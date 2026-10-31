@@ -1,0 +1,54 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { registerUser, createSession, SESSION_COOKIE_NAME, SESSION_DURATION_MS } from '@/lib/services/auth';
+
+export async function POST(req: NextRequest) {
+  try {
+    const body = await req.json();
+    const { email, password, name, bio } = body;
+
+    if (!email || !password || !name) {
+      return NextResponse.json(
+        { success: false, error: 'Email, password, and name are required' },
+        { status: 400 }
+      );
+    }
+
+    const regResult = registerUser({ email, password, name, bio });
+    if (!regResult.success || !regResult.user) {
+      return NextResponse.json(
+        { success: false, error: regResult.error || 'Registration failed' },
+        { status: 400 }
+      );
+    }
+
+    // Auto-create session on successful registration
+    const userAgent = req.headers.get('user-agent') || undefined;
+    const ip = req.headers.get('x-forwarded-for') || undefined;
+    const session = createSession(regResult.user.id, userAgent, ip);
+
+    const res = NextResponse.json(
+      {
+        success: true,
+        user: regResult.user,
+        sessionToken: session.token
+      },
+      { status: 201 }
+    );
+
+    // Set secure HTTP-only cookie
+    res.cookies.set({
+      name: SESSION_COOKIE_NAME,
+      value: session.token,
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/',
+      maxAge: Math.floor(SESSION_DURATION_MS / 1000)
+    });
+
+    return res;
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    return NextResponse.json({ success: false, error: message }, { status: 500 });
+  }
+}

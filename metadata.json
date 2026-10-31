@@ -1,0 +1,6 @@
+{
+  "name": "Community OS",
+  "description": "Multi-community operating system turning conversations into structured needs, verified work, mutual trust, and portable outcomes across Discord, Telegram, and Web.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
