@@ -32,7 +32,8 @@ import {
   Circle,
   Eye,
   EyeOff,
-  UserCheck
+  UserCheck,
+  Bot
 } from 'lucide-react';
 
 interface MemberWorkspaceProps {
@@ -205,22 +206,24 @@ export const MemberWorkspace: React.FC<MemberWorkspaceProps> = ({
           </h2>
         </div>
 
-        {/* Persona Switcher for Quick User Testing */}
-        <div className="flex items-center gap-2 bg-slate-900 border border-slate-800 p-1 rounded-lg text-xs font-mono shrink-0">
-          <span className="text-slate-500 pl-2">Switch Persona:</span>
-          {users.map((u) => (
-            <button
-              key={u.id}
-              onClick={() => onSelectUser(u)}
-              className={`px-2.5 py-1 rounded transition-colors ${
-                currentUser.id === u.id
-                  ? 'bg-indigo-600 text-white font-bold'
-                  : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              {u.name.split(' ')[0]}
-            </button>
-          ))}
+        {/* Real Member Profile Badge */}
+        <div className="flex items-center gap-3 bg-slate-900/80 border border-slate-800 px-3.5 py-2 rounded-xl text-xs shrink-0">
+          <div className="flex items-center gap-2">
+            <div className="h-8 w-8 rounded-full bg-gradient-to-tr from-indigo-500 to-violet-500 flex items-center justify-center font-bold text-white text-xs shadow">
+              {currentUser.name.charAt(0)}
+            </div>
+            <div>
+              <div className="font-semibold text-white flex items-center gap-1.5">
+                <span>{currentUser.name}</span>
+                <span className="rounded bg-indigo-500/10 px-1.5 py-0.5 text-[10px] font-mono text-indigo-400 border border-indigo-500/20">
+                  {currentUser.platformRole}
+                </span>
+              </div>
+              <div className="text-[11px] text-slate-400 font-mono">
+                {currentUser.email}
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -576,18 +579,114 @@ export const MemberWorkspace: React.FC<MemberWorkspaceProps> = ({
         </div>
       )}
 
-      {/* SUBTAB 6: ONE-TIME IDENTITY LINKING CHALLENGES (Part 7) */}
+      {/* SUBTAB 6: CONNECTED ACCOUNTS & IDENTITY LINKING */}
       {activeSubTab === 'identity' && (
-        <div className="space-y-4">
+        <div className="space-y-6">
+          {/* Connected Personal Accounts Status */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Discord Account Card */}
+            <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-5 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="h-8 w-8 rounded-lg bg-[#5865F2]/20 border border-[#5865F2]/40 flex items-center justify-center text-[#8ea1ff]">
+                    <Bot className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold text-white">Personal Discord Account</h4>
+                    <span className="text-[10px] text-slate-400 font-mono">Member Identity & Roles</span>
+                  </div>
+                </div>
+                {currentUser.identities?.discordId ? (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 px-2 py-0.5 text-[10px] font-mono text-emerald-400">
+                    <CheckCircle2 className="h-3 w-3" />
+                    <span>Connected</span>
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-slate-800 border border-slate-700 px-2 py-0.5 text-[10px] font-mono text-slate-400">
+                    <span>Not Linked</span>
+                  </span>
+                )}
+              </div>
+
+              {currentUser.identities?.discordId ? (
+                <div className="rounded-lg bg-slate-950 p-3 space-y-1 text-xs font-mono">
+                  <div className="text-slate-300">@{currentUser.identities.discordUsername || 'discord_user'}</div>
+                  <div className="text-[10px] text-slate-500">ID: {currentUser.identities.discordId}</div>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <p className="text-xs text-slate-400 leading-normal">
+                    Link your Discord identity to receive role attestations, notifications, and slash command access.
+                  </p>
+                  <a
+                    href="/api/discord/connect?mode=user&redirect=true"
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-[#5865F2]/40 bg-[#5865F2]/10 hover:bg-[#5865F2]/20 px-3.5 py-1.5 text-xs font-semibold text-[#8ea1ff] transition-all"
+                  >
+                    <Bot className="h-3.5 w-3.5" />
+                    <span>Connect Discord via OAuth</span>
+                  </a>
+                </div>
+              )}
+            </div>
+
+            {/* Telegram Account Card */}
+            <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-5 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="h-8 w-8 rounded-lg bg-[#229ED9]/20 border border-[#229ED9]/40 flex items-center justify-center text-[#54bbf0]">
+                    <Send className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold text-white">Personal Telegram Account</h4>
+                    <span className="text-[10px] text-slate-400 font-mono">Member Passport & Alerts</span>
+                  </div>
+                </div>
+                {currentUser.identities?.telegramId ? (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 px-2 py-0.5 text-[10px] font-mono text-emerald-400">
+                    <CheckCircle2 className="h-3 w-3" />
+                    <span>Connected</span>
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-slate-800 border border-slate-700 px-2 py-0.5 text-[10px] font-mono text-slate-400">
+                    <span>Not Linked</span>
+                  </span>
+                )}
+              </div>
+
+              {currentUser.identities?.telegramId ? (
+                <div className="rounded-lg bg-slate-950 p-3 space-y-1 text-xs font-mono">
+                  <div className="text-slate-300">@{currentUser.identities.telegramUsername || 'telegram_user'}</div>
+                  <div className="text-[10px] text-slate-500">ID: {currentUser.identities.telegramId}</div>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <p className="text-xs text-slate-400 leading-normal">
+                    Link your Telegram identity to verify deliverables and query tasks directly via @CommunityOutcomeBot.
+                  </p>
+                  <a
+                    href="https://t.me/CommunityOutcomeBot?start=connect"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-[#229ED9]/40 bg-[#229ED9]/10 hover:bg-[#229ED9]/20 px-3.5 py-1.5 text-xs font-semibold text-[#54bbf0] transition-all"
+                  >
+                    <Send className="h-3.5 w-3.5" />
+                    <span>Open @CommunityOutcomeBot</span>
+                  </a>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* In-Chat One-Time Verification Challenge Generator */}
           <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-5 space-y-4">
             <div className="flex items-center gap-2">
               <Key className="h-4 w-4 text-indigo-400" />
               <h3 className="text-sm font-bold text-white">
-                One-Time Identity Verification Challenges (Part 7)
+                Link via In-Chat Verification Code (/connect &lt;code&gt;)
               </h3>
             </div>
             <p className="text-xs text-slate-400 leading-relaxed">
-              Generate a short-lived, single-use 6-character challenge code to securely bind your Discord or Telegram account. Never links accounts based solely on matching usernames.
+              If you prefer not to use OAuth, generate a cryptographically bound single-use 6-character challenge code and send it directly to the bot.
             </p>
 
             <div className="flex flex-col sm:flex-row sm:items-center gap-3">

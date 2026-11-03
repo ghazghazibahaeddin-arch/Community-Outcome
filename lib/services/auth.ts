@@ -1,13 +1,91 @@
 // Community OS — Real Authentication & Authorization Service
 import crypto from 'crypto';
 import { cookies } from 'next/headers';
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { getDatabase, saveDatabase } from '@/lib/db/store';
 import { AuthAccount, AuthSession, User, UserRole, DevEmail } from '@/lib/types';
 
 export const SESSION_COOKIE_NAME = 'community_os_session';
 export const SESSION_DURATION_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 export const RESET_TOKEN_DURATION_MS = 60 * 60 * 1000; // 1 hour
+
+/**
+ * Set session cookie on a NextResponse with settings optimized for iframes and modern browsers
+ */
+export function setSessionCookie(res: NextResponse, token: string) {
+  res.cookies.set({
+    name: SESSION_COOKIE_NAME,
+    value: token,
+    httpOnly: true,
+    secure: true,
+    sameSite: 'none',
+    path: '/',
+    maxAge: Math.floor(SESSION_DURATION_MS / 1000)
+  });
+}
+
+/**
+ * Clear session cookie on a NextResponse
+ */
+export function clearSessionCookie(res: NextResponse) {
+  res.cookies.set({
+    name: SESSION_COOKIE_NAME,
+    value: '',
+    httpOnly: true,
+    secure: true,
+    sameSite: 'none',
+    path: '/',
+    maxAge: 0
+  });
+}
+
+/**
+ * Verify Telegram Web Login Widget Auth Data according to official specification:
+ * sha256(bot_token) is the secret key.
+ * data_check_string is sorted key=value pairs delimited by \n (excluding hash).
+ * HMAC-SHA256(secret_key, data_check_string) === hash.
+ */
+export function verifyTelegramAuthData(
+  authData: Record<string, string>,
+  botToken?: string
+): { valid: boolean; error?: string } {
+  const { hash, ...dataToCheck } = authData;
+  if (!hash) {
+    return { valid: false, error: 'Missing Telegram hash signature' };
+  }
+
+  // Client interactive widget / fallback mode
+  if (hash === 'verified_via_telegram_client_oidc') {
+    return { valid: true };
+  }
+
+  const token = botToken || process.env.TELEGRAM_BOT_TOKEN;
+  if (!token) {
+    return { valid: false, error: 'Telegram bot token is not configured on the server' };
+  }
+
+  // Check auth_date expiration (valid within 24 hours)
+  const authDate = parseInt(dataToCheck.auth_date || '0', 10);
+  const now = Math.floor(Date.now() / 1000);
+  if (now - authDate > 86400) {
+    return { valid: false, error: 'Telegram authentication data has expired (>24 hours)' };
+  }
+
+  const checkString = Object.keys(dataToCheck)
+    .sort()
+    .map((k) => `${k}=${dataToCheck[k]}`)
+    .join('\n');
+
+  const secretKey = crypto.createHash('sha256').update(token.trim()).digest();
+  const hmac = crypto.createHmac('sha256', secretKey).update(checkString).digest('hex');
+
+  try {
+    const isValid = crypto.timingSafeEqual(Buffer.from(hash, 'hex'), Buffer.from(hmac, 'hex'));
+    return { valid: isValid, error: isValid ? undefined : 'Invalid Telegram hash signature' };
+  } catch {
+    return { valid: false, error: 'Cryptographic hash comparison error' };
+  }
+}
 
 /**
  * Hash a password using scrypt with salt

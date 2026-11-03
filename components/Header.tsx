@@ -19,7 +19,8 @@ import {
   LogOut,
   Building2,
   Lock,
-  ChevronDown
+  ChevronDown,
+  Settings
 } from 'lucide-react';
 
 interface HeaderProps {
@@ -43,6 +44,7 @@ interface HeaderProps {
   currentUserRole: UserRole;
   onSignOut: () => void;
   onOpenCreateCommunity: () => void;
+  onOpenAccountSettings?: () => void;
   // Data mode
   dataMode: DataMode;
   onToggleDataMode: () => void;
@@ -67,6 +69,7 @@ export const Header: React.FC<HeaderProps> = ({
   currentUserRole,
   onSignOut,
   onOpenCreateCommunity,
+  onOpenAccountSettings,
   dataMode,
   onToggleDataMode
 }) => {
@@ -178,13 +181,18 @@ export const Header: React.FC<HeaderProps> = ({
             {/* Authenticated Account or Sign In */}
             {authUser ? (
               <div className="flex items-center gap-2">
-                <div className="flex items-center gap-1.5 bg-slate-900/90 border border-slate-700/80 rounded-md px-2 py-0.5">
+                <button
+                  onClick={onOpenAccountSettings}
+                  title="Account & Identity Settings"
+                  className="flex items-center gap-1.5 bg-slate-900/90 hover:bg-slate-800/90 border border-slate-700/80 rounded-md px-2 py-0.5 transition-colors cursor-pointer"
+                >
                   <span className="h-2 w-2 rounded-full bg-emerald-400" />
                   <span className="font-medium text-slate-200 max-w-[120px] truncate">{authUser.name}</span>
                   <span className="text-[10px] font-mono uppercase bg-indigo-950/60 text-indigo-300 border border-indigo-700/50 px-1 rounded">
                     {currentUserRole}
                   </span>
-                </div>
+                  <Settings className="h-3 w-3 text-slate-400 ml-0.5" />
+                </button>
                 <button
                   onClick={onSignOut}
                   title="Sign out of your account"

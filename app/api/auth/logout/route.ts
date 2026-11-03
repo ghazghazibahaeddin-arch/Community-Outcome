@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { destroySession, SESSION_COOKIE_NAME } from '@/lib/services/auth';
+import { destroySession, clearSessionCookie, SESSION_COOKIE_NAME } from '@/lib/services/auth';
 
 export async function POST(req: NextRequest) {
   try {
@@ -13,7 +13,7 @@ export async function POST(req: NextRequest) {
     }
 
     const res = NextResponse.json({ success: true, message: 'Logged out successfully' });
-    res.cookies.delete(SESSION_COOKIE_NAME);
+    clearSessionCookie(res);
     return res;
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);

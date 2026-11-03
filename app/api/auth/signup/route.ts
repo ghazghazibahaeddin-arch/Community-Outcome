@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { registerUser, createSession, SESSION_COOKIE_NAME, SESSION_DURATION_MS } from '@/lib/services/auth';
+import { registerUser, createSession, setSessionCookie } from '@/lib/services/auth';
 
 export async function POST(req: NextRequest) {
   try {
@@ -35,16 +35,7 @@ export async function POST(req: NextRequest) {
       { status: 201 }
     );
 
-    // Set secure HTTP-only cookie
-    res.cookies.set({
-      name: SESSION_COOKIE_NAME,
-      value: session.token,
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      path: '/',
-      maxAge: Math.floor(SESSION_DURATION_MS / 1000)
-    });
+    setSessionCookie(res, session.token);
 
     return res;
   } catch (err: unknown) {

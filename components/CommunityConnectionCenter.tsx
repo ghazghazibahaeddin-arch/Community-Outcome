@@ -449,24 +449,15 @@ export const CommunityConnectionCenter: React.FC<CommunityConnectionCenterProps>
 
               {/* Action Buttons */}
               <div className="flex flex-wrap items-center gap-2.5">
-                {discordInstallUrl ? (
-                  <a
-                    href={discordInstallUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-xs font-bold text-white shadow-lg hover:bg-indigo-500 transition-all"
-                  >
-                    <ExternalLink className="h-3.5 w-3.5" />
-                    <span>Install Bot into Server</span>
-                  </a>
-                ) : (
-                  <button
-                    disabled
-                    className="rounded-lg bg-indigo-900/50 px-4 py-2 text-xs font-bold text-slate-400 cursor-not-allowed"
-                  >
-                    Preparing Installation URL...
-                  </button>
-                )}
+                <a
+                  href={discordInstallUrl || `/api/discord/connect?communityId=${community.id}&redirect=true`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-xs font-bold text-white shadow-lg hover:bg-indigo-500 transition-all"
+                >
+                  <ExternalLink className="h-3.5 w-3.5" />
+                  <span>Install Bot into Server</span>
+                </a>
 
                 <button
                   onClick={handleVerifyDiscord}

@@ -16,6 +16,9 @@ import { KnowledgeSection } from '@/components/KnowledgeSection';
 import { OwnerAnalyticsSection } from '@/components/OwnerAnalyticsSection';
 import { IntegrationsSection } from '@/components/IntegrationsSection';
 import { TestingSuiteSection } from '@/components/TestingSuiteSection';
+import { AuthPortal } from '@/components/AuthPortal';
+import { AccountSettingsModal } from '@/components/AccountSettingsModal';
+import { OnboardingChoiceModal } from '@/components/OnboardingChoiceModal';
 
 import { translations } from '@/lib/i18n';
 import {
@@ -62,7 +65,10 @@ export default function HomePage() {
 
   // Real Authenticated User State
   const [authUser, setAuthUser] = useState<User | null>(null);
-  const [currentUserRole, setCurrentUserRole] = useState<UserRole>('community_owner');
+  const [currentUserRole, setCurrentUserRole] = useState<UserRole>('guest');
+  const [isAccountSettingsOpen, setIsAccountSettingsOpen] = useState<boolean>(false);
+  const [isOnboardingOpen, setIsOnboardingOpen] = useState<boolean>(false);
+  const [discordInstallUrl, setDiscordInstallUrl] = useState<string | null>(null);
 
   // App Data States
   const [communities, setCommunities] = useState<Community[]>([]);
@@ -108,10 +114,42 @@ export default function HomePage() {
     eventAttendanceRate: 0
   });
 
+  // Extract token from URL (OAuth callbacks) or localStorage
+  const getStoredToken = React.useCallback(() => {
+    if (typeof window === 'undefined') return null;
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      const urlToken = urlParams.get('session_token');
+      if (urlToken) {
+        try {
+          localStorage.setItem('community_os_session_token', urlToken);
+          // Clean query params so URL is neat
+          const cleanSearch = new URLSearchParams(window.location.search);
+          cleanSearch.delete('session_token');
+          const newUrl = window.location.pathname + (cleanSearch.toString() ? `?${cleanSearch.toString()}` : '');
+          window.history.replaceState({}, document.title, newUrl);
+        } catch {}
+        return urlToken;
+      }
+      return localStorage.getItem('community_os_session_token');
+    } catch {
+      return null;
+    }
+  }, []);
+
   const fetchData = React.useCallback(async (commId = currentCommunityId) => {
     setIsRefreshing(true);
     try {
-      const res = await fetch(`/api/data?communityId=${commId}`);
+      const token = getStoredToken();
+      const headers: Record<string, string> = {};
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
+      const res = await fetch(`/api/data?communityId=${commId}`, {
+        headers,
+        credentials: 'include'
+      });
       const json = await res.json();
       if (json.success && json.data) {
         const d = json.data;
@@ -147,10 +185,27 @@ export default function HomePage() {
         if (d.authUser) {
           setAuthUser(d.authUser);
           setCurrentUserRole(d.currentUserRole || 'member');
-        } else if (!authUser && d.users?.[0]) {
-          // If unauthenticated in demo mode, provide standard explorer profile
-          setAuthUser(d.users[0]);
-          setCurrentUserRole(foundComm?.ownerId === d.users[0].id ? 'community_owner' : 'member');
+        } else if (token) {
+          // If we had a token, query /api/auth/me before clearing user state
+          try {
+            const meRes = await fetch('/api/auth/me', { headers, credentials: 'include' });
+            const meJson = await meRes.json();
+            if (meJson.authenticated && meJson.user) {
+              setAuthUser(meJson.user);
+              setCurrentUserRole('member');
+            } else {
+              try {
+                localStorage.removeItem('community_os_session_token');
+              } catch {}
+              setAuthUser(null);
+              setCurrentUserRole('guest');
+            }
+          } catch {
+            // Keep existing authUser on transient network glitch
+          }
+        } else {
+          setAuthUser(null);
+          setCurrentUserRole('guest');
         }
 
         // Derive notifications
@@ -185,62 +240,14 @@ export default function HomePage() {
       setIsLoading(false);
       setIsRefreshing(false);
     }
-  }, [currentCommunityId, authUser]);
+  }, [currentCommunityId, getStoredToken]);
 
   useEffect(() => {
-    let active = true;
-    const execute = async () => {
-      try {
-        const res = await fetch(`/api/data?communityId=${currentCommunityId}`);
-        const json = await res.json();
-        if (active && json.success && json.data) {
-          const d = json.data;
-          setCommunities(d.communities || []);
-          const foundComm = d.communities?.find((c: Community) => c.id === currentCommunityId) || d.currentCommunity || d.communities?.[0] || null;
-          setCurrentCommunity(foundComm);
-          setUsers(d.users || []);
-          setRequests(d.requests || []);
-          setOffers(d.offers || []);
-          setTasks(d.tasks || []);
-          setHandoffs(d.handoffs || []);
-          setIntents(d.intents || []);
-          setPolls(d.polls || []);
-          setCommitments(d.commitments || []);
-          setContributions(d.contributions || []);
-          setAttestations(d.attestations || []);
-          setDisputes(d.disputes || []);
-          setPortfolioItems(d.portfolioItems || []);
-          setOutcomes(d.outcomes || []);
-          setLinks(d.links || []);
-          setKnowledge(d.knowledge || []);
-          setSourceCards(d.sourceCards || []);
-          setAgentKits(d.agentKits || []);
-          setRecoveryCandidates(d.recoveryCandidates || []);
-          setDiscordTests(d.discordTests || []);
-          setMiniAppTests(d.miniAppTests || []);
-          setOwnerActionItems(d.ownerActionItems || []);
-          setIdentityChallenges(d.identityChallenges || []);
-          if (d.dataMode) setDataMode(d.dataMode);
-          if (d.analytics) setAnalytics(d.analytics);
-
-          if (d.authUser) {
-            setAuthUser(d.authUser);
-            setCurrentUserRole(d.currentUserRole || 'member');
-          } else if (d.users?.[0]) {
-            setAuthUser(d.users[0]);
-            setCurrentUserRole(foundComm?.ownerId === d.users[0].id ? 'community_owner' : 'member');
-          }
-          setIsLoading(false);
-        }
-      } catch (err) {
-        console.error('Failed to load data:', err);
-      }
-    };
-    execute();
-    return () => {
-      active = false;
-    };
-  }, [currentCommunityId]);
+    const timer = setTimeout(() => {
+      fetchData(currentCommunityId);
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [fetchData, currentCommunityId]);
 
   const handleSelectCommunity = (id: string) => {
     setCurrentCommunityId(id);
@@ -289,14 +296,62 @@ export default function HomePage() {
 
   const handleSignOut = async () => {
     try {
-      await fetch('/api/auth/logout', { method: 'POST' });
+      const token = getStoredToken();
+      await fetch('/api/auth/logout', {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        credentials: 'include'
+      });
+      try {
+        localStorage.removeItem('community_os_session_token');
+      } catch {}
       setAuthUser(null);
       setCurrentUserRole('guest');
-      setWorkspaceMode('modules');
+      setWorkspaceMode('member');
       await fetchData(currentCommunityId);
     } catch (err) {
       console.error('Failed to sign out:', err);
     }
+  };
+
+  const handleOnboardingSelect = async (
+    role: 'owner' | 'member',
+    details?: { communityName?: string; inviteCode?: string }
+  ) => {
+    if (role === 'owner') {
+      setWorkspaceMode('owner');
+      setCurrentUserRole('community_owner');
+      if (details?.communityName && authUser) {
+        try {
+          const token = getStoredToken();
+          const res = await fetch('/api/data', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              ...(token ? { Authorization: `Bearer ${token}` } : {})
+            },
+            body: JSON.stringify({
+              action: 'create_community',
+              payload: {
+                name: details.communityName,
+                description: `${details.communityName} community workspace.`,
+                ownerId: authUser.id
+              }
+            })
+          });
+          const json = await res.json();
+          if (json.success && json.community) {
+            handleCommunityCreated(json.community);
+          }
+        } catch (e) {
+          console.error('Failed to create community during onboarding:', e);
+        }
+      }
+    } else {
+      setWorkspaceMode('member');
+      setCurrentUserRole('member');
+    }
+    await fetchData(currentCommunityId);
   };
 
   const handleCommunityCreated = (newComm: Community) => {
@@ -339,6 +394,34 @@ export default function HomePage() {
 
   const t = translations[lang];
 
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-[#070b14] flex items-center justify-center">
+        <div className="flex items-center gap-3 text-xs font-mono text-slate-400">
+          <span className="h-2 w-2 rounded-full bg-indigo-500 animate-ping" />
+          <span>Loading Community OS State...</span>
+        </div>
+      </div>
+    );
+  }
+
+  // 1. AUTHENTICATION MUST BE THE ENTRY POINT
+  if (!authUser) {
+    return (
+      <AuthPortal
+        lang={lang}
+        onToggleLang={handleToggleLang}
+        onAuthenticated={(user, defaultWorkspace) => {
+          setAuthUser(user);
+          setWorkspaceMode(defaultWorkspace);
+          setIsOnboardingOpen(true);
+          fetchData(currentCommunityId);
+        }}
+        discordInstallUrl={discordInstallUrl || undefined}
+      />
+    );
+  }
+
   return (
     <div
       dir={lang === 'ar' ? 'rtl' : 'ltr'}
@@ -364,6 +447,7 @@ export default function HomePage() {
         currentUserRole={currentUserRole}
         onSignOut={handleSignOut}
         onOpenCreateCommunity={() => setIsCreateCommunityOpen(true)}
+        onOpenAccountSettings={() => setIsAccountSettingsOpen(true)}
         dataMode={dataMode}
         onToggleDataMode={handleToggleDataMode}
       />
@@ -690,6 +774,27 @@ export default function HomePage() {
         onClose={() => setIsCreateCommunityOpen(false)}
         onCreated={handleCommunityCreated}
         lang={lang}
+      />
+
+      {/* Account Settings & Identity Modal */}
+      {authUser && (
+        <AccountSettingsModal
+          isOpen={isAccountSettingsOpen}
+          onClose={() => setIsAccountSettingsOpen(false)}
+          user={authUser}
+          lang={lang}
+          onSignOut={handleSignOut}
+          onRefresh={() => fetchData(currentCommunityId)}
+        />
+      )}
+
+      {/* Post-Registration & Onboarding Role Path Selection */}
+      <OnboardingChoiceModal
+        isOpen={isOnboardingOpen}
+        user={authUser}
+        lang={lang}
+        onSelectRole={handleOnboardingSelect}
+        onClose={() => setIsOnboardingOpen(false)}
       />
 
       {/* Quiet, Anti-Slop Footer */}

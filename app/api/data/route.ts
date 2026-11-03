@@ -1,6 +1,6 @@
 // Community OS — Central Data & Actions API Route with Server-Side Authorization
 import { NextRequest, NextResponse } from 'next/server';
-import { dbOperations, getDatabase } from '@/lib/db/store';
+import { dbOperations, getDatabase, saveDatabase } from '@/lib/db/store';
 import { computeCommunityAnalytics } from '@/lib/services/analytics';
 import { runAllJourneyVerifications } from '@/lib/services/testingSuite';
 import { getAuthenticatedUserFromRequest, getUserRoleInCommunity } from '@/lib/services/auth';
@@ -356,6 +356,25 @@ export async function POST(req: NextRequest) {
           return NextResponse.json({ success: false, error: 'Unauthorized: only community owners can publish community menus' }, { status: 403 });
         }
         result = dbOperations.saveMenuMessage(payload.communityId, payload.platform, payload.messageId, payload.channelId);
+        break;
+      }
+
+      case 'update_user_profile': {
+        const targetUserId = authUser?.id || payload.userId;
+        const targetUser = db.users.find(u => u.id === targetUserId);
+        if (!targetUser) {
+          return NextResponse.json({ success: false, error: 'User not found' }, { status: 404 });
+        }
+        if (payload.name) targetUser.name = payload.name;
+        if (payload.bio) {
+          targetUser.bio = payload.bio;
+          if (targetUser.passport) targetUser.passport.biography = payload.bio;
+        }
+        if (Array.isArray(payload.languages) && targetUser.passport) {
+          targetUser.passport.languages = payload.languages;
+        }
+        saveDatabase(db);
+        result = { success: true, user: targetUser };
         break;
       }
 

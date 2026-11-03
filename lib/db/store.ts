@@ -1,6 +1,7 @@
 // Community OS — Robust Server-Side Database & Store
 import fs from 'fs';
 import path from 'path';
+import { isSupabaseConfigured, syncDatabaseToSupabase } from './supabase';
 import {
   User,
   Community,
@@ -1358,7 +1359,15 @@ export function saveDatabase(db: DatabaseSchema): void {
   cachedDb = db;
   try {
     ensureDataFile();
-    fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2), 'utf-8');
+    const tempFile = `${DB_FILE}.tmp.${Date.now()}`;
+    fs.writeFileSync(tempFile, JSON.stringify(db, null, 2), 'utf-8');
+    fs.renameSync(tempFile, DB_FILE);
+
+    if (isSupabaseConfigured()) {
+      syncDatabaseToSupabase(db).catch((err: any) => {
+        console.warn('[Supabase Sync Warning]:', err?.message || err);
+      });
+    }
   } catch (err) {
     console.error('Failed to persist database file:', err);
   }

@@ -77,7 +77,7 @@ export interface PrivacySettings {
 export interface MemberPassport {
   displayName: string;
   biography: string;
-  skills: { name: string; verified: boolean; verifiedByCommunityId?: string }[];
+  skills: { id?: string; name: string; level?: string; verified: boolean; endorsementsCount?: number; verifiedByCommunityId?: string }[];
   interests: string[];
   languages: string[];
   collaborationPreferences: string;

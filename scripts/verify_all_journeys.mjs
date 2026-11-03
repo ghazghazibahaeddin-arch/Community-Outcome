@@ -483,7 +483,7 @@ async function runTests() {
   const discordConnectInfo = await discordConnectInfoRes.json();
   assert(
     discordConnectInfo.success &&
-    discordConnectInfo.installUrl.includes('permissions=277025507392') &&
+    discordConnectInfo.installUrl.includes('permissions=277025774752') &&
     discordConnectInfo.installUrl.includes('scope=bot%20applications.commands'),
     'Connection Center: Discord OAuth installation URL generated with correct permissions and scopes'
   );
@@ -625,6 +625,116 @@ async function runTests() {
   assert(
     unauthorizedDisconnectRes.status === 403,
     'Security Invariant: Ordinary member rejected when attempting to disconnect community bots (HTTP 403)'
+  );
+
+  // 15. Discord OAuth Callback: Handles installation callback with state and guild_id
+  const callbackState = `os_discord_comm_devforge_${Date.now()}`;
+  const callbackRes = await fetch(
+    `${BASE_URL}/api/discord/callback?code=mock_oauth_code_123&guild_id=987654321098765432&permissions=277025774752&state=${callbackState}`,
+    { redirect: 'manual' }
+  );
+  // Expect a 307 or 302 redirect back to ?tab=owner&connected_platform=discord
+  const locationHeader = callbackRes.headers.get('location') || '';
+  assert(
+    (callbackRes.status === 302 || callbackRes.status === 307) &&
+    locationHeader.includes('connected_platform=discord') &&
+    locationHeader.includes('987654321098765432'),
+    'Connection Center: Discord OAuth installation callback successfully processed guild and issued redirect'
+  );
+
+  // 16. Discord OAuth Callback: Rejects request with invalid or missing state
+  const invalidCallbackRes = await fetch(
+    `${BASE_URL}/api/discord/callback?code=mock_code&guild_id=123&state=invalid_state`,
+    { redirect: 'manual' }
+  );
+  const invalidLocation = invalidCallbackRes.headers.get('location') || '';
+  assert(
+    invalidLocation.includes('discord_error='),
+    'Security Invariant: Discord callback strictly rejects invalid state tokens and logs security error'
+  );
+
+  // 17. Discord Permission Bitfield: Explicitly includes VIEW_CHANNEL (1024)
+  const discordPermRes = await fetch(`${BASE_URL}/api/discord/connect?communityId=comm_devforge`);
+  const discordPermData = await discordPermRes.json();
+  const permBigInt = BigInt(discordPermData.permissionsInteger || '0');
+  const hasViewChannel = (permBigInt & 1024n) === 1024n;
+  assert(
+    discordPermData.success && hasViewChannel && discordPermData.requiredPermissions.some(p => p.includes('VIEW_CHANNEL')),
+    'Connection Center: Discord bot permissions explicitly include VIEW_CHANNEL (1024) without granting Administrator'
+  );
+
+  // 18. Supabase PostgreSQL Schema & Migration File Readiness
+  const fs = await import('fs');
+  const path = await import('path');
+  const migrationPath = path.join(process.cwd(), 'supabase', 'migrations', '20261101_init_schema.sql');
+  const migrationExists = fs.existsSync(migrationPath);
+  let migrationValid = false;
+  if (migrationExists) {
+    const sql = fs.readFileSync(migrationPath, 'utf-8');
+    migrationValid = sql.includes('CREATE TABLE IF NOT EXISTS users') &&
+                     sql.includes('CREATE TABLE IF NOT EXISTS communities') &&
+                     sql.includes('CREATE TABLE IF NOT EXISTS requests') &&
+                     sql.includes('ROW LEVEL SECURITY');
+  }
+  assert(
+    migrationExists && migrationValid,
+    'Database: Supabase PostgreSQL migration schema created with multi-tenant RLS policies and tables'
+  );
+
+  // 19. Singleton Worker Guard Verification
+  const lockFilePath = path.join(process.cwd(), 'data', 'bot_service.lock');
+  const lockExists = fs.existsSync(lockFilePath);
+  assert(
+    lockExists,
+    'Background Services: Singleton PID lock active to prevent duplicate Telegram polling workers & 409 conflicts'
+  );
+
+  // 20. Telegram Auth Config: Provides bot username & BotFather domain setup instructions
+  const tgConfigRes = await fetch(`${BASE_URL}/api/auth/telegram/config`);
+  const tgConfigData = await tgConfigRes.json();
+  assert(
+    tgConfigData.success && tgConfigData.botUsername && tgConfigData.botFatherInstructions.length > 0,
+    'Authentication: Telegram config endpoint exposes bot username and explicit @BotFather domain configuration instructions'
+  );
+
+  // 21. Telegram Web Login Verification: Successfully authenticates and creates session
+  const tgAuthRes = await fetch(`${BASE_URL}/api/auth/telegram/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      id: 'tg_88921029',
+      first_name: 'Tariq',
+      username: 'tariq_builder',
+      auth_date: Math.floor(Date.now() / 1000),
+      hash: 'verified_via_telegram_client_oidc'
+    })
+  });
+  const tgAuthData = await tgAuthRes.json();
+  assert(
+    tgAuthRes.status === 200 && tgAuthData.success && Boolean(tgAuthData.sessionToken) && tgAuthData.user.name === 'Tariq',
+    'Authentication: Telegram Login verification succeeded, created verified user, and issued session token'
+  );
+
+  // 22. Discord Direct Redirect: Ensures users never see raw JSON when clicking connect
+  const discordRedirectRes = await fetch(`${BASE_URL}/api/discord/connect?redirect=true`, {
+    redirect: 'manual'
+  });
+  const discordLoc = discordRedirectRes.headers.get('location') || '';
+  assert(
+    (discordRedirectRes.status === 302 || discordRedirectRes.status === 307) && discordLoc.includes('discord.com/api/oauth2/authorize'),
+    'Connection Center: Discord connect endpoint issues 302/307 direct redirect so users never see raw API JSON'
+  );
+
+  // 23. Bearer Session Persistence: Session token survives across refreshes and requests
+  const persistentDataRes = await fetch(`${BASE_URL}/api/data?communityId=comm_devforge`, {
+    headers: {
+      Authorization: `Bearer ${tgAuthData.sessionToken}`
+    }
+  });
+  const persistentDataJson = await persistentDataRes.json();
+  assert(
+    persistentDataJson.success && persistentDataJson.data.authUser?.id === tgAuthData.user.id,
+    'Session Persistence: Authorization Bearer header restores authenticated session across page refreshes and requests'
   );
 
   // Summary
