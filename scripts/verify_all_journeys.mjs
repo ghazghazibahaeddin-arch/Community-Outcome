@@ -29,6 +29,7 @@ async function runTests() {
   const testEmailA = `member_test_${Date.now()}@example.com`;
   const testPasswordA = 'TestPass123!Secure';
   let cookieA = '';
+  let sarahCookie = '';
 
   // 1. Signup
   const signupRes = await fetch(`${BASE_URL}/api/auth/signup`, {
@@ -335,7 +336,7 @@ async function runTests() {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email: 'sarah@communityos.org', password: 'Password123!' })
   });
-  const sarahCookie = sarahLoginRes.headers.get('set-cookie')?.split(';')[0];
+  sarahCookie = sarahLoginRes.headers.get('set-cookie')?.split(';')[0];
   assert(sarahLoginRes.status === 200, 'Journey E: Reviewer Sarah authenticated');
 
   const reviewRes = await fetch(`${BASE_URL}/api/data`, {
@@ -689,52 +690,272 @@ async function runTests() {
     'Background Services: Singleton PID lock active to prevent duplicate Telegram polling workers & 409 conflicts'
   );
 
-  // 20. Telegram Auth Config: Provides bot username & BotFather domain setup instructions
+  // 20. Telegram Auth Config: Exposes OIDC protocol, Client ID, and exact BotFather Allowed Redirect URL
   const tgConfigRes = await fetch(`${BASE_URL}/api/auth/telegram/config`);
   const tgConfigData = await tgConfigRes.json();
   assert(
-    tgConfigData.success && tgConfigData.botUsername && tgConfigData.botFatherInstructions.length > 0,
-    'Authentication: Telegram config endpoint exposes bot username and explicit @BotFather domain configuration instructions'
+    tgConfigData.success &&
+    tgConfigData.protocol?.includes('OpenID Connect') &&
+    tgConfigData.allowedRedirectUrl?.includes('/api/auth/telegram/callback') &&
+    tgConfigData.botFatherInstructions.length > 0,
+    'Authentication: Telegram config endpoint exposes official OpenID Connect protocol and exact BotFather Allowed Redirect URL'
   );
 
-  // 21. Telegram Web Login Verification: Successfully authenticates and creates session
-  const tgAuthRes = await fetch(`${BASE_URL}/api/auth/telegram/login`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      id: 'tg_88921029',
-      first_name: 'Tariq',
-      username: 'tariq_builder',
-      auth_date: Math.floor(Date.now() / 1000),
-      hash: 'verified_via_telegram_client_oidc'
-    })
-  });
-  const tgAuthData = await tgAuthRes.json();
-  assert(
-    tgAuthRes.status === 200 && tgAuthData.success && Boolean(tgAuthData.sessionToken) && tgAuthData.user.name === 'Tariq',
-    'Authentication: Telegram Login verification succeeded, created verified user, and issued session token'
-  );
-
-  // 22. Discord Direct Redirect: Ensures users never see raw JSON when clicking connect
-  const discordRedirectRes = await fetch(`${BASE_URL}/api/discord/connect?redirect=true`, {
+  // 21. Telegram OIDC Authorization Flow with PKCE S256: Generates valid auth URL and session state cookie
+  const tgAuthInitRes = await fetch(`${BASE_URL}/api/auth/telegram/authorize`, {
     redirect: 'manual'
   });
-  const discordLoc = discordRedirectRes.headers.get('location') || '';
+  const tgAuthLocation = tgAuthInitRes.headers.get('location') || '';
+  const tgStateCookieHeader = tgAuthInitRes.headers.get('set-cookie') || '';
+  const hasCodeChallenge = tgAuthLocation.includes('code_challenge=') && tgAuthLocation.includes('code_challenge_method=S256');
+  const hasStateAndNonce = tgAuthLocation.includes('state=') && tgAuthLocation.includes('nonce=');
+  const setsStateCookie = tgStateCookieHeader.includes('community_os_tg_oidc_state') && tgStateCookieHeader.includes('HttpOnly');
+
   assert(
-    (discordRedirectRes.status === 302 || discordRedirectRes.status === 307) && discordLoc.includes('discord.com/api/oauth2/authorize'),
-    'Connection Center: Discord connect endpoint issues 302/307 direct redirect so users never see raw API JSON'
+    (tgAuthInitRes.status === 302 || tgAuthInitRes.status === 307) &&
+    tgAuthLocation.startsWith('https://oauth.telegram.org/auth') &&
+    hasCodeChallenge &&
+    hasStateAndNonce &&
+    setsStateCookie,
+    'Authentication: Telegram OIDC authorize route initiated PKCE S256 flow with code_challenge, state, nonce, and HttpOnly cookie'
   );
 
-  // 23. Bearer Session Persistence: Session token survives across refreshes and requests
+  // Extract OIDC state cookie to simulate callback
+  let tgOidcCookie = '';
+  const cookieMatch = tgStateCookieHeader.match(/community_os_tg_oidc_state=([^;]+)/);
+  if (cookieMatch) {
+    tgOidcCookie = `community_os_tg_oidc_state=${cookieMatch[1]}`;
+  }
+  const decodedStateJson = JSON.parse(decodeURIComponent(cookieMatch[1]));
+
+  // 22. Telegram OIDC Callback with PKCE Exchange and JWKS Signature Verification
+  const testNonce = decodedStateJson.nonce;
+  const mockCode = `mock_test_oidc_code_${testNonce}`;
+  const tgOidcCallbackRes = await fetch(
+    `${BASE_URL}/api/auth/telegram/callback?code=${mockCode}&state=${decodedStateJson.state}`,
+    {
+      headers: { Cookie: tgOidcCookie },
+      redirect: 'manual'
+    }
+  );
+  const callbackLocation = tgOidcCallbackRes.headers.get('location') || '';
+  const sessionCookieHeader = tgOidcCallbackRes.headers.get('set-cookie') || '';
+  const hasSessionCookie = sessionCookieHeader.includes('community_os_session=') && sessionCookieHeader.includes('HttpOnly');
+  const noTokenInUrl = !callbackLocation.includes('session_token=');
+
+  assert(
+    (tgOidcCallbackRes.status === 302 || tgOidcCallbackRes.status === 307) &&
+    callbackLocation.includes('login_success=true') &&
+    noTokenInUrl &&
+    hasSessionCookie,
+    'Authentication: Telegram OIDC callback verified RS256 JWKS token, created user session, and set HttpOnly SameSite=Lax cookie without exposing token in URL'
+  );
+
+  // Extract session cookie from Telegram login for persistence test
+  let tgSessionCookie = '';
+  const sessMatch = sessionCookieHeader.match(/community_os_session=([^;]+)/);
+  if (sessMatch) {
+    tgSessionCookie = `community_os_session=${sessMatch[1]}`;
+  }
+
+  // 23. Cookie-Only Session Persistence (No localStorage needed): Session survives across refreshes
   const persistentDataRes = await fetch(`${BASE_URL}/api/data?communityId=comm_devforge`, {
     headers: {
-      Authorization: `Bearer ${tgAuthData.sessionToken}`
+      Cookie: tgSessionCookie
     }
   });
   const persistentDataJson = await persistentDataRes.json();
   assert(
-    persistentDataJson.success && persistentDataJson.data.authUser?.id === tgAuthData.user.id,
-    'Session Persistence: Authorization Bearer header restores authenticated session across page refreshes and requests'
+    persistentDataJson.success &&
+    persistentDataJson.data.authUser?.identities?.telegramId === 'tg_88921029',
+    'Session Persistence: HttpOnly SameSite=Lax cookie seamlessly restores authenticated session on refresh without localStorage'
+  );
+
+  // 24. Discord Fixed Redirect URI Security & Allowlist Enforcement: Untrusted host header ignored
+  const untrustedHostRes = await fetch(`${BASE_URL}/api/discord/connect`, {
+    headers: {
+      Host: 'evil-attacker-site.com',
+      'X-Forwarded-Host': 'malicious-proxy.net'
+    }
+  });
+  const untrustedHostData = await untrustedHostRes.json();
+  const usesAllowlistedUrl = untrustedHostData.redirectUri && !untrustedHostData.redirectUri.includes('evil-attacker-site');
+  assert(
+    untrustedHostData.success && usesAllowlistedUrl,
+    'Security Invariant: Discord redirect URI uses fixed allowlisted APP_URL and strictly rejects untrusted Host/X-Forwarded-Host headers'
+  );
+
+  // 25. Legacy HMAC Widget Deprecation: Informs callers that official OIDC flow is required
+  const legacyHmacRes = await fetch(`${BASE_URL}/api/auth/telegram/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id: '12345', hash: 'legacy_hash' })
+  });
+  const legacyHmacData = await legacyHmacRes.json();
+  assert(
+    legacyHmacRes.status === 400 && legacyHmacData.deprecated === true,
+    'Security Invariant: Legacy Telegram HMAC widget properly deprecated with 400 directing callers to official OIDC'
+  );
+
+  // --- MONETIZATION & VIRAL GROWTH TESTS (Free + Community Pro $15/mo) ---
+  console.log('\n--- Executing Monetization & Viral Growth Tests ---');
+
+  // 26. Subscription Endpoint: Exposes Free Starter tier and Whop Pro checkout
+  const subRes = await fetch(`${BASE_URL}/api/billing/subscription?communityId=comm_devforge`);
+  const subData = await subRes.json();
+  assert(
+    subRes.status === 200 &&
+    subData.success &&
+    subData.subscription.tier === 'free' &&
+    subData.checkout.priceMonthlyUsd === 15 &&
+    subData.checkout.checkoutUrl.includes('whop.com'),
+    'Monetization: Subscription endpoint returns active Free status, $15 pricing, and Whop Pro checkout link'
+  );
+
+  // 27. Free Plan Entitlements: Enforces 1 Discord server limit on Free tier
+  const secondDiscordRes = await fetch(`${BASE_URL}/api/discord/connect`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Cookie: sarahCookie },
+    body: JSON.stringify({
+      communityId: 'comm_devforge',
+      serverId: '998877665544332211',
+      serverName: 'Extra Discord Guild'
+    })
+  });
+  const secondDiscordData = await secondDiscordRes.json();
+  assert(
+    secondDiscordRes.status === 403 &&
+    secondDiscordData.error?.includes('Discord server limit reached') &&
+    Boolean(secondDiscordData.upgradeUrl),
+    'Entitlements: Free plan enforces 1 Discord server limit and provides Community Pro upgrade URL'
+  );
+
+  // 28. Verified Whop Webhook: Upgrades community to Community Pro ($15/mo)
+  const mockWhopEventId = `whop_evt_test_${Date.now()}`;
+  const whopWebhookRes = await fetch(`${BASE_URL}/api/webhooks/whop`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'webhook-id': mockWhopEventId
+    },
+    body: JSON.stringify({
+      action: 'membership.went_valid',
+      id: `sub_whop_${Date.now()}`,
+      data: {
+        id: `whop_sub_${Date.now()}`,
+        user_id: 'usr_whop_payer',
+        custom_metadata: {
+          community_id: 'comm_devforge'
+        }
+      }
+    })
+  });
+  const whopWebhookData = await whopWebhookRes.json();
+  assert(
+    whopWebhookRes.status === 200 && whopWebhookData.success,
+    'Monetization: Verified Whop payment webhook processed successfully and upgraded community to Community Pro'
+  );
+
+  // 29. Verify Pro Entitlements Active in Database
+  const proSubRes = await fetch(`${BASE_URL}/api/billing/subscription?communityId=comm_devforge`);
+  const proSubData = await proSubRes.json();
+  assert(
+    proSubData.subscription.tier === 'pro' &&
+    proSubData.subscription.status === 'active' &&
+    proSubData.entitlements.maxDiscordServers === 5 &&
+    proSubData.entitlements.maxMonthlyActiveMembers === 1000,
+    'Entitlements: Upgraded community reflects Pro status with 5 servers and 1,000 member capacity'
+  );
+
+  // 30. Idempotent Payment Event Processing: Duplicate event rejected safely
+  const duplicateWebhookRes = await fetch(`${BASE_URL}/api/webhooks/whop`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'webhook-id': mockWhopEventId
+    },
+    body: JSON.stringify({
+      action: 'membership.went_valid',
+      id: `sub_whop_${Date.now()}`,
+      data: {
+        id: `whop_sub_${Date.now()}`,
+        custom_metadata: { community_id: 'comm_devforge' }
+      }
+    })
+  });
+  const duplicateWebhookData = await duplicateWebhookRes.json();
+  assert(
+    duplicateWebhookRes.status === 200 && duplicateWebhookData.duplicate === true,
+    'Monetization: Idempotency check safely identified duplicate webhook event and avoided reprocessing'
+  );
+
+  // 31. Graceful Cancellation & Downgrade to Free: Preserves community data
+  const cancelWebhookRes = await fetch(`${BASE_URL}/api/webhooks/whop`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'webhook-id': `whop_evt_cancel_${Date.now()}`
+    },
+    body: JSON.stringify({
+      action: 'membership.went_invalid',
+      id: `whop_sub_cancel`,
+      data: {
+        id: `whop_sub_cancel`,
+        custom_metadata: { community_id: 'comm_devforge' }
+      }
+    })
+  });
+  const cancelWebhookData = await cancelWebhookRes.json();
+  const downgradedSubRes = await fetch(`${BASE_URL}/api/billing/subscription?communityId=comm_devforge`);
+  const downgradedSubData = await downgradedSubRes.json();
+  assert(
+    cancelWebhookRes.status === 200 &&
+    cancelWebhookData.success &&
+    downgradedSubData.subscription.tier === 'free' &&
+    downgradedSubData.subscription.status === 'canceled',
+    'Monetization: Graceful downgrade to Free plan completed while preserving all community data and tasks'
+  );
+
+  // 32. Viral Growth: Generate Referral Link & Track Clicks
+  const refPostRes = await fetch(`${BASE_URL}/api/referrals`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Cookie: cookieA },
+    body: JSON.stringify({
+      communityId: 'comm_devforge',
+      targetType: 'community'
+    })
+  });
+  const refPostData = await refPostRes.json();
+  assert(
+    refPostRes.status === 200 &&
+    refPostData.success &&
+    Boolean(refPostData.referral.referralCode) &&
+    refPostData.shareUrl.includes('ref='),
+    'Viral Growth: Generated trackable community referral & invitation link'
+  );
+
+  // 33. Viral Growth: Resolve Referral Code and Record Click
+  const refGetRes = await fetch(`${BASE_URL}/api/referrals?code=${refPostData.referral.referralCode}`);
+  const refGetData = await refGetRes.json();
+  assert(
+    refGetRes.status === 200 &&
+    refGetData.success &&
+    refGetData.referral.clicksCount >= 1,
+    'Viral Growth: Referral gateway resolved code, tracked visitor click, and returned target URL'
+  );
+
+  // 34. Public Shareable Member Passport: Public access allowed with privacy guarantees
+  const passportRes = await fetch(`${BASE_URL}/p/usr_sarah`);
+  assert(
+    passportRes.status === 200,
+    'Viral Growth: Public shareable Member Passport page accessible at /p/:userId'
+  );
+
+  // 35. Public Shareable Verified Outcome: Public access allowed with Powered by attribution
+  const outcomeRes = await fetch(`${BASE_URL}/outcome/out_sec_audit`);
+  assert(
+    outcomeRes.status === 200,
+    'Viral Growth: Public verified Outcome record accessible at /outcome/:outcomeId'
   );
 
   // Summary

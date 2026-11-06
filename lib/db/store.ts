@@ -37,7 +37,10 @@ import {
   OwnerActionItem,
   AuthAccount,
   AuthSession,
-  DevEmail
+  DevEmail,
+  CommunitySubscription,
+  PaymentWebhookEvent,
+  ReferralRecord
 } from '../types';
 
 export interface DatabaseSchema {
@@ -73,6 +76,9 @@ export interface DatabaseSchema {
   auditLogs: AuditLogItem[];
   identityChallenges?: IdentityChallenge[];
   groupConnectionChallenges?: GroupConnectionChallenge[];
+  subscriptions?: CommunitySubscription[];
+  webhookEvents?: PaymentWebhookEvent[];
+  referrals?: ReferralRecord[];
   dataMode?: DataMode;
 }
 
@@ -249,21 +255,23 @@ function getInitialSeedData(): DatabaseSchema {
         'Respect contributor privacy and consent settings.'
       ],
       discordConfig: {
-        connected: true,
-        serverId: 'discord_guild_devforge_01',
-        serverName: 'DevForge Main Guild',
-        channelId: 'ch_actions_991',
-        status: 'connected',
-        lastChecked: '2026-10-30T10:00:00Z'
+        connected: false,
+        serverId: '',
+        serverName: '',
+        channelId: '',
+        status: 'disconnected',
+        lastChecked: ''
       },
       telegramConfig: {
-        connected: true,
-        groupId: 'tg_group_devforge_super',
-        groupTitle: 'DevForge Core Discussion',
-        channelId: 'tg_ch_devforge_announcements',
-        status: 'connected',
-        lastChecked: '2026-10-30T11:00:00Z'
+        connected: false,
+        groupId: '',
+        groupTitle: '',
+        channelId: '',
+        status: 'disconnected',
+        lastChecked: ''
       },
+      connectedDiscordServers: [],
+      connectedTelegramGroups: [],
       contributionCategories: [
         { id: 'cat_tech', name: 'Technical Assistance', nameAr: 'المساعدة البرمجية والتقنية', description: 'Code contributions, PR reviews, bug triage, architecture audits.', requiresReview: true },
         { id: 'cat_mentor', name: 'Mentoring & Sessions', nameAr: 'الإرشاد والجلسات التوجيهية', description: '1-on-1 consultations and technical mentorship hours.', requiresReview: true },

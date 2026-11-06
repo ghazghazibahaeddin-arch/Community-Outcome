@@ -191,3 +191,64 @@ CREATE POLICY "Public communities read" ON communities FOR SELECT USING (true);
 CREATE POLICY "Public requests read" ON requests FOR SELECT USING (visibility = 'public' OR visibility = 'community');
 CREATE POLICY "Public tasks read" ON tasks FOR SELECT USING (true);
 CREATE POLICY "Public contributions read" ON contributions FOR SELECT USING (true);
+
+-- 17. SUBSCRIPTIONS & MONETIZATION
+CREATE TABLE IF NOT EXISTS subscriptions (
+  id TEXT PRIMARY KEY,
+  community_id TEXT NOT NULL REFERENCES communities(id) ON DELETE CASCADE,
+  tier TEXT NOT NULL DEFAULT 'free', -- free, pro
+  status TEXT NOT NULL DEFAULT 'active', -- active, pending, past_due, canceled, expired
+  provider TEXT NOT NULL DEFAULT 'whop', -- whop, gumroad, manual
+  provider_customer_id TEXT,
+  provider_subscription_id TEXT,
+  provider_plan_id TEXT,
+  current_period_start TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  current_period_end TIMESTAMPTZ NOT NULL,
+  cancel_at_period_end BOOLEAN NOT NULL DEFAULT FALSE,
+  canceled_at TIMESTAMPTZ,
+  amount_usd NUMERIC(10, 2) NOT NULL DEFAULT 0.00,
+  currency TEXT NOT NULL DEFAULT 'USD',
+  billing_interval TEXT NOT NULL DEFAULT 'month',
+  last_payment_event_id TEXT,
+  last_payment_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- 18. PAYMENT WEBHOOK EVENTS (Idempotency Store)
+CREATE TABLE IF NOT EXISTS payment_webhook_events (
+  id TEXT PRIMARY KEY,
+  provider TEXT NOT NULL,
+  event_id TEXT NOT NULL,
+  event_type TEXT NOT NULL,
+  community_id TEXT REFERENCES communities(id) ON DELETE SET NULL,
+  payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+  processed BOOLEAN NOT NULL DEFAULT TRUE,
+  processed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  error TEXT,
+  received_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(provider, event_id)
+);
+
+-- 19. VIRAL REFERRALS & INVITATIONS
+CREATE TABLE IF NOT EXISTS referrals (
+  id TEXT PRIMARY KEY,
+  referral_code TEXT UNIQUE NOT NULL,
+  community_id TEXT NOT NULL REFERENCES communities(id) ON DELETE CASCADE,
+  referrer_user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  referred_user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+  target_type TEXT NOT NULL DEFAULT 'community', -- community, request, task, passport
+  target_id TEXT,
+  clicks_count INT NOT NULL DEFAULT 0,
+  conversions_count INT NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  last_clicked_at TIMESTAMPTZ
+);
+
+ALTER TABLE subscriptions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE payment_webhook_events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE referrals ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Public subscriptions read" ON subscriptions FOR SELECT USING (true);
+CREATE POLICY "Public referrals read" ON referrals FOR SELECT USING (true);
+

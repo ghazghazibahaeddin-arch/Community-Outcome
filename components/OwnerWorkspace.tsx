@@ -34,9 +34,12 @@ import {
   ShieldCheck,
   Award,
   Send,
-  Sparkles
+  Sparkles,
+  CreditCard
 } from 'lucide-react';
 import { CommunityConnectionCenter } from './CommunityConnectionCenter';
+import { PricingPlansSection } from './PricingPlansSection';
+import { CommunitySubscription, PlanEntitlements } from '@/lib/types';
 
 interface OwnerWorkspaceProps {
   community: Community;
@@ -53,6 +56,14 @@ interface OwnerWorkspaceProps {
   ownerActionItems: OwnerActionItem[];
   dataMode: DataMode;
   lang: Language;
+  subscription?: CommunitySubscription;
+  entitlements?: PlanEntitlements & {
+    currentUsage: {
+      membersCount: number;
+      discordServersCount: number;
+      telegramGroupsCount: number;
+    };
+  };
   onRefresh: () => void;
   onSelectTab: (tab: string) => void;
   onSwitchToMemberSpace?: () => void;
@@ -73,13 +84,15 @@ export const OwnerWorkspace: React.FC<OwnerWorkspaceProps> = ({
   ownerActionItems,
   dataMode,
   lang,
+  subscription,
+  entitlements,
   onRefresh,
   onSelectTab,
   onSwitchToMemberSpace
 }) => {
   const t = translations[lang];
 
-  const [activeSection, setActiveSection] = useState<'operations' | 'connect' | 'requests' | 'reviews' | 'disputes' | 'roles' | 'config' | 'integrations'>('operations');
+  const [activeSection, setActiveSection] = useState<'operations' | 'connect' | 'pricing' | 'requests' | 'reviews' | 'disputes' | 'roles' | 'config' | 'integrations'>('operations');
 
   // Role Management State
   const [selectedUserForRole, setSelectedUserForRole] = useState<string>(users[1]?.id || 'usr_alex');
@@ -306,6 +319,20 @@ export const OwnerWorkspace: React.FC<OwnerWorkspaceProps> = ({
           )}
         </button>
         <button
+          onClick={() => setActiveSection('pricing')}
+          className={`px-3 py-1.5 rounded-md whitespace-nowrap transition-colors flex items-center gap-1.5 ${
+            activeSection === 'pricing'
+              ? 'bg-amber-500/20 text-amber-300 font-bold border border-amber-500/40 shadow-sm'
+              : 'hover:text-slate-200 text-amber-400/90 hover:bg-slate-800/40'
+          }`}
+        >
+          <Sparkles className="h-3.5 w-3.5" />
+          <span>Plans & Growth ($15/mo)</span>
+          {subscription?.tier === 'pro' && (
+            <span className="text-[10px] font-mono bg-amber-500/20 text-amber-300 px-1 rounded">PRO</span>
+          )}
+        </button>
+        <button
           onClick={() => setActiveSection('requests')}
           className={`px-3 py-1.5 rounded-md whitespace-nowrap transition-colors ${
             activeSection === 'requests' ? 'bg-indigo-600/20 text-indigo-400 font-bold' : 'hover:text-slate-200'
@@ -361,6 +388,18 @@ export const OwnerWorkspace: React.FC<OwnerWorkspaceProps> = ({
           community={community}
           currentUser={currentUser}
           currentUserRole={currentUserRole}
+          lang={lang}
+          onRefresh={onRefresh}
+        />
+      )}
+
+      {/* SECTION: PLANS & MONETIZATION */}
+      {activeSection === 'pricing' && (
+        <PricingPlansSection
+          community={community}
+          subscription={subscription}
+          entitlements={entitlements}
+          isOwner={isOwnerOrAdmin}
           lang={lang}
           onRefresh={onRefresh}
         />

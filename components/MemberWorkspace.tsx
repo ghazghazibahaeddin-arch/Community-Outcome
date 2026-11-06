@@ -535,21 +535,35 @@ export const MemberWorkspace: React.FC<MemberWorkspaceProps> = ({
           </p>
 
           <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-5 space-y-4">
-            <div className="flex items-center gap-4">
-              <div className="relative h-16 w-16 overflow-hidden rounded-full border-2 border-indigo-500/40 bg-slate-800">
-                <Image
-                  src={currentUser.avatar}
-                  alt={currentUser.name}
-                  fill
-                  sizes="64px"
-                  className="object-cover"
-                  referrerPolicy="no-referrer"
-                />
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="flex items-center gap-4">
+                <div className="relative h-16 w-16 overflow-hidden rounded-full border-2 border-indigo-500/40 bg-slate-800 shrink-0">
+                  <Image
+                    src={currentUser.avatar}
+                    alt={currentUser.name}
+                    fill
+                    sizes="64px"
+                    className="object-cover"
+                    referrerPolicy="no-referrer"
+                  />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white">{currentUser.passport.displayName}</h3>
+                  <span className="text-xs text-slate-400 font-mono">{currentUser.email}</span>
+                  <p className="text-xs text-slate-300 mt-1">{currentUser.passport.biography}</p>
+                </div>
               </div>
-              <div>
-                <h3 className="text-base font-bold text-white">{currentUser.passport.displayName}</h3>
-                <span className="text-xs text-slate-400 font-mono">{currentUser.email}</span>
-                <p className="text-xs text-slate-300 mt-1">{currentUser.passport.biography}</p>
+
+              <div className="shrink-0 flex items-center gap-2">
+                <a
+                  href={`/p/${currentUser.id}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-500/40 bg-indigo-600/10 hover:bg-indigo-600/20 px-3 py-1.5 text-xs font-semibold text-indigo-400 transition-all font-mono"
+                >
+                  <ExternalLink className="h-3.5 w-3.5" />
+                  <span>Public Passport</span>
+                </a>
               </div>
             </div>
 
@@ -663,15 +677,23 @@ export const MemberWorkspace: React.FC<MemberWorkspaceProps> = ({
                   <p className="text-xs text-slate-400 leading-normal">
                     Link your Telegram identity to verify deliverables and query tasks directly via @CommunityOutcomeBot.
                   </p>
-                  <a
-                    href="https://t.me/CommunityOutcomeBot?start=connect"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-[#229ED9]/40 bg-[#229ED9]/10 hover:bg-[#229ED9]/20 px-3.5 py-1.5 text-xs font-semibold text-[#54bbf0] transition-all"
-                  >
-                    <Send className="h-3.5 w-3.5" />
-                    <span>Open @CommunityOutcomeBot</span>
-                  </a>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <a
+                      href="/api/auth/telegram/authorize?redirect=true"
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-[#229ED9]/40 bg-[#229ED9]/10 hover:bg-[#229ED9]/20 px-3 py-1.5 text-xs font-semibold text-[#54bbf0] transition-all"
+                    >
+                      <Send className="h-3.5 w-3.5" />
+                      <span>Connect via Telegram OIDC</span>
+                    </a>
+                    <a
+                      href="https://t.me/CommunityOutcomeBot?start=connect"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800 hover:bg-slate-700 px-3 py-1.5 text-xs text-slate-300 transition-all"
+                    >
+                      <span>Open @Bot</span>
+                    </a>
+                  </div>
                 </div>
               )}
             </div>

@@ -4,6 +4,13 @@ import { dbOperations, getDatabase, saveDatabase } from '@/lib/db/store';
 import { computeCommunityAnalytics } from '@/lib/services/analytics';
 import { runAllJourneyVerifications } from '@/lib/services/testingSuite';
 import { getAuthenticatedUserFromRequest, getUserRoleInCommunity } from '@/lib/services/auth';
+import {
+  getCommunitySubscription,
+  getCommunityEntitlements,
+  verifyCommunityEntitlement,
+  trackReferralEvent,
+  WHOP_PRO_CHECKOUT_URL
+} from '@/lib/services/subscriptionService';
 
 export async function GET(req: NextRequest) {
   try {
@@ -67,7 +74,10 @@ export async function GET(req: NextRequest) {
         events: db.events.filter(e => communityId === 'all' || e.communityId === communityId),
         ownerActionItems: dbOperations.getOwnerActionItems(communityId),
         dataMode: dbOperations.getDataMode(),
-        identityChallenges: db.identityChallenges || []
+        identityChallenges: db.identityChallenges || [],
+        subscription: getCommunitySubscription(communityId),
+        entitlements: getCommunityEntitlements(communityId),
+        referrals: (db.referrals || []).filter(r => r.communityId === communityId)
       }
     });
   } catch (err: unknown) {
@@ -88,6 +98,24 @@ export async function POST(req: NextRequest) {
     switch (action) {
       case 'create_community': {
         const creatorId = authUser?.id || payload.ownerId || 'usr_sarah';
+
+        // Entitlement Check: Free plan allows 1 community per owner. Community Pro required for multi-community ownership.
+        const existingOwnedCommunities = db.communities.filter(c => c.ownerId === creatorId);
+        if (existingOwnedCommunities.length >= 1) {
+          // Check if any existing community is Pro
+          const hasProSubscription = existingOwnedCommunities.some(c => {
+            const sub = getCommunitySubscription(c.id);
+            return sub.tier === 'pro' && sub.status === 'active';
+          });
+          if (!hasProSubscription && authUser?.platformRole !== 'platform_admin') {
+            return NextResponse.json({
+              success: false,
+              error: 'Free plan includes 1 community. Upgrade to Community Pro ($15/month) to create and govern multiple communities.',
+              upgradeUrl: `${WHOP_PRO_CHECKOUT_URL}?custom_community_id=${encodeURIComponent(existingOwnedCommunities[0].id)}`
+            }, { status: 403 });
+          }
+        }
+
         result = dbOperations.createCommunity({
           name: payload.name,
           slug: payload.slug || payload.name.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
@@ -109,7 +137,23 @@ export async function POST(req: NextRequest) {
 
       case 'join_community': {
         const userId = authUser?.id || payload.userId || 'usr_sarah';
+
+        // Entitlement enforcement: Check monthly active member limit (100 for Free, 1,000 for Pro)
+        const memberLimitCheck = verifyCommunityEntitlement(payload.communityId, 'member_limit');
+        if (!memberLimitCheck.allowed) {
+          return NextResponse.json({
+            success: false,
+            error: memberLimitCheck.reason,
+            upgradeUrl: memberLimitCheck.upgradeUrl
+          }, { status: 403 });
+        }
+
         result = dbOperations.joinCommunity(payload.communityId, userId);
+
+        // Track referral conversion if a referralCode was passed
+        if (payload.referralCode) {
+          trackReferralEvent(payload.referralCode, 'conversion', userId);
+        }
         break;
       }
 

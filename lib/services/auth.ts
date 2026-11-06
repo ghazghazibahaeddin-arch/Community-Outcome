@@ -10,15 +10,22 @@ export const SESSION_DURATION_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 export const RESET_TOKEN_DURATION_MS = 60 * 60 * 1000; // 1 hour
 
 /**
- * Set session cookie on a NextResponse with settings optimized for iframes and modern browsers
+ * Set session cookie on a NextResponse with secure server-managed settings.
+ * Defaults to SameSite=Lax for normal top-level production web app security.
+ * SameSite=None is only used when explicitly requested for cross-site / iframe deployments.
  */
-export function setSessionCookie(res: NextResponse, token: string) {
+export function setSessionCookie(
+  res: NextResponse,
+  token: string,
+  options?: { isCrossSite?: boolean }
+) {
+  const isCrossSite = options?.isCrossSite ?? false;
   res.cookies.set({
     name: SESSION_COOKIE_NAME,
     value: token,
     httpOnly: true,
     secure: true,
-    sameSite: 'none',
+    sameSite: isCrossSite ? 'none' : 'lax',
     path: '/',
     maxAge: Math.floor(SESSION_DURATION_MS / 1000)
   });
@@ -27,13 +34,17 @@ export function setSessionCookie(res: NextResponse, token: string) {
 /**
  * Clear session cookie on a NextResponse
  */
-export function clearSessionCookie(res: NextResponse) {
+export function clearSessionCookie(
+  res: NextResponse,
+  options?: { isCrossSite?: boolean }
+) {
+  const isCrossSite = options?.isCrossSite ?? false;
   res.cookies.set({
     name: SESSION_COOKIE_NAME,
     value: '',
     httpOnly: true,
     secure: true,
-    sameSite: 'none',
+    sameSite: isCrossSite ? 'none' : 'lax',
     path: '/',
     maxAge: 0
   });

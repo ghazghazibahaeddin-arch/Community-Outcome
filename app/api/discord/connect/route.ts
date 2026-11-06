@@ -1,19 +1,9 @@
 // Community OS — Real Discord Server Connection & Verification Handler
 import { NextRequest, NextResponse } from 'next/server';
-import { dbOperations, getDatabase } from '@/lib/db/store';
+import { dbOperations } from '@/lib/db/store';
 import { getAuthenticatedUserFromRequest, getUserRoleInCommunity } from '@/lib/services/auth';
-
-function getAppBaseUrl(req: NextRequest): string {
-  const host = req.headers.get('x-forwarded-host') || req.headers.get('host');
-  const proto = req.headers.get('x-forwarded-proto') || (req.url.startsWith('https:') ? 'https' : 'http');
-  if (host) {
-    return `${proto}://${host}`.replace(/\/$/, '');
-  }
-  if (process.env.APP_URL) {
-    return process.env.APP_URL.replace(/\/$/, '');
-  }
-  return new URL(req.url).origin.replace(/\/$/, '');
-}
+import { getDiscordRedirectUri, getVerifiedAppUrl } from '@/lib/services/securityConfig';
+import { verifyCommunityEntitlement } from '@/lib/services/subscriptionService';
 
 export async function GET(req: NextRequest) {
   try {
@@ -42,13 +32,15 @@ export async function GET(req: NextRequest) {
     const permissions = '277025774752';
     const userSessionSuffix = authUser ? authUser.id : 'anon';
     const state = `os_discord_${mode}_${communityId}_${userSessionSuffix}_${Date.now()}`;
-    const appUrl = getAppBaseUrl(req);
-    const redirectUri = encodeURIComponent(`${appUrl}/api/discord/callback`);
+    
+    // Fixed production APP_URL and DISCORD_REDIRECT_URI from server env validated against allowlist
+    const verifiedRedirectUri = getDiscordRedirectUri();
+    const encodedRedirectUri = encodeURIComponent(verifiedRedirectUri);
 
     // Bot + slash command install URL vs User Identity OAuth URL
     const installUrl = mode === 'user'
-      ? `https://discord.com/api/oauth2/authorize?client_id=${appId}&response_type=code&scope=identify%20email&state=${state}&redirect_uri=${redirectUri}`
-      : `https://discord.com/api/oauth2/authorize?client_id=${appId}&permissions=${permissions}&scope=bot%20applications.commands&state=${state}&response_type=code&redirect_uri=${redirectUri}`;
+      ? `https://discord.com/api/oauth2/authorize?client_id=${appId}&response_type=code&scope=identify%20email&state=${state}&redirect_uri=${encodedRedirectUri}`
+      : `https://discord.com/api/oauth2/authorize?client_id=${appId}&permissions=${permissions}&scope=bot%20applications.commands&state=${state}&response_type=code&redirect_uri=${encodedRedirectUri}`;
 
     // If requested via link navigation (or redirect=true or HTML accept), redirect immediately so user never sees raw JSON!
     const shouldRedirect = url.searchParams.get('redirect') === 'true' || req.headers.get('accept')?.includes('text/html');
@@ -61,7 +53,8 @@ export async function GET(req: NextRequest) {
       appId,
       installUrl,
       mode,
-      redirectUri: `${appUrl}/api/discord/callback`,
+      redirectUri: verifiedRedirectUri,
+      appUrl: getVerifiedAppUrl(),
       permissionsInteger: permissions,
       requiredScopes: mode === 'user' ? ['identify', 'email'] : ['bot', 'applications.commands'],
       requiredPermissions: [
@@ -98,6 +91,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: 'Valid Discord Server ID (Guild ID) is required' }, { status: 400 });
     }
 
+    // Entitlement Check: Free plan allows 1 Discord server, Pro allows up to 5
+    const entitlementCheck = verifyCommunityEntitlement(communityId, 'discord_server_connect', serverId.trim());
+    if (!entitlementCheck.allowed) {
+      return NextResponse.json({
+        success: false,
+        error: entitlementCheck.reason,
+        upgradeUrl: entitlementCheck.upgradeUrl
+      }, { status: 403 });
+    }
+
     // Verify bot token and check live guild if token is configured
     const token = process.env.DISCORD_BOT_TOKEN;
     let actualServerName = serverName?.trim() || `Discord Guild (${serverId.trim()})`;
@@ -129,8 +132,8 @@ export async function POST(req: NextRequest) {
             error: `Discord Bot is not present in server "${serverId}". Please complete the "Install Bot" flow first to authorize the bot into your server.`
           }, { status: 400 });
         }
-      } catch (netErr: any) {
-        // If network check times out, preserve honest log
+      } catch {
+        // Network check handled gracefully
       }
     }
 

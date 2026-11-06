@@ -47,7 +47,9 @@ import {
   DataMode,
   IdentityChallenge,
   NotificationItem,
-  UserRole
+  UserRole,
+  CommunitySubscription,
+  PlanEntitlements
 } from '@/lib/types';
 import { CommunityOutcomeAnalytics } from '@/lib/services/analytics';
 import { ArrowRight, ShieldCheck, CheckCircle2, MessageSquare, ListTodo, ExternalLink, Shield, UserCheck, Sparkles } from 'lucide-react';
@@ -96,6 +98,8 @@ export default function HomePage() {
   const [ownerActionItems, setOwnerActionItems] = useState<OwnerActionItem[]>([]);
   const [identityChallenges, setIdentityChallenges] = useState<IdentityChallenge[]>([]);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const [subscription, setSubscription] = useState<CommunitySubscription | undefined>(undefined);
+  const [entitlements, setEntitlements] = useState<any>(undefined);
   const [analytics, setAnalytics] = useState<CommunityOutcomeAnalytics>({
     totalRequests: 0,
     requestsWithOffers: 0,
@@ -114,40 +118,25 @@ export default function HomePage() {
     eventAttendanceRate: 0
   });
 
-  // Extract token from URL (OAuth callbacks) or localStorage
-  const getStoredToken = React.useCallback(() => {
-    if (typeof window === 'undefined') return null;
+  // Clean up any legacy localStorage tokens on load and clean OAuth callback URL parameters
+  React.useEffect(() => {
+    if (typeof window === 'undefined') return;
     try {
+      localStorage.removeItem('community_os_session_token');
       const urlParams = new URLSearchParams(window.location.search);
-      const urlToken = urlParams.get('session_token');
-      if (urlToken) {
-        try {
-          localStorage.setItem('community_os_session_token', urlToken);
-          // Clean query params so URL is neat
-          const cleanSearch = new URLSearchParams(window.location.search);
-          cleanSearch.delete('session_token');
-          const newUrl = window.location.pathname + (cleanSearch.toString() ? `?${cleanSearch.toString()}` : '');
-          window.history.replaceState({}, document.title, newUrl);
-        } catch {}
-        return urlToken;
+      if (urlParams.has('session_token')) {
+        urlParams.delete('session_token');
+        const cleanUrl = window.location.pathname + (urlParams.toString() ? `?${urlParams.toString()}` : '');
+        window.history.replaceState({}, document.title, cleanUrl);
       }
-      return localStorage.getItem('community_os_session_token');
-    } catch {
-      return null;
-    }
+    } catch {}
   }, []);
 
   const fetchData = React.useCallback(async (commId = currentCommunityId) => {
     setIsRefreshing(true);
     try {
-      const token = getStoredToken();
-      const headers: Record<string, string> = {};
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-      }
-
+      // Credentials: 'include' sends the HttpOnly, Secure SameSite=Lax cookie automatically
       const res = await fetch(`/api/data?communityId=${commId}`, {
-        headers,
         credentials: 'include'
       });
       const json = await res.json();
@@ -178,34 +167,30 @@ export default function HomePage() {
         setMiniAppTests(d.miniAppTests || []);
         setOwnerActionItems(d.ownerActionItems || []);
         setIdentityChallenges(d.identityChallenges || []);
+        if (d.subscription) setSubscription(d.subscription);
+        if (d.entitlements) setEntitlements(d.entitlements);
         if (d.dataMode) setDataMode(d.dataMode);
         if (d.analytics) setAnalytics(d.analytics);
 
-        // Authenticated user resolution
+        // Authenticated user resolution via server session cookie
         if (d.authUser) {
           setAuthUser(d.authUser);
           setCurrentUserRole(d.currentUserRole || 'member');
-        } else if (token) {
-          // If we had a token, query /api/auth/me before clearing user state
+        } else {
           try {
-            const meRes = await fetch('/api/auth/me', { headers, credentials: 'include' });
+            const meRes = await fetch('/api/auth/me', { credentials: 'include' });
             const meJson = await meRes.json();
             if (meJson.authenticated && meJson.user) {
               setAuthUser(meJson.user);
               setCurrentUserRole('member');
             } else {
-              try {
-                localStorage.removeItem('community_os_session_token');
-              } catch {}
               setAuthUser(null);
               setCurrentUserRole('guest');
             }
           } catch {
-            // Keep existing authUser on transient network glitch
+            setAuthUser(null);
+            setCurrentUserRole('guest');
           }
-        } else {
-          setAuthUser(null);
-          setCurrentUserRole('guest');
         }
 
         // Derive notifications
@@ -240,7 +225,7 @@ export default function HomePage() {
       setIsLoading(false);
       setIsRefreshing(false);
     }
-  }, [currentCommunityId, getStoredToken]);
+  }, [currentCommunityId]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -296,10 +281,8 @@ export default function HomePage() {
 
   const handleSignOut = async () => {
     try {
-      const token = getStoredToken();
       await fetch('/api/auth/logout', {
         method: 'POST',
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
         credentials: 'include'
       });
       try {
@@ -323,13 +306,12 @@ export default function HomePage() {
       setCurrentUserRole('community_owner');
       if (details?.communityName && authUser) {
         try {
-          const token = getStoredToken();
           const res = await fetch('/api/data', {
             method: 'POST',
             headers: {
-              'Content-Type': 'application/json',
-              ...(token ? { Authorization: `Bearer ${token}` } : {})
+              'Content-Type': 'application/json'
             },
+            credentials: 'include',
             body: JSON.stringify({
               action: 'create_community',
               payload: {
@@ -480,6 +462,8 @@ export default function HomePage() {
                 ownerActionItems={ownerActionItems}
                 dataMode={dataMode}
                 lang={lang}
+                subscription={subscription}
+                entitlements={entitlements}
                 onRefresh={() => fetchData(currentCommunityId)}
                 onSelectTab={(tab) => {
                   setWorkspaceMode('modules');

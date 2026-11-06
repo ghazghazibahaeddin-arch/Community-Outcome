@@ -2,30 +2,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { dbOperations, getDatabase, saveDatabase } from '@/lib/db/store';
 import { createSession, getAuthenticatedUserFromRequest, setSessionCookie } from '@/lib/services/auth';
+import { getDiscordRedirectUri, getVerifiedAppUrl } from '@/lib/services/securityConfig';
 import { User } from '@/lib/types';
-
-function getAppBaseUrl(req: NextRequest): string {
-  const host = req.headers.get('x-forwarded-host') || req.headers.get('host');
-  const proto = req.headers.get('x-forwarded-proto') || (req.url.startsWith('https:') ? 'https' : 'http');
-  if (host) {
-    return `${proto}://${host}`.replace(/\/$/, '');
-  }
-  if (process.env.APP_URL) {
-    return process.env.APP_URL.replace(/\/$/, '');
-  }
-  return new URL(req.url).origin.replace(/\/$/, '');
-}
 
 export async function GET(req: NextRequest) {
   const url = new URL(req.url);
   const code = url.searchParams.get('code');
   const guildId = url.searchParams.get('guild_id');
-  const permissions = url.searchParams.get('permissions');
   const state = url.searchParams.get('state');
   const error = url.searchParams.get('error');
   const errorDescription = url.searchParams.get('error_description');
 
-  const appUrl = getAppBaseUrl(req);
+  const appUrl = getVerifiedAppUrl();
   const existingUser = await getAuthenticatedUserFromRequest(req);
 
   // 1. Handle user cancellation or OAuth error
@@ -53,7 +41,7 @@ export async function GET(req: NextRequest) {
   if (isUserAuthMode && code) {
     const clientId = process.env.DISCORD_APPLICATION_ID || '1347000000000000000';
     const clientSecret = process.env.DISCORD_CLIENT_SECRET;
-    const redirectUri = `${appUrl}/api/discord/callback`;
+    const redirectUri = getDiscordRedirectUri();
 
     let discordUser: { id: string; username: string; email?: string; avatar?: string } | null = null;
 
@@ -159,10 +147,13 @@ export async function GET(req: NextRequest) {
       saveDatabase(db);
     }
 
-    // Create session and set cookie
+    // Create session and set cookie with SameSite=Lax
+    // Note: No session token is placed into the URL query parameters
     const session = createSession(user.id, req.headers.get('user-agent') || undefined);
-    const res = NextResponse.redirect(`${appUrl}/?session_token=${session.token}&connected_platform=discord&login_success=true`);
-    setSessionCookie(res, session.token);
+    const res = NextResponse.redirect(
+      `${appUrl}/?tab=member&connected_platform=discord&login_success=true`
+    );
+    setSessionCookie(res, session.token, { isCrossSite: false });
     return res;
   }
 
@@ -207,11 +198,6 @@ export async function GET(req: NextRequest) {
 
     const redirectUrl = `${appUrl}/?tab=owner&connected_platform=discord&guild_id=${encodeURIComponent(guildId)}&guild_name=${encodeURIComponent(serverName)}&status=success`;
     const res = NextResponse.redirect(redirectUrl);
-
-    // If existing session token was in cookie, keep it
-    if (existingUser) {
-      // Session is preserved seamlessly
-    }
     return res;
   }
 

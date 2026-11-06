@@ -590,3 +590,86 @@ export interface IntegrationCheckResult {
   webhookUrl?: string;
   checkedAt: string;
 }
+
+// -------------------------------------------------------------
+// COMMUNITY OS — MONETIZATION, SUBSCRIPTIONS & VIRAL GROWTH
+// -------------------------------------------------------------
+
+export type PlanTier = 'free' | 'pro';
+
+export type SubscriptionStatus =
+  | 'active'
+  | 'pending'
+  | 'past_due'
+  | 'canceled'
+  | 'expired';
+
+export type PaymentProvider = 'whop' | 'gumroad' | 'manual';
+
+export interface CommunitySubscription {
+  id: string;
+  communityId: string;
+  tier: PlanTier;
+  status: SubscriptionStatus;
+  provider: PaymentProvider;
+  providerCustomerId?: string;
+  providerSubscriptionId?: string;
+  providerPlanId?: string;
+  currentPeriodStart: string;
+  currentPeriodEnd: string;
+  cancelAtPeriodEnd: boolean;
+  canceledAt?: string;
+  amountUsd: number;
+  currency: string;
+  billingInterval: 'month';
+  lastPaymentEventId?: string;
+  lastPaymentAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PlanEntitlements {
+  tier: PlanTier;
+  name: string;
+  priceMonthlyUsd: number;
+  maxMonthlyActiveMembers: number;
+  maxDiscordServers: number;
+  maxTelegramGroups: number;
+  advancedAutomations: boolean;
+  scheduledPublishing: boolean;
+  advancedAnalytics: boolean;
+  advancedTrustGraph: boolean;
+  communityShieldAdvanced: boolean;
+  customBranding: boolean;
+  apiWebhooksAuditLogs: boolean;
+  advancedWorkflowsPermissions: boolean;
+  showPoweredByBadge: boolean;
+}
+
+export interface PaymentWebhookEvent {
+  id: string;
+  provider: PaymentProvider;
+  eventId: string;
+  eventType: string;
+  communityId?: string;
+  payload: any;
+  processed: boolean;
+  processedAt?: string;
+  error?: string;
+  receivedAt: string;
+}
+
+export interface ReferralRecord {
+  id: string;
+  referralCode: string;
+  communityId: string;
+  referrerUserId: string;
+  referredUserId?: string;
+  targetType: 'community' | 'request' | 'task' | 'passport';
+  targetId?: string;
+  clicksCount: number;
+  conversionsCount: number;
+  createdAt: string;
+  lastClickedAt?: string;
+}
+

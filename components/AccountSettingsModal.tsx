@@ -236,14 +236,22 @@ export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({
                     Connected
                   </span>
                 ) : (
-                  <a
-                    href="https://t.me/CommunityOutcomeBot?start=connect"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-[10px] text-[#54bbf0] bg-[#229ED9]/20 hover:bg-[#229ED9]/30 px-2 py-1 rounded border border-[#229ED9]/40"
-                  >
-                    Link @Bot
-                  </a>
+                  <div className="flex items-center gap-1">
+                    <a
+                      href="/api/auth/telegram/authorize?redirect=true"
+                      className="text-[10px] text-[#54bbf0] bg-[#229ED9]/20 hover:bg-[#229ED9]/30 px-2 py-1 rounded border border-[#229ED9]/40"
+                    >
+                      OIDC Link
+                    </a>
+                    <a
+                      href="https://t.me/CommunityOutcomeBot?start=connect"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[10px] text-slate-400 bg-slate-800 hover:bg-slate-700 px-1.5 py-1 rounded border border-slate-700"
+                    >
+                      @Bot
+                    </a>
+                  </div>
                 )}
               </div>
             </div>

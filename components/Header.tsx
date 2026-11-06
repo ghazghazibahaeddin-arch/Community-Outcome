@@ -299,6 +299,13 @@ export const Header: React.FC<HeaderProps> = ({
           >
             {t.navigation.testSuite}
           </button>
+          <button
+            onClick={() => { onSelectWorkspaceMode('owner'); }}
+            className="whitespace-nowrap transition-all py-1 px-2 rounded-md bg-amber-500/10 text-amber-300 border border-amber-500/30 hover:bg-amber-500/20 text-xs font-semibold flex items-center gap-1"
+          >
+            <Sparkles className="h-3 w-3 text-amber-400" />
+            <span>Pricing ($15)</span>
+          </button>
         </nav>
 
         {/* Zone 3: Community Selector, Create Community, Lang Toggle, Refresh & Primary CTA */}

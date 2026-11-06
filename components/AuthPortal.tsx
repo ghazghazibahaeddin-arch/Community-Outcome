@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { Language, User } from '@/lib/types';
 import {
   ShieldCheck,
+  Shield,
   Lock,
   Mail,
   User as UserIcon,
@@ -58,9 +59,12 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({
   const [showTelegramModal, setShowTelegramModal] = useState(false);
   const [telegramConfig, setTelegramConfig] = useState<{
     botUsername: string;
+    clientId?: string;
     isConfigured: boolean;
-    domain: string;
-    origin: string;
+    allowedRedirectUrl?: string;
+    appUrl?: string;
+    domain?: string;
+    origin?: string;
     botFatherInstructions: string[];
   } | null>(null);
   const [telegramAuthLoading, setTelegramAuthLoading] = useState(false);
@@ -109,12 +113,6 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({
         return;
       }
 
-      if (data.sessionToken) {
-        try {
-          localStorage.setItem('community_os_session_token', data.sessionToken);
-        } catch {}
-      }
-
       setSuccessMessage(isRtl ? 'تم تسجيل الدخول عبر Telegram بنجاح!' : 'Telegram authentication successful!');
       setShowTelegramModal(false);
       setTimeout(() => {
@@ -142,18 +140,13 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ email: email.trim(), password })
       });
       const data = await res.json();
       if (!res.ok || !data.success) {
         setErrorMessage(data.error || (isRtl ? 'فشل تسجيل الدخول: تحقق من البريد أو كلمة المرور' : 'Invalid email or password.'));
         return;
-      }
-
-      if (data.sessionToken) {
-        try {
-          localStorage.setItem('community_os_session_token', data.sessionToken);
-        } catch {}
       }
 
       setSuccessMessage(isRtl ? 'تم تسجيل الدخول بنجاح! جاري التوجيه...' : 'Authenticated successfully! Redirecting...');
@@ -190,6 +183,7 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({
       const res = await fetch('/api/auth/signup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
           name: name.trim(),
           email: email.trim(),
@@ -201,12 +195,6 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({
       if (!res.ok || !data.success) {
         setErrorMessage(data.error || (isRtl ? 'فشل إنشاء الحساب' : 'Failed to register account.'));
         return;
-      }
-
-      if (data.sessionToken) {
-        try {
-          localStorage.setItem('community_os_session_token', data.sessionToken);
-        } catch {}
       }
 
       setSuccessMessage(isRtl ? 'تم إنشاء الحساب بنجاح! مرحباً بك في Community OS' : 'Account created successfully! Welcome to Community OS.');
@@ -567,14 +555,23 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({
                     <span>{isRtl ? 'المتابعة بحساب Discord' : 'Continue with Discord'}</span>
                   </a>
 
-                  <button
-                    type="button"
-                    onClick={openTelegramLogin}
-                    className="w-full flex items-center justify-center gap-2 rounded-lg border border-[#229ED9]/40 bg-[#229ED9]/10 hover:bg-[#229ED9]/20 py-2.5 text-xs font-semibold text-[#54bbf0] transition-all"
-                  >
-                    <Send className="h-4 w-4" />
-                    <span>{isRtl ? 'المتابعة بحساب Telegram' : 'Continue with Telegram'}</span>
-                  </button>
+                  <div className="flex items-center gap-1.5">
+                    <a
+                      href="/api/auth/telegram/authorize?redirect=true"
+                      className="flex-1 flex items-center justify-center gap-2 rounded-lg border border-[#229ED9]/40 bg-[#229ED9]/10 hover:bg-[#229ED9]/20 py-2.5 text-xs font-semibold text-[#54bbf0] transition-all"
+                    >
+                      <Send className="h-4 w-4" />
+                      <span>{isRtl ? 'المتابعة بـ Telegram OIDC' : 'Continue with Telegram'}</span>
+                    </a>
+                    <button
+                      type="button"
+                      onClick={openTelegramLogin}
+                      title="Telegram Setup & BotFather Instructions"
+                      className="rounded-lg border border-[#229ED9]/30 bg-[#229ED9]/5 hover:bg-[#229ED9]/15 px-2.5 py-2.5 text-xs text-[#54bbf0]"
+                    >
+                      <Shield className="h-4 w-4" />
+                    </button>
+                  </div>
                 </div>
               </form>
             )}
@@ -853,23 +850,35 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({
                 </div>
               </div>
 
-              {/* Exact BotFather Domain Instructions */}
+              {/* Exact BotFather OpenID Connect Allowed Redirect URL */}
               <div className="rounded-lg border border-slate-800 bg-slate-950 p-3 space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="text-[11px] font-semibold text-slate-300">
-                    {isRtl ? 'إعداد النطاق المصرح به في @BotFather:' : 'Required @BotFather Domain Setup:'}
+                    {isRtl ? 'رابط إعادة التوجيه المصرح به في @BotFather:' : 'BotFather Allowed Redirect URL (OIDC):'}
                   </span>
-                  <span className="text-[10px] font-mono text-indigo-400 bg-indigo-500/10 px-1.5 py-0.5 rounded">
-                    {telegramConfig?.domain || (typeof window !== 'undefined' ? window.location.host : 'localhost:3000')}
+                  <span className="text-[10px] font-mono text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">
+                    PKCE S256
                   </span>
+                </div>
+                <div className="p-2 rounded bg-slate-900 border border-slate-800 text-[11px] font-mono text-sky-300 break-all select-all">
+                  {telegramConfig?.allowedRedirectUrl || (typeof window !== 'undefined' ? `${window.location.origin}/api/auth/telegram/callback` : 'https://.../api/auth/telegram/callback')}
                 </div>
                 <div className="text-[11px] text-slate-400 space-y-1 font-mono">
                   <div>1. Message <span className="text-sky-300">@BotFather</span> on Telegram</div>
-                  <div>2. Send <span className="text-amber-300">/setdomain</span></div>
-                  <div>3. Choose <span className="text-sky-300">@{telegramConfig?.botUsername || 'CommunityOutcomeBot'}</span></div>
-                  <div>4. Enter domain: <span className="text-emerald-300 font-bold">{telegramConfig?.domain || (typeof window !== 'undefined' ? window.location.host : 'localhost:3000')}</span></div>
+                  <div>2. Send <span className="text-amber-300">/mybots</span> & select <span className="text-sky-300">@{telegramConfig?.botUsername || 'CommunityOutcomeBot'}</span></div>
+                  <div>3. Choose <span className="text-sky-300">Bot Settings</span> &rarr; <span className="text-sky-300">OpenID Connect Login</span></div>
+                  <div>4. Select <span className="text-amber-300">Allowed Redirect URLs</span> & add the URL above</div>
                 </div>
               </div>
+
+              {/* Direct Link to Launch Official OIDC */}
+              <a
+                href="/api/auth/telegram/authorize?redirect=true"
+                className="w-full flex items-center justify-center gap-2 rounded-lg bg-[#229ED9] hover:bg-[#1f8ec4] py-2.5 text-xs font-semibold text-white shadow-lg shadow-sky-600/30 transition-all"
+              >
+                <Send className="h-4 w-4" />
+                <span>{isRtl ? 'فتح نافذة تفويض Telegram الرسمية' : 'Launch Official Telegram OIDC Login'}</span>
+              </a>
 
               {/* Enter Telegram Handle to Authenticate */}
               <div className="space-y-2 pt-1">

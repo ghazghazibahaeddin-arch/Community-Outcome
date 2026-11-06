@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { CommunityLink, Community } from '@/lib/types';
 import { ArrowLeft, ShieldCheck, CheckCircle2, ExternalLink, Send, AlertTriangle } from 'lucide-react';
 
@@ -183,8 +184,14 @@ export default function ActionLinkPage() {
         </div>
       </div>
 
-      <footer className="text-center text-xs text-slate-600 font-mono py-4">
-        Community OS Universal Link Gateway
+      <footer className="text-center py-6">
+        <Link
+          href="/"
+          className="inline-flex items-center gap-1.5 text-xs text-slate-500 hover:text-indigo-400 transition-colors font-mono"
+        >
+          <ShieldCheck className="h-4 w-4 text-indigo-400" />
+          <span>Powered by <span className="font-bold text-slate-300">Community OS</span></span>
+        </Link>
       </footer>
     </div>
   );
