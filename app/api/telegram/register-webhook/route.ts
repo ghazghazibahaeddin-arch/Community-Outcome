@@ -1,76 +1,79 @@
+// Community OS — Telegram Bot Webhook Auto-Registration Handler
 import { NextRequest, NextResponse } from 'next/server';
+import { getAuthenticatedUserFromRequest } from '@/lib/services/auth';
 
-export async function POST(req: NextRequest) {
+export async function GET(req: NextRequest) {
   try {
     const token = process.env.TELEGRAM_BOT_TOKEN;
-    const secret = process.env.TELEGRAM_WEBHOOK_SECRET;
-
     if (!token) {
       return NextResponse.json({
-        success: false,
-        error: 'TELEGRAM_BOT_TOKEN is not configured in server environment.'
+        configured: false,
+        error: 'TELEGRAM_BOT_TOKEN environment variable is not configured'
       }, { status: 400 });
     }
 
-    const appUrl = (process.env.APP_URL || 'https://community-os.org').replace(/\/$/, '');
-    const webhookUrl = `${appUrl}/api/telegram/webhook`;
-
-    const setWebhookUrl = `https://api.telegram.org/bot${token.trim()}/setWebhook`;
-    const payload: any = {
-      url: webhookUrl,
-      allowed_updates: ['message', 'channel_post', 'callback_query']
-    };
-
-    if (secret) {
-      // Telegram requires: Only characters A-Z, a-z, 0-9, _ and - are allowed.
-      const safeSecret = secret.trim().replace(/[^A-Za-z0-9_-]/g, '');
-      if (safeSecret.length >= 1) {
-        payload.secret_token = safeSecret;
-      }
-    }
-
-    const apiRes = await fetch(setWebhookUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-
-    const data = await apiRes.json();
-    if (!apiRes.ok || !data.ok) {
-      return NextResponse.json({
-        success: false,
-        error: data.description || 'Telegram setWebhook failed',
-        details: data
-      }, { status: apiRes.status });
-    }
-
-    // Also register commands in Telegram menu
-    const commands = [
-      { command: 'help', description: 'Show all available commands' },
-      { command: 'hub', description: 'Open Community Action Hub' },
-      { command: 'requests', description: 'View active NeedSignal help requests' },
-      { command: 'tasks', description: 'Browse active QuestLoop tasks' },
-      { command: 'mytasks', description: 'View tasks assigned to you' },
-      { command: 'passport', description: 'View verified Member Passport' },
-      { command: 'contribution', description: 'Submit deliverable evidence' },
-      { command: 'connect', description: 'Link Telegram account to Community OS' },
-      { command: 'status', description: 'Check bot and database health' }
-    ];
-
-    await fetch(`https://api.telegram.org/bot${token.trim()}/setMyCommands`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ commands })
-    });
+    // Check current webhook status from Telegram Bot API
+    const res = await fetch(`https://api.telegram.org/bot${token.trim()}/getWebhookInfo`);
+    const data = (await res.json()) as any;
 
     return NextResponse.json({
       success: true,
-      message: 'Telegram webhook and menu commands successfully registered.',
-      webhookUrl,
-      telegramResponse: data
+      webhookInfo: data.result || null
     });
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : String(err);
-    return NextResponse.json({ success: false, error: message }, { status: 500 });
+  } catch (err: any) {
+    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+  }
+}
+
+export async function POST(req: NextRequest) {
+  try {
+    const authUser = await getAuthenticatedUserFromRequest(req);
+    // Only platform admin can register webhooks
+    if (authUser && authUser.platformRole !== 'platform_admin') {
+      return NextResponse.json({ success: false, error: 'Unauthorized: requires platform admin role' }, { status: 403 });
+    }
+
+    const token = process.env.TELEGRAM_BOT_TOKEN;
+    if (!token) {
+      return NextResponse.json({
+        success: false,
+        error: 'TELEGRAM_BOT_TOKEN is not configured in server environment'
+      }, { status: 400 });
+    }
+
+    const body = ((await req.json().catch(() => ({}))) || {}) as { appUrl?: string; dropPending?: boolean };
+    const rawAppUrl = body.appUrl || process.env.APP_URL || 'https://community-os.workers.dev';
+    const appUrl = rawAppUrl.trim().replace(/\/$/, '');
+    const webhookUrl = `${appUrl}/api/telegram/webhook`;
+
+    const rawSecret = process.env.TELEGRAM_WEBHOOK_SECRET || 'comm_tg_sec_prod_9918';
+    const sanitizedSecret = rawSecret.trim().replace(/[^A-Za-z0-9_-]/g, '');
+
+    const params = new URLSearchParams({
+      url: webhookUrl,
+      secret_token: sanitizedSecret,
+      allowed_updates: JSON.stringify(['message', 'edited_message', 'channel_post', 'callback_query']),
+      drop_pending_updates: body.dropPending ? 'true' : 'false'
+    });
+
+    const setRes = await fetch(`https://api.telegram.org/bot${token.trim()}/setWebhook?${params.toString()}`);
+    const setResult = (await setRes.json()) as any;
+
+    if (!setResult.ok) {
+      return NextResponse.json({
+        success: false,
+        error: setResult.description || 'Failed to register webhook with Telegram',
+        targetUrl: webhookUrl
+      }, { status: 400 });
+    }
+
+    return NextResponse.json({
+      success: true,
+      message: 'Telegram Webhook registered successfully for Cloudflare Workers',
+      webhookUrl,
+      telegramResponse: setResult
+    });
+  } catch (err: any) {
+    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
   }
 }

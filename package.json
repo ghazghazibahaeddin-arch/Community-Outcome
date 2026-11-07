@@ -7,7 +7,11 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
-    "clean": "next clean"
+    "clean": "next clean",
+    "cf:check": "npx vinext check",
+    "cf:preview": "npx wrangler dev",
+    "cf:deploy": "npx wrangler deploy",
+    "telegram:register": "node scripts/register_telegram_webhook.mjs"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",

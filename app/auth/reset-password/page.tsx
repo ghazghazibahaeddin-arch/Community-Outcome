@@ -43,7 +43,7 @@ function ResetPasswordForm() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token, newPassword: password })
       });
-      const data = await res.json();
+      const data = (await res.json()) as any;
 
       if (!res.ok || !data.success) {
         setError(data.error || 'Password reset failed');

@@ -3,7 +3,7 @@ import { resetPassword } from '@/lib/services/auth';
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
+    const body = (await req.json()) as { token?: string; newPassword?: string };
     const { token, newPassword } = body;
 
     if (!token || !newPassword) {

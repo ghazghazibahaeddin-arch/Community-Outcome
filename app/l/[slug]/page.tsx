@@ -23,7 +23,7 @@ export default function ActionLinkPage() {
     const fetchLink = async () => {
       try {
         const res = await fetch(`/api/data`);
-        const json = await res.json();
+        const json = (await res.json()) as any;
         if (json.success && json.data) {
           const foundLink = json.data.links?.find((l: CommunityLink) => l.slug === slug);
           if (foundLink) {

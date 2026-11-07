@@ -2,6 +2,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { dbOperations, getDatabase } from '@/lib/db/store';
 
+// Deduplicate Telegram update retries
+const recentUpdateIds = new Set<number>();
+const MAX_RECENT_UPDATES = 2000;
+
 export async function POST(req: NextRequest) {
   try {
     // 1. Validate incoming Telegram secret token header if configured
@@ -15,7 +19,19 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const rawBody = await req.json();
+    const rawBody = (await req.json()) as any;
+
+    // 1.1 Deduplicate Telegram update retries via update_id
+    if (typeof rawBody.update_id === 'number') {
+      if (recentUpdateIds.has(rawBody.update_id)) {
+        return NextResponse.json({ ok: true, duplicate: true });
+      }
+      recentUpdateIds.add(rawBody.update_id);
+      if (recentUpdateIds.size > MAX_RECENT_UPDATES) {
+        const firstEntry = recentUpdateIds.values().next().value;
+        if (firstEntry !== undefined) recentUpdateIds.delete(firstEntry);
+      }
+    }
 
     // 2. Handle Inline Button Callback Queries (In-Group Interactive Bot Experience)
     if (rawBody.callback_query) {
@@ -397,7 +413,7 @@ export async function POST(req: NextRequest) {
             const adminCheckRes = await fetch(
               `https://api.telegram.org/bot${token.trim()}/getChatMember?chat_id=${chatId}&user_id=${message.from.id}`
             );
-            const adminCheckJson = await adminCheckRes.json();
+            const adminCheckJson = (await adminCheckRes.json()) as any;
             if (adminCheckJson.ok && !['creator', 'administrator'].includes(adminCheckJson.result?.status)) {
               return NextResponse.json({
                 method: 'sendMessage',

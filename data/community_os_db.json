@@ -1876,6 +1876,156 @@
         "allowCrossCommunitySharing": false,
         "shareableRecordIds": []
       }
+    },
+    {
+      "id": "usr_1793984325435_1e8d61f2",
+      "name": "Jordan Member",
+      "email": "member_test_1793984322917@example.com",
+      "avatar": "https://picsum.photos/seed/usr_1793984325435_1e8d61f2/200/200",
+      "bio": "Open source contributor & automated tester",
+      "platformRole": "user",
+      "createdAt": "2026-11-06T16:58:45.493Z",
+      "identities": {},
+      "passport": {
+        "displayName": "Jordan Member",
+        "biography": "Open source contributor & automated tester",
+        "skills": [],
+        "interests": [],
+        "languages": [
+          "English"
+        ],
+        "collaborationPreferences": "Open to community collaborations.",
+        "portfolioLinks": [],
+        "isPublic": true
+      },
+      "privacy": {
+        "showBio": true,
+        "showSkills": true,
+        "showVerifiedOnly": false,
+        "allowDiscovery": true,
+        "allowCrossCommunitySharing": false,
+        "shareableRecordIds": []
+      }
+    },
+    {
+      "id": "usr_1793984326955_7d352189",
+      "name": "Elena Founder",
+      "email": "owner_1793984326920@example.com",
+      "avatar": "https://picsum.photos/seed/usr_1793984326955_7d352189/200/200",
+      "bio": "Ecosystem Steward",
+      "platformRole": "user",
+      "createdAt": "2026-11-06T16:58:46.999Z",
+      "identities": {},
+      "passport": {
+        "displayName": "Elena Founder",
+        "biography": "Ecosystem Steward",
+        "skills": [],
+        "interests": [],
+        "languages": [
+          "English"
+        ],
+        "collaborationPreferences": "Open to community collaborations.",
+        "portfolioLinks": [],
+        "isPublic": true
+      },
+      "privacy": {
+        "showBio": true,
+        "showSkills": true,
+        "showVerifiedOnly": false,
+        "allowDiscovery": true,
+        "allowCrossCommunitySharing": false,
+        "shareableRecordIds": []
+      }
+    },
+    {
+      "id": "usr_1794041815188_3c06af2d",
+      "name": "Jordan Member",
+      "email": "member_test_1794041814320@example.com",
+      "avatar": "https://picsum.photos/seed/usr_1794041815188_3c06af2d/200/200",
+      "bio": "Open source contributor & automated tester",
+      "platformRole": "user",
+      "createdAt": "2026-11-07T08:56:55.238Z",
+      "identities": {},
+      "passport": {
+        "displayName": "Jordan Member",
+        "biography": "Open source contributor & automated tester",
+        "skills": [],
+        "interests": [],
+        "languages": [
+          "English"
+        ],
+        "collaborationPreferences": "Open to community collaborations.",
+        "portfolioLinks": [],
+        "isPublic": true
+      },
+      "privacy": {
+        "showBio": true,
+        "showSkills": true,
+        "showVerifiedOnly": false,
+        "allowDiscovery": true,
+        "allowCrossCommunitySharing": false,
+        "shareableRecordIds": []
+      }
+    },
+    {
+      "id": "usr_1794041815802_0ed93674",
+      "name": "Elena Founder",
+      "email": "owner_1794041815776@example.com",
+      "avatar": "https://picsum.photos/seed/usr_1794041815802_0ed93674/200/200",
+      "bio": "Ecosystem Steward",
+      "platformRole": "user",
+      "createdAt": "2026-11-07T08:56:55.847Z",
+      "identities": {},
+      "passport": {
+        "displayName": "Elena Founder",
+        "biography": "Ecosystem Steward",
+        "skills": [],
+        "interests": [],
+        "languages": [
+          "English"
+        ],
+        "collaborationPreferences": "Open to community collaborations.",
+        "portfolioLinks": [],
+        "isPublic": true
+      },
+      "privacy": {
+        "showBio": true,
+        "showSkills": true,
+        "showVerifiedOnly": false,
+        "allowDiscovery": true,
+        "allowCrossCommunitySharing": false,
+        "shareableRecordIds": []
+      }
+    },
+    {
+      "id": "usr_1794041844700_0cb3faad",
+      "name": "Security Auditor",
+      "email": "security_tester_1794041844474@domain.org",
+      "avatar": "https://picsum.photos/seed/usr_1794041844700_0cb3faad/200/200",
+      "bio": "Auditing production security invariants",
+      "platformRole": "user",
+      "createdAt": "2026-11-07T08:57:24.764Z",
+      "identities": {},
+      "passport": {
+        "displayName": "Security Auditor",
+        "biography": "Auditing production security invariants",
+        "skills": [],
+        "interests": [],
+        "languages": [
+          "English"
+        ],
+        "collaborationPreferences": "Open to community collaborations.",
+        "portfolioLinks": [],
+        "isPublic": true
+      },
+      "privacy": {
+        "showBio": true,
+        "showSkills": true,
+        "showVerifiedOnly": false,
+        "allowDiscovery": true,
+        "allowCrossCommunitySharing": false,
+        "shareableRecordIds": []
+      }
     }
   ],
   "communities": [
@@ -1910,7 +2060,7 @@
           "Use Application Commands"
         ],
         "slashCommandsRegistered": 10,
-        "lastChecked": "2026-11-05T15:44:42.276Z"
+        "lastChecked": "2026-11-07T08:57:01.286Z"
       },
       "telegramConfig": {
         "connected": true,
@@ -1920,8 +2070,8 @@
         "botMembership": true,
         "botIsAdmin": true,
         "webhookActive": true,
-        "lastChecked": "2026-11-05T15:44:40.836Z",
-        "menuMessageId": "msg_sim_1793893481332",
+        "lastChecked": "2026-11-07T08:57:00.131Z",
+        "menuMessageId": "msg_sim_1794041820616",
         "channelId": "-100192837465"
       },
       "connectedDiscordServers": [
@@ -3020,6 +3170,84 @@
       ],
       "id": "comm_1793893476107",
       "createdAt": "2026-11-05T15:44:36.107Z"
+    },
+    {
+      "name": "Nexus Security Lab (Verified)",
+      "slug": "nexus-lab-1793984327012",
+      "description": "Collaborative security auditing and formal verification guild",
+      "category": "Security & Infrastructure",
+      "avatar": "https://picsum.photos/seed/1793984327033/200/200",
+      "coverImage": "https://images.unsplash.com/photo-1522071820081-009f0129c71c?auto=format&fit=crop&w=1200&q=80",
+      "ownerId": "usr_1793984326955_7d352189",
+      "rules": [
+        "Be respectful and transparent",
+        "Deliver on verified commitments"
+      ],
+      "discordConfig": {
+        "connected": false,
+        "status": "not_configured"
+      },
+      "telegramConfig": {
+        "connected": false,
+        "status": "not_configured"
+      },
+      "contributionCategories": [
+        {
+          "id": "cat_core",
+          "name": "Core Deliverables",
+          "nameAr": "المخرجات الأساسية",
+          "description": "Major project milestones and deliverables",
+          "requiresReview": true
+        },
+        {
+          "id": "cat_review",
+          "name": "Quality & Audit",
+          "nameAr": "الجودة والتدقيق",
+          "description": "Peer reviews and test verifications",
+          "requiresReview": true
+        }
+      ],
+      "id": "comm_1793984327033",
+      "createdAt": "2026-11-06T16:58:47.033Z"
+    },
+    {
+      "name": "Nexus Security Lab (Verified)",
+      "slug": "nexus-lab-1794041815860",
+      "description": "Collaborative security auditing and formal verification guild",
+      "category": "Security & Infrastructure",
+      "avatar": "https://picsum.photos/seed/1794041815881/200/200",
+      "coverImage": "https://images.unsplash.com/photo-1522071820081-009f0129c71c?auto=format&fit=crop&w=1200&q=80",
+      "ownerId": "usr_1794041815802_0ed93674",
+      "rules": [
+        "Be respectful and transparent",
+        "Deliver on verified commitments"
+      ],
+      "discordConfig": {
+        "connected": false,
+        "status": "not_configured"
+      },
+      "telegramConfig": {
+        "connected": false,
+        "status": "not_configured"
+      },
+      "contributionCategories": [
+        {
+          "id": "cat_core",
+          "name": "Core Deliverables",
+          "nameAr": "المخرجات الأساسية",
+          "description": "Major project milestones and deliverables",
+          "requiresReview": true
+        },
+        {
+          "id": "cat_review",
+          "name": "Quality & Audit",
+          "nameAr": "الجودة والتدقيق",
+          "description": "Peer reviews and test verifications",
+          "requiresReview": true
+        }
+      ],
+      "id": "comm_1794041815881",
+      "createdAt": "2026-11-07T08:56:55.881Z"
     }
   ],
   "memberships": [
@@ -3652,9 +3880,131 @@
       "role": "member",
       "joinedAt": "2026-11-05T15:44:36.177Z",
       "onboardingStatus": "first_action_completed"
+    },
+    {
+      "id": "mem_1793984326614_usr_1793984325435_1e8d61f2",
+      "userId": "usr_1793984325435_1e8d61f2",
+      "communityId": "comm_devforge",
+      "role": "member",
+      "joinedAt": "2026-11-06T16:58:46.614Z",
+      "onboardingStatus": "first_action_completed"
+    },
+    {
+      "id": "mem_1793984327033_owner",
+      "userId": "usr_1793984326955_7d352189",
+      "communityId": "comm_1793984327033",
+      "role": "community_owner",
+      "joinedAt": "2026-11-06T16:58:47.033Z",
+      "onboardingStatus": "first_action_completed"
+    },
+    {
+      "id": "mem_1793984327096_usr_1793984326955_7d352189",
+      "userId": "usr_1793984326955_7d352189",
+      "communityId": "comm_devforge",
+      "role": "member",
+      "joinedAt": "2026-11-06T16:58:47.096Z",
+      "onboardingStatus": "first_action_completed"
+    },
+    {
+      "id": "mem_1794041815696_usr_1794041815188_3c06af2d",
+      "userId": "usr_1794041815188_3c06af2d",
+      "communityId": "comm_devforge",
+      "role": "member",
+      "joinedAt": "2026-11-07T08:56:55.696Z",
+      "onboardingStatus": "first_action_completed"
+    },
+    {
+      "id": "mem_1794041815881_owner",
+      "userId": "usr_1794041815802_0ed93674",
+      "communityId": "comm_1794041815881",
+      "role": "community_owner",
+      "joinedAt": "2026-11-07T08:56:55.881Z",
+      "onboardingStatus": "first_action_completed"
+    },
+    {
+      "id": "mem_1794041815952_usr_1794041815802_0ed93674",
+      "userId": "usr_1794041815802_0ed93674",
+      "communityId": "comm_devforge",
+      "role": "member",
+      "joinedAt": "2026-11-07T08:56:55.952Z",
+      "onboardingStatus": "first_action_completed"
     }
   ],
   "requests": [
+    {
+      "communityId": "comm_devforge",
+      "creatorId": "usr_alex",
+      "title": "Telegram Bot Test Deliverable Request",
+      "description": "Created via Telegram Bot by @telegram_tester",
+      "category": "cat_tech",
+      "skillsRequired": [
+        "General Assistance & Verification"
+      ],
+      "priority": "high",
+      "deadline": "2026-11-14T08:56:58.614Z",
+      "status": "open",
+      "visibility": "community",
+      "id": "req_1794041818614",
+      "createdAt": "2026-11-07T08:56:58.614Z",
+      "updatedAt": "2026-11-07T08:56:58.614Z"
+    },
+    {
+      "communityId": "comm_devforge",
+      "creatorId": "usr_1794041815188_3c06af2d",
+      "title": "Audit E2E Automated Invariants for Test Suite",
+      "description": "Comprehensive evaluation of automated journey invariants",
+      "category": "cat_tech",
+      "skillsRequired": [
+        "TypeScript",
+        "Testing"
+      ],
+      "priority": "high",
+      "deadline": "2026-11-14T08:56:55.709Z",
+      "visibility": "community",
+      "id": "req_1794041815729",
+      "createdAt": "2026-11-07T08:56:55.729Z",
+      "updatedAt": "2026-11-07T08:56:57.667Z",
+      "status": "in_progress",
+      "assignedOfferId": "off_1794041817642",
+      "assignedMemberId": "usr_1794041815188_3c06af2d"
+    },
+    {
+      "communityId": "comm_devforge",
+      "creatorId": "usr_alex",
+      "title": "Telegram Bot Test Deliverable Request",
+      "description": "Created via Telegram Bot by @telegram_tester",
+      "category": "cat_tech",
+      "skillsRequired": [
+        "General Assistance & Verification"
+      ],
+      "priority": "high",
+      "deadline": "2026-11-13T16:58:50.863Z",
+      "status": "open",
+      "visibility": "community",
+      "id": "req_1793984330864",
+      "createdAt": "2026-11-06T16:58:50.864Z",
+      "updatedAt": "2026-11-06T16:58:50.864Z"
+    },
+    {
+      "communityId": "comm_devforge",
+      "creatorId": "usr_1793984325435_1e8d61f2",
+      "title": "Audit E2E Automated Invariants for Test Suite",
+      "description": "Comprehensive evaluation of automated journey invariants",
+      "category": "cat_tech",
+      "skillsRequired": [
+        "TypeScript",
+        "Testing"
+      ],
+      "priority": "high",
+      "deadline": "2026-11-13T16:58:46.633Z",
+      "visibility": "community",
+      "id": "req_1793984326818",
+      "createdAt": "2026-11-06T16:58:46.818Z",
+      "updatedAt": "2026-11-06T16:58:49.537Z",
+      "status": "in_progress",
+      "assignedOfferId": "off_1793984329511",
+      "assignedMemberId": "usr_1793984325435_1e8d61f2"
+    },
     {
       "communityId": "comm_devforge",
       "creatorId": "usr_alex",
@@ -4592,6 +4942,44 @@
   ],
   "offers": [
     {
+      "requestId": "req_1794041815729",
+      "communityId": "comm_devforge",
+      "memberId": "usr_1794041815188_3c06af2d",
+      "proposedHelp": "I will write the test runner and verify invariants",
+      "skills": [
+        "TypeScript",
+        "Testing"
+      ],
+      "experienceDescription": "QA lead",
+      "availability": "10 hrs/week",
+      "estimatedHours": 4,
+      "portfolioLinks": [
+        "https://github.com/test-portfolio"
+      ],
+      "id": "off_1794041817642",
+      "status": "accepted",
+      "createdAt": "2026-11-07T08:56:57.642Z"
+    },
+    {
+      "requestId": "req_1793984326818",
+      "communityId": "comm_devforge",
+      "memberId": "usr_1793984325435_1e8d61f2",
+      "proposedHelp": "I will write the test runner and verify invariants",
+      "skills": [
+        "TypeScript",
+        "Testing"
+      ],
+      "experienceDescription": "QA lead",
+      "availability": "10 hrs/week",
+      "estimatedHours": 4,
+      "portfolioLinks": [
+        "https://github.com/test-portfolio"
+      ],
+      "id": "off_1793984329511",
+      "status": "accepted",
+      "createdAt": "2026-11-06T16:58:49.511Z"
+    },
+    {
       "requestId": "req_1793893475936",
       "communityId": "comm_devforge",
       "memberId": "usr_1793893474741_23c99d9d",
@@ -5155,6 +5543,64 @@
     }
   ],
   "tasks": [
+    {
+      "id": "tsk_1794041817667",
+      "communityId": "comm_devforge",
+      "title": "Deliver: Audit E2E Automated Invariants for Test Suite",
+      "description": "I will write the test runner and verify invariants",
+      "expectedOutput": "Completed work with attached verifiable evidence.",
+      "outputExpected": "Completed work with attached verifiable evidence.",
+      "acceptanceCriteria": "Meets agreed parameters and peer review signoff.",
+      "assigneeId": "usr_1794041815188_3c06af2d",
+      "deadline": "2026-11-14T08:56:55.709Z",
+      "status": "completed",
+      "checklist": [
+        {
+          "id": "chk_1_1794041817667",
+          "item": "Execute initial milestone",
+          "completed": false
+        },
+        {
+          "id": "chk_2_1794041817667",
+          "item": "Submit evidence URL for peer review",
+          "completed": false
+        }
+      ],
+      "evidenceIds": [
+        "cnt_1794041817693"
+      ],
+      "rewardRecognition": "Verified Peer Outcome Certificate",
+      "createdAt": "2026-11-07T08:56:57.667Z"
+    },
+    {
+      "id": "tsk_1793984329537",
+      "communityId": "comm_devforge",
+      "title": "Deliver: Audit E2E Automated Invariants for Test Suite",
+      "description": "I will write the test runner and verify invariants",
+      "expectedOutput": "Completed work with attached verifiable evidence.",
+      "outputExpected": "Completed work with attached verifiable evidence.",
+      "acceptanceCriteria": "Meets agreed parameters and peer review signoff.",
+      "assigneeId": "usr_1793984325435_1e8d61f2",
+      "deadline": "2026-11-13T16:58:46.633Z",
+      "status": "completed",
+      "checklist": [
+        {
+          "id": "chk_1_1793984329537",
+          "item": "Execute initial milestone",
+          "completed": false
+        },
+        {
+          "id": "chk_2_1793984329537",
+          "item": "Submit evidence URL for peer review",
+          "completed": false
+        }
+      ],
+      "evidenceIds": [
+        "cnt_1793984329569"
+      ],
+      "rewardRecognition": "Verified Peer Outcome Certificate",
+      "createdAt": "2026-11-06T16:58:49.537Z"
+    },
     {
       "id": "tsk_1793893478012",
       "communityId": "comm_devforge",
@@ -5863,6 +6309,52 @@
   ],
   "commitments": [
     {
+      "id": "com_1794041817667",
+      "communityId": "comm_devforge",
+      "agreedWhat": "Deliver outcome for \"Audit E2E Automated Invariants for Test Suite\"",
+      "committedById": "usr_1794041815188_3c06af2d",
+      "expectingDeliveryId": "usr_1794041815188_3c06af2d",
+      "relatedRequestId": "req_1794041815729",
+      "deadline": "2026-11-14T08:56:55.709Z",
+      "status": "fulfilled",
+      "history": [
+        {
+          "timestamp": "2026-11-07T08:56:57.667Z",
+          "note": "Offer accepted; commitment formalized.",
+          "authorId": "usr_1794041815188_3c06af2d"
+        },
+        {
+          "timestamp": "2026-11-07T08:56:57.693Z",
+          "note": "Fulfillment submitted via contribution cnt_1794041817693",
+          "authorId": "usr_1794041815188_3c06af2d"
+        }
+      ],
+      "createdAt": "2026-11-07T08:56:57.667Z"
+    },
+    {
+      "id": "com_1793984329537",
+      "communityId": "comm_devforge",
+      "agreedWhat": "Deliver outcome for \"Audit E2E Automated Invariants for Test Suite\"",
+      "committedById": "usr_1793984325435_1e8d61f2",
+      "expectingDeliveryId": "usr_1793984325435_1e8d61f2",
+      "relatedRequestId": "req_1793984326818",
+      "deadline": "2026-11-13T16:58:46.633Z",
+      "status": "fulfilled",
+      "history": [
+        {
+          "timestamp": "2026-11-06T16:58:49.537Z",
+          "note": "Offer accepted; commitment formalized.",
+          "authorId": "usr_1793984325435_1e8d61f2"
+        },
+        {
+          "timestamp": "2026-11-06T16:58:49.569Z",
+          "note": "Fulfillment submitted via contribution cnt_1793984329569",
+          "authorId": "usr_1793984325435_1e8d61f2"
+        }
+      ],
+      "createdAt": "2026-11-06T16:58:49.537Z"
+    },
+    {
       "id": "com_1793893478012",
       "communityId": "comm_devforge",
       "agreedWhat": "Deliver outcome for \"Audit E2E Automated Invariants for Test Suite\"",
@@ -6420,6 +6912,56 @@
     }
   ],
   "contributions": [
+    {
+      "id": "cnt_1794041817693",
+      "communityId": "comm_devforge",
+      "memberId": "usr_1794041815188_3c06af2d",
+      "categoryId": "cat_tech",
+      "title": "Completed Task: Deliver: Audit E2E Automated Invariants for Test Suite",
+      "description": "Verified test run output attached",
+      "relatedTaskId": "tsk_1794041817667",
+      "evidence": [
+        {
+          "id": "evi_1794041817693",
+          "type": "link",
+          "url": "https://github.com/community-os/core/pull/42",
+          "description": "Task completion deliverable link",
+          "submittedAt": "2026-11-07T08:56:57.693Z"
+        }
+      ],
+      "submissionDate": "2026-11-07T08:56:57.693Z",
+      "reviewStatus": "verified",
+      "firstPartyConfirmed": true,
+      "secondPartyConfirmed": true,
+      "sharingValidity": true,
+      "reviewerId": "usr_sarah",
+      "decisionReason": "Evidence inspected: pull request merged with passing CI suite"
+    },
+    {
+      "id": "cnt_1793984329569",
+      "communityId": "comm_devforge",
+      "memberId": "usr_1793984325435_1e8d61f2",
+      "categoryId": "cat_tech",
+      "title": "Completed Task: Deliver: Audit E2E Automated Invariants for Test Suite",
+      "description": "Verified test run output attached",
+      "relatedTaskId": "tsk_1793984329537",
+      "evidence": [
+        {
+          "id": "evi_1793984329569",
+          "type": "link",
+          "url": "https://github.com/community-os/core/pull/42",
+          "description": "Task completion deliverable link",
+          "submittedAt": "2026-11-06T16:58:49.569Z"
+        }
+      ],
+      "submissionDate": "2026-11-06T16:58:49.569Z",
+      "reviewStatus": "verified",
+      "firstPartyConfirmed": true,
+      "secondPartyConfirmed": true,
+      "sharingValidity": true,
+      "reviewerId": "usr_sarah",
+      "decisionReason": "Evidence inspected: pull request merged with passing CI suite"
+    },
     {
       "id": "cnt_1793893478039",
       "communityId": "comm_devforge",
@@ -7068,6 +7610,38 @@
   "disputes": [],
   "outcomes": [
     {
+      "id": "out_1794041817797",
+      "communityId": "comm_devforge",
+      "objective": "Completed Task: Deliver: Audit E2E Automated Invariants for Test Suite",
+      "participatingMemberIds": [
+        "usr_1794041815188_3c06af2d",
+        "usr_sarah"
+      ],
+      "deliveredResult": "Verified test run output attached",
+      "confirmationStatus": "verified",
+      "evidenceUrls": [
+        "https://github.com/community-os/core/pull/42"
+      ],
+      "date": "2026-11-07",
+      "shareable": true
+    },
+    {
+      "id": "out_1793984329671",
+      "communityId": "comm_devforge",
+      "objective": "Completed Task: Deliver: Audit E2E Automated Invariants for Test Suite",
+      "participatingMemberIds": [
+        "usr_1793984325435_1e8d61f2",
+        "usr_sarah"
+      ],
+      "deliveredResult": "Verified test run output attached",
+      "confirmationStatus": "verified",
+      "evidenceUrls": [
+        "https://github.com/community-os/core/pull/42"
+      ],
+      "date": "2026-11-06",
+      "shareable": true
+    },
+    {
       "id": "out_1793893478166",
       "communityId": "comm_devforge",
       "objective": "Completed Task: Deliver: Audit E2E Automated Invariants for Test Suite",
@@ -7453,6 +8027,26 @@
     }
   ],
   "portfolioItems": [
+    {
+      "id": "port_1794041817797",
+      "userId": "usr_1794041815188_3c06af2d",
+      "outcomeRecordId": "out_1794041817797",
+      "title": "Completed Task: Deliver: Audit E2E Automated Invariants for Test Suite",
+      "roleDescription": "Verified Contributor",
+      "communityName": "DevForge Builders",
+      "featured": true,
+      "isPublic": true
+    },
+    {
+      "id": "port_1793984329671",
+      "userId": "usr_1793984325435_1e8d61f2",
+      "outcomeRecordId": "out_1793984329671",
+      "title": "Completed Task: Deliver: Audit E2E Automated Invariants for Test Suite",
+      "roleDescription": "Verified Contributor",
+      "communityName": "DevForge Builders",
+      "featured": true,
+      "isPublic": true
+    },
     {
       "id": "port_1793893478166",
       "userId": "usr_1793893474741_23c99d9d",
@@ -8501,6 +9095,42 @@
         "verifiedOutcomes": 0
       },
       "createdAt": "2026-11-05T15:44:36.107Z"
+    },
+    {
+      "id": "lnk_1793984327033_hub",
+      "communityId": "comm_1793984327033",
+      "linkType": "hub_multipurpose",
+      "slug": "nexus-lab-1793984327012-hub",
+      "title": "Nexus Security Lab Action Hub",
+      "description": "Universal access hub for Nexus Security Lab",
+      "audience": "public",
+      "isRevoked": false,
+      "stats": {
+        "visits": 0,
+        "starts": 0,
+        "submissions": 0,
+        "completions": 0,
+        "verifiedOutcomes": 0
+      },
+      "createdAt": "2026-11-06T16:58:47.033Z"
+    },
+    {
+      "id": "lnk_1794041815881_hub",
+      "communityId": "comm_1794041815881",
+      "linkType": "hub_multipurpose",
+      "slug": "nexus-lab-1794041815860-hub",
+      "title": "Nexus Security Lab Action Hub",
+      "description": "Universal access hub for Nexus Security Lab",
+      "audience": "public",
+      "isRevoked": false,
+      "stats": {
+        "visits": 0,
+        "starts": 0,
+        "submissions": 0,
+        "completions": 0,
+        "verifiedOutcomes": 0
+      },
+      "createdAt": "2026-11-07T08:56:55.881Z"
     }
   ],
   "events": [
@@ -8654,6 +9284,38 @@
     }
   ],
   "notifications": [
+    {
+      "id": "notif_1794041817667",
+      "userId": "usr_1794041815188_3c06af2d",
+      "communityId": "comm_devforge",
+      "title": "Offer Accepted",
+      "message": "Offer accepted and task tsk_tsk_1794041817667 created.",
+      "linkUrl": "/tasks",
+      "type": "task",
+      "read": false,
+      "channelAttempts": {
+        "inApp": true,
+        "discord": true,
+        "telegram": true
+      },
+      "createdAt": "2026-11-07T08:56:57.667Z"
+    },
+    {
+      "id": "notif_1793984329537",
+      "userId": "usr_1793984325435_1e8d61f2",
+      "communityId": "comm_devforge",
+      "title": "Offer Accepted",
+      "message": "Offer accepted and task tsk_tsk_1793984329537 created.",
+      "linkUrl": "/tasks",
+      "type": "task",
+      "read": false,
+      "channelAttempts": {
+        "inApp": true,
+        "discord": true,
+        "telegram": true
+      },
+      "createdAt": "2026-11-06T16:58:49.537Z"
+    },
     {
       "id": "notif_1793893478012",
       "userId": "usr_1793893474741_23c99d9d",
@@ -9040,6 +9702,182 @@
     }
   ],
   "auditLogs": [
+    {
+      "id": "aud_downgrade_1794041824578",
+      "communityId": "comm_devforge",
+      "actorId": "system_billing",
+      "action": "subscription_downgrade_free",
+      "details": "Gracefully downgraded to Free plan. Community data preserved. Reason: Webhook event: membership.went_invalid",
+      "timestamp": "2026-11-07T08:57:04.578Z"
+    },
+    {
+      "id": "aud_sub_1794041824494",
+      "communityId": "comm_devforge",
+      "actorId": "system_billing",
+      "action": "subscription_pro_active",
+      "details": "Subscription updated to PRO (active) via whop",
+      "timestamp": "2026-11-07T08:57:04.494Z"
+    },
+    {
+      "id": "aud_1794041821286",
+      "communityId": "comm_devforge",
+      "actorId": "usr_sarah",
+      "action": "discord_server_connected",
+      "details": "Connected Discord server \"Discord Server (987654321098765432)\" (ID: 987654321098765432) with verified bot presence",
+      "timestamp": "2026-11-07T08:57:01.286Z"
+    },
+    {
+      "id": "aud_1794041820131",
+      "communityId": "comm_devforge",
+      "actorId": "usr_sarah",
+      "action": "telegram_group_connected",
+      "details": "Connected Telegram group \"DevForge Core Telegram Group\" (ID: -100192837465) by @sarah_steward via challenge code",
+      "timestamp": "2026-11-07T08:57:00.131Z"
+    },
+    {
+      "id": "aud_1794041819224",
+      "communityId": "comm_devforge",
+      "actorId": "usr_sarah",
+      "action": "discord_server_connected",
+      "details": "Connected Discord server \"Verified DevForge Operations Guild\" (ID: guild_test_prod_99182) with verified bot presence",
+      "timestamp": "2026-11-07T08:56:59.224Z"
+    },
+    {
+      "id": "aud_1794041818614",
+      "communityId": "comm_devforge",
+      "actorId": "usr_alex",
+      "action": "request_created",
+      "details": "Created NeedSignal request: \"Telegram Bot Test Deliverable Request\"",
+      "timestamp": "2026-11-07T08:56:58.614Z"
+    },
+    {
+      "id": "aud_1794041817797",
+      "communityId": "comm_devforge",
+      "actorId": "usr_sarah",
+      "action": "contribution_verified",
+      "details": "Verified contribution \"Completed Task: Deliver: Audit E2E Automated Invariants for Test Suite\" for member usr_1794041815188_3c06af2d",
+      "timestamp": "2026-11-07T08:56:57.797Z"
+    },
+    {
+      "id": "aud_1794041815952",
+      "communityId": "comm_devforge",
+      "actorId": "usr_1794041815802_0ed93674",
+      "action": "community_joined",
+      "details": "User usr_1794041815802_0ed93674 joined community comm_devforge as member",
+      "timestamp": "2026-11-07T08:56:55.952Z"
+    },
+    {
+      "id": "aud_1794041815881",
+      "communityId": "comm_1794041815881",
+      "actorId": "usr_1794041815802_0ed93674",
+      "action": "community_created",
+      "details": "Created community Nexus Security Lab",
+      "timestamp": "2026-11-07T08:56:55.881Z"
+    },
+    {
+      "id": "aud_1794041815729",
+      "communityId": "comm_devforge",
+      "actorId": "usr_1794041815188_3c06af2d",
+      "action": "request_created",
+      "details": "Created NeedSignal request: \"Audit E2E Automated Invariants for Test Suite\"",
+      "timestamp": "2026-11-07T08:56:55.729Z"
+    },
+    {
+      "id": "aud_1794041815696",
+      "communityId": "comm_devforge",
+      "actorId": "usr_1794041815188_3c06af2d",
+      "action": "community_joined",
+      "details": "User usr_1794041815188_3c06af2d joined community comm_devforge as member",
+      "timestamp": "2026-11-07T08:56:55.696Z"
+    },
+    {
+      "id": "aud_downgrade_1793984339240",
+      "communityId": "comm_devforge",
+      "actorId": "system_billing",
+      "action": "subscription_downgrade_free",
+      "details": "Gracefully downgraded to Free plan. Community data preserved. Reason: Webhook event: membership.went_invalid",
+      "timestamp": "2026-11-06T16:58:59.240Z"
+    },
+    {
+      "id": "aud_sub_1793984339154",
+      "communityId": "comm_devforge",
+      "actorId": "system_billing",
+      "action": "subscription_pro_active",
+      "details": "Subscription updated to PRO (active) via whop",
+      "timestamp": "2026-11-06T16:58:59.154Z"
+    },
+    {
+      "id": "aud_1793984334999",
+      "communityId": "comm_devforge",
+      "actorId": "usr_sarah",
+      "action": "discord_server_connected",
+      "details": "Connected Discord server \"Discord Server (987654321098765432)\" (ID: 987654321098765432) with verified bot presence",
+      "timestamp": "2026-11-06T16:58:54.999Z"
+    },
+    {
+      "id": "aud_1793984333298",
+      "communityId": "comm_devforge",
+      "actorId": "usr_sarah",
+      "action": "telegram_group_connected",
+      "details": "Connected Telegram group \"DevForge Core Telegram Group\" (ID: -100192837465) by @sarah_steward via challenge code",
+      "timestamp": "2026-11-06T16:58:53.298Z"
+    },
+    {
+      "id": "aud_1793984331845",
+      "communityId": "comm_devforge",
+      "actorId": "usr_sarah",
+      "action": "discord_server_connected",
+      "details": "Connected Discord server \"Verified DevForge Operations Guild\" (ID: guild_test_prod_99182) with verified bot presence",
+      "timestamp": "2026-11-06T16:58:51.845Z"
+    },
+    {
+      "id": "aud_1793984330864",
+      "communityId": "comm_devforge",
+      "actorId": "usr_alex",
+      "action": "request_created",
+      "details": "Created NeedSignal request: \"Telegram Bot Test Deliverable Request\"",
+      "timestamp": "2026-11-06T16:58:50.864Z"
+    },
+    {
+      "id": "aud_1793984329671",
+      "communityId": "comm_devforge",
+      "actorId": "usr_sarah",
+      "action": "contribution_verified",
+      "details": "Verified contribution \"Completed Task: Deliver: Audit E2E Automated Invariants for Test Suite\" for member usr_1793984325435_1e8d61f2",
+      "timestamp": "2026-11-06T16:58:49.671Z"
+    },
+    {
+      "id": "aud_1793984327096",
+      "communityId": "comm_devforge",
+      "actorId": "usr_1793984326955_7d352189",
+      "action": "community_joined",
+      "details": "User usr_1793984326955_7d352189 joined community comm_devforge as member",
+      "timestamp": "2026-11-06T16:58:47.096Z"
+    },
+    {
+      "id": "aud_1793984327033",
+      "communityId": "comm_1793984327033",
+      "actorId": "usr_1793984326955_7d352189",
+      "action": "community_created",
+      "details": "Created community Nexus Security Lab",
+      "timestamp": "2026-11-06T16:58:47.033Z"
+    },
+    {
+      "id": "aud_1793984326818",
+      "communityId": "comm_devforge",
+      "actorId": "usr_1793984325435_1e8d61f2",
+      "action": "request_created",
+      "details": "Created NeedSignal request: \"Audit E2E Automated Invariants for Test Suite\"",
+      "timestamp": "2026-11-06T16:58:46.818Z"
+    },
+    {
+      "id": "aud_1793984326614",
+      "communityId": "comm_devforge",
+      "actorId": "usr_1793984325435_1e8d61f2",
+      "action": "community_joined",
+      "details": "User usr_1793984325435_1e8d61f2 joined community comm_devforge as member",
+      "timestamp": "2026-11-06T16:58:46.614Z"
+    },
     {
       "id": "aud_downgrade_1793893485702",
       "communityId": "comm_devforge",
@@ -11158,6 +11996,51 @@
       "emailVerified": false,
       "createdAt": "2026-11-05T15:44:36.072Z",
       "updatedAt": "2026-11-05T15:44:36.072Z"
+    },
+    {
+      "id": "usr_1793984325435_1e8d61f2",
+      "email": "member_test_1793984322917@example.com",
+      "passwordHash": "bfd3aeca189ba2bdb5be266dc62dc1600755fa6eb826b5a678b6782939382c8927a353392afbe6ff4bcf18935d3e3fcc5414a8c3a1b1d2a12879222bf5fe7127",
+      "salt": "e63c32a819f4e177f2741484eb9a7aaa",
+      "emailVerified": false,
+      "createdAt": "2026-11-06T16:58:45.493Z",
+      "updatedAt": "2026-11-06T16:58:48.666Z"
+    },
+    {
+      "id": "usr_1793984326955_7d352189",
+      "email": "owner_1793984326920@example.com",
+      "passwordHash": "474901adcb5f85457bd6edf87fecb429f68ce4d3bc4a2748a957ddef826ebc1352da56201fd666626f7b0bd9c651eb37a1debd6a102d997b9b59a3341290c4d3",
+      "salt": "8dd470b958be494b22f1ab691e450e77",
+      "emailVerified": false,
+      "createdAt": "2026-11-06T16:58:46.999Z",
+      "updatedAt": "2026-11-06T16:58:46.999Z"
+    },
+    {
+      "id": "usr_1794041815188_3c06af2d",
+      "email": "member_test_1794041814320@example.com",
+      "passwordHash": "db64e2549ca796a562d7602a02bfa1d7faaba4c0d485146c41ace7e83181dc2441a4184448e970c8006ecaa7733afead9ec60f9f62f5f25ff6bc70e4b841621c",
+      "salt": "46508288e9aa8bc3c3bd5d24f8f8af67",
+      "emailVerified": false,
+      "createdAt": "2026-11-07T08:56:55.238Z",
+      "updatedAt": "2026-11-07T08:56:57.097Z"
+    },
+    {
+      "id": "usr_1794041815802_0ed93674",
+      "email": "owner_1794041815776@example.com",
+      "passwordHash": "0aac53fc893c2a686f05f70608bb7c9c2cefa5cc1facca9a43b5b1119fd47af773ab64258fb5cf34b4942f5813ebeea59d23ba3dec989d8fa9872a76e60036ee",
+      "salt": "ae58c8093d53d9e00765af1df1666946",
+      "emailVerified": false,
+      "createdAt": "2026-11-07T08:56:55.847Z",
+      "updatedAt": "2026-11-07T08:56:55.847Z"
+    },
+    {
+      "id": "usr_1794041844700_0cb3faad",
+      "email": "security_tester_1794041844474@domain.org",
+      "passwordHash": "438c89d2a03d05eaeaa09202a58be8b042042a724f4f819d4d6b881d4964a4f971dee61d394c5bd814e50e987a2f7d2e5efe8cf2b91a4f0073560b1454f2a16b",
+      "salt": "9d765d4c2f35af899a34ba56275a0d19",
+      "emailVerified": false,
+      "createdAt": "2026-11-07T08:57:24.764Z",
+      "updatedAt": "2026-11-07T08:57:24.764Z"
     }
   ],
   "sessions": [
@@ -11844,9 +12727,98 @@
       "createdAt": "2026-11-05T15:44:43.798Z",
       "expiresAt": "2026-11-12T15:44:43.798Z",
       "userAgent": "node"
+    },
+    {
+      "token": "61884b46be47c8142d646e50ad37f6895ba9003d49c5e4bcaa7ccf67a11de8b4",
+      "userId": "usr_1793984326955_7d352189",
+      "createdAt": "2026-11-06T16:58:47.004Z",
+      "expiresAt": "2026-11-13T16:58:47.004Z",
+      "userAgent": "node",
+      "ip": "::ffff:127.0.0.1"
+    },
+    {
+      "token": "65e6b490fc2133ea3b9c48e5a8cc8414b56c9947fa2ee533541a4815cb541d64",
+      "userId": "usr_1793984325435_1e8d61f2",
+      "createdAt": "2026-11-06T16:58:49.472Z",
+      "expiresAt": "2026-11-13T16:58:49.472Z",
+      "userAgent": "node",
+      "ip": "::ffff:127.0.0.1"
+    },
+    {
+      "token": "3e9ae5ac834cbcaa5ee58321ce2b71e55ebd6eb1e3f531f486cb43124dcde593",
+      "userId": "usr_sarah",
+      "createdAt": "2026-11-06T16:58:49.643Z",
+      "expiresAt": "2026-11-13T16:58:49.643Z",
+      "userAgent": "node",
+      "ip": "::ffff:127.0.0.1"
+    },
+    {
+      "token": "3884d446297a3ef1cc78bab374ed2084b06471bc26fde622f6d032e717adac79",
+      "userId": "usr_tg_tg_88921029",
+      "createdAt": "2026-11-06T16:58:57.202Z",
+      "expiresAt": "2026-11-13T16:58:57.202Z",
+      "userAgent": "node"
+    },
+    {
+      "token": "f1cdaecf7bfe274c62a5e0f3aa70e574fa077572789380bfa07da8a2e8b2067d",
+      "userId": "usr_1794041815802_0ed93674",
+      "createdAt": "2026-11-07T08:56:55.852Z",
+      "expiresAt": "2026-11-14T08:56:55.852Z",
+      "userAgent": "node",
+      "ip": "::ffff:127.0.0.1"
+    },
+    {
+      "token": "362e9d559e7a57863ec64e77260136d883e5c3773a9724b1b8dcedc1bae3fd47",
+      "userId": "usr_1794041815188_3c06af2d",
+      "createdAt": "2026-11-07T08:56:57.600Z",
+      "expiresAt": "2026-11-14T08:56:57.600Z",
+      "userAgent": "node",
+      "ip": "::ffff:127.0.0.1"
+    },
+    {
+      "token": "38e313c1ba7c9204794eac2bae0df70844024eb438fe5f935ea721f9de9164e7",
+      "userId": "usr_sarah",
+      "createdAt": "2026-11-07T08:56:57.762Z",
+      "expiresAt": "2026-11-14T08:56:57.762Z",
+      "userAgent": "node",
+      "ip": "::ffff:127.0.0.1"
+    },
+    {
+      "token": "5f0d447e17d20834cd200403ddd16acadd791400d4c657f67775e678f26939c1",
+      "userId": "usr_tg_tg_88921029",
+      "createdAt": "2026-11-07T08:57:02.678Z",
+      "expiresAt": "2026-11-14T08:57:02.678Z",
+      "userAgent": "node"
+    },
+    {
+      "token": "3debaa35ce670e023744796d8f0776cf5c2d8bbbdd32be97578089d41dd37329",
+      "userId": "usr_tg_tg_88921029",
+      "createdAt": "2026-11-07T08:57:24.973Z",
+      "expiresAt": "2026-11-14T08:57:24.973Z",
+      "userAgent": "node"
     }
   ],
   "devEmails": [
+    {
+      "id": "eml_1794041816336",
+      "to": "member_test_1794041814320@example.com",
+      "subject": "Community OS — Password Reset Request",
+      "html": "<p>Hello,</p><p>You requested a password reset for your Community OS account. Click the link below to set a new password:</p><p><a href=\"https://ais-dev-x3f327qfyrgqv3sqcrumjr-942709702494.europe-west2.run.app/auth/reset-password?token=74c4fe4c1dff11f7534d1374173381af7b3ab2f4ac3cf66f0fec797aefa5deac\">Reset Password</a></p><p>This link expires in 1 hour.</p>",
+      "text": "You requested a password reset for your Community OS account. Visit: https://ais-dev-x3f327qfyrgqv3sqcrumjr-942709702494.europe-west2.run.app/auth/reset-password?token=74c4fe4c1dff11f7534d1374173381af7b3ab2f4ac3cf66f0fec797aefa5deac (Expires in 1 hour)",
+      "resetUrl": "https://ais-dev-x3f327qfyrgqv3sqcrumjr-942709702494.europe-west2.run.app/auth/reset-password?token=74c4fe4c1dff11f7534d1374173381af7b3ab2f4ac3cf66f0fec797aefa5deac",
+      "resetToken": "74c4fe4c1dff11f7534d1374173381af7b3ab2f4ac3cf66f0fec797aefa5deac",
+      "sentAt": "2026-11-07T08:56:56.336Z"
+    },
+    {
+      "id": "eml_1793984327759",
+      "to": "member_test_1793984322917@example.com",
+      "subject": "Community OS — Password Reset Request",
+      "html": "<p>Hello,</p><p>You requested a password reset for your Community OS account. Click the link below to set a new password:</p><p><a href=\"https://ais-dev-x3f327qfyrgqv3sqcrumjr-942709702494.europe-west2.run.app/auth/reset-password?token=046aa900179c62e943dd3e59162757b46475522d9755063f487d5796b4df026e\">Reset Password</a></p><p>This link expires in 1 hour.</p>",
+      "text": "You requested a password reset for your Community OS account. Visit: https://ais-dev-x3f327qfyrgqv3sqcrumjr-942709702494.europe-west2.run.app/auth/reset-password?token=046aa900179c62e943dd3e59162757b46475522d9755063f487d5796b4df026e (Expires in 1 hour)",
+      "resetUrl": "https://ais-dev-x3f327qfyrgqv3sqcrumjr-942709702494.europe-west2.run.app/auth/reset-password?token=046aa900179c62e943dd3e59162757b46475522d9755063f487d5796b4df026e",
+      "resetToken": "046aa900179c62e943dd3e59162757b46475522d9755063f487d5796b4df026e",
+      "sentAt": "2026-11-06T16:58:47.759Z"
+    },
     {
       "id": "eml_1793893476742",
       "to": "member_test_1793893473658@example.com",
@@ -12088,6 +13060,26 @@
   ],
   "groupConnectionChallenges": [
     {
+      "id": "gchl_1794041820063",
+      "code": "CONNECT-TG-VKHA",
+      "communityId": "comm_devforge",
+      "createdBy": "usr_sarah",
+      "platform": "telegram",
+      "createdAt": "2026-11-07T08:57:00.063Z",
+      "expiresAt": "2026-11-07T09:12:00.063Z",
+      "isUsed": true
+    },
+    {
+      "id": "gchl_1793984333227",
+      "code": "CONNECT-TG-ZV5J",
+      "communityId": "comm_devforge",
+      "createdBy": "usr_sarah",
+      "platform": "telegram",
+      "createdAt": "2026-11-06T16:58:53.227Z",
+      "expiresAt": "2026-11-06T17:13:53.227Z",
+      "isUsed": true
+    },
+    {
       "id": "gchl_1793893480690",
       "code": "CONNECT-TG-T201",
       "communityId": "comm_devforge",
@@ -12285,19 +13277,19 @@
       "tier": "free",
       "status": "canceled",
       "provider": "whop",
-      "currentPeriodStart": "2026-11-05T15:44:45.610Z",
-      "currentPeriodEnd": "2026-12-06T15:44:45.610Z",
+      "currentPeriodStart": "2026-11-07T08:57:04.494Z",
+      "currentPeriodEnd": "2026-12-08T08:57:04.494Z",
       "cancelAtPeriodEnd": false,
       "amountUsd": 15,
       "currency": "USD",
       "billingInterval": "month",
       "createdAt": "2026-11-04T16:45:09.535Z",
-      "updatedAt": "2026-11-05T15:44:45.702Z",
+      "updatedAt": "2026-11-07T08:57:04.578Z",
       "providerCustomerId": "usr_whop_payer",
-      "providerSubscriptionId": "whop_sub_1793893484808",
-      "lastPaymentEventId": "whop_evt_test_1793893484808",
-      "lastPaymentAt": "2026-11-05T15:44:45.610Z",
-      "canceledAt": "2026-11-05T15:44:45.702Z"
+      "providerSubscriptionId": "whop_sub_1794041823612",
+      "lastPaymentEventId": "whop_evt_test_1794041823612",
+      "lastPaymentAt": "2026-11-07T08:57:04.494Z",
+      "canceledAt": "2026-11-07T08:57:04.578Z"
     },
     {
       "id": "sub_free_all",
@@ -12479,6 +13471,88 @@
       "processed": true,
       "processedAt": "2026-11-05T15:44:45.702Z",
       "receivedAt": "2026-11-05T15:44:45.702Z"
+    },
+    {
+      "id": "ev_1793984339158_ns16",
+      "provider": "whop",
+      "eventId": "whop_evt_test_1793984338587",
+      "eventType": "membership.went_valid",
+      "communityId": "comm_devforge",
+      "payload": {
+        "action": "membership.went_valid",
+        "id": "sub_whop_1793984338587",
+        "data": {
+          "id": "whop_sub_1793984338587",
+          "user_id": "usr_whop_payer",
+          "custom_metadata": {
+            "community_id": "comm_devforge"
+          }
+        }
+      },
+      "processed": true,
+      "processedAt": "2026-11-06T16:58:59.154Z",
+      "receivedAt": "2026-11-06T16:58:59.154Z"
+    },
+    {
+      "id": "ev_1793984339245_4bl5",
+      "provider": "whop",
+      "eventId": "whop_evt_cancel_1793984339220",
+      "eventType": "membership.went_invalid",
+      "communityId": "comm_devforge",
+      "payload": {
+        "action": "membership.went_invalid",
+        "id": "whop_sub_cancel",
+        "data": {
+          "id": "whop_sub_cancel",
+          "custom_metadata": {
+            "community_id": "comm_devforge"
+          }
+        }
+      },
+      "processed": true,
+      "processedAt": "2026-11-06T16:58:59.240Z",
+      "receivedAt": "2026-11-06T16:58:59.240Z"
+    },
+    {
+      "id": "ev_1794041824498_40dn",
+      "provider": "whop",
+      "eventId": "whop_evt_test_1794041823612",
+      "eventType": "membership.went_valid",
+      "communityId": "comm_devforge",
+      "payload": {
+        "action": "membership.went_valid",
+        "id": "sub_whop_1794041823612",
+        "data": {
+          "id": "whop_sub_1794041823612",
+          "user_id": "usr_whop_payer",
+          "custom_metadata": {
+            "community_id": "comm_devforge"
+          }
+        }
+      },
+      "processed": true,
+      "processedAt": "2026-11-07T08:57:04.494Z",
+      "receivedAt": "2026-11-07T08:57:04.494Z"
+    },
+    {
+      "id": "ev_1794041824581_enqm",
+      "provider": "whop",
+      "eventId": "whop_evt_cancel_1794041824561",
+      "eventType": "membership.went_invalid",
+      "communityId": "comm_devforge",
+      "payload": {
+        "action": "membership.went_invalid",
+        "id": "whop_sub_cancel",
+        "data": {
+          "id": "whop_sub_cancel",
+          "custom_metadata": {
+            "community_id": "comm_devforge"
+          }
+        }
+      },
+      "processed": true,
+      "processedAt": "2026-11-07T08:57:04.578Z",
+      "receivedAt": "2026-11-07T08:57:04.578Z"
     }
   ],
   "referrals": [
@@ -12488,10 +13562,10 @@
       "communityId": "comm_devforge",
       "referrerUserId": "usr_guest",
       "targetType": "community",
-      "clicksCount": 4,
+      "clicksCount": 6,
       "conversionsCount": 0,
       "createdAt": "2026-11-05T15:35:45.917Z",
-      "lastClickedAt": "2026-11-05T15:44:46.265Z"
+      "lastClickedAt": "2026-11-07T08:57:05.120Z"
     }
   ]
 }

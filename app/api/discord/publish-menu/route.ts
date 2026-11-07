@@ -5,8 +5,12 @@ import { getAuthenticatedUserFromRequest, getUserRoleInCommunity } from '@/lib/s
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
+    const body = (await req.json()) as { communityId?: string; channelId?: string };
     const { communityId, channelId } = body;
+
+    if (!communityId) {
+      return NextResponse.json({ success: false, error: 'communityId is required' }, { status: 400 });
+    }
 
     const authUser = await getAuthenticatedUserFromRequest(req);
     const actorId = authUser?.id || 'usr_sarah';
@@ -108,11 +112,11 @@ export async function POST(req: NextRequest) {
         });
 
         if (discordRes.ok) {
-          const sentMsg = await discordRes.json();
+          const sentMsg = (await discordRes.json()) as any;
           messageId = sentMsg.id;
           deliveryStatus = 'live_published';
         } else {
-          const errData = await discordRes.json().catch(() => ({}));
+          const errData = ((await discordRes.json().catch(() => ({}))) || {}) as any;
           return NextResponse.json({
             success: false,
             error: `Discord API Error (HTTP ${discordRes.status}): ${errData.message || 'Check bot permissions in channel'}`

@@ -139,7 +139,7 @@ export default function HomePage() {
       const res = await fetch(`/api/data?communityId=${commId}`, {
         credentials: 'include'
       });
-      const json = await res.json();
+      const json = (await res.json()) as any;
       if (json.success && json.data) {
         const d = json.data;
         setCommunities(d.communities || []);
@@ -179,7 +179,7 @@ export default function HomePage() {
         } else {
           try {
             const meRes = await fetch('/api/auth/me', { credentials: 'include' });
-            const meJson = await meRes.json();
+            const meJson = (await meRes.json()) as any;
             if (meJson.authenticated && meJson.user) {
               setAuthUser(meJson.user);
               setCurrentUserRole('member');
@@ -321,7 +321,7 @@ export default function HomePage() {
               }
             })
           });
-          const json = await res.json();
+          const json = (await res.json()) as any;
           if (json.success && json.community) {
             handleCommunityCreated(json.community);
           }

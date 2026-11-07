@@ -36,7 +36,7 @@ export default function PublicPassportPage() {
     const fetchProfile = async () => {
       try {
         const res = await fetch('/api/data');
-        const json = await res.json();
+        const json = (await res.json()) as any;
         if (json.success && json.data) {
           const found = (json.data.users || []).find((u: User) => u.id === userId);
           if (found) {

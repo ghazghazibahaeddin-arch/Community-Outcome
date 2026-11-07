@@ -5,8 +5,12 @@ import { getAuthenticatedUserFromRequest, getUserRoleInCommunity } from '@/lib/s
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
+    const body = (await req.json()) as { communityId?: string; groupId?: string; pinMessage?: boolean };
     const { communityId, groupId, pinMessage = true } = body;
+
+    if (!communityId) {
+      return NextResponse.json({ success: false, error: 'communityId is required' }, { status: 400 });
+    }
 
     const authUser = await getAuthenticatedUserFromRequest(req);
     const actorId = authUser?.id || 'usr_sarah';
@@ -72,7 +76,7 @@ export async function POST(req: NextRequest) {
           })
         });
 
-        const sendJson = await sendRes.json();
+        const sendJson = (await sendRes.json()) as any;
         if (sendJson.ok && sendJson.result?.message_id) {
           messageId = String(sendJson.result.message_id);
           deliveryStatus = 'live_published';

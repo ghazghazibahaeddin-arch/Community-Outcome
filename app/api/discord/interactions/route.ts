@@ -18,21 +18,37 @@ const InteractionResponseType = {
 };
 
 /**
- * Verify Discord Ed25519 request signature
+ * Verify Discord Ed25519 request signature (Dual Web Crypto + Node.js crypto support)
  */
-function verifyDiscordSignature(
+async function verifyDiscordSignature(
   rawBody: string,
   signature: string | null,
   timestamp: string | null,
   publicKeyHex: string
-): boolean {
+): Promise<boolean> {
   if (!signature || !timestamp || !publicKeyHex) return false;
   try {
     const keyBuffer = Buffer.from(publicKeyHex.trim(), 'hex');
     const signatureBuffer = Buffer.from(signature.trim(), 'hex');
     const messageBuffer = Buffer.from(timestamp + rawBody, 'utf-8');
 
-    // Ed25519 SPKI DER prefix
+    // 1. Web Crypto API (Native in Cloudflare Workers workerd)
+    if (typeof globalThis.crypto?.subtle?.importKey === 'function') {
+      try {
+        const key = await globalThis.crypto.subtle.importKey(
+          'raw',
+          keyBuffer,
+          { name: 'NODE-ED25519', namedCurve: 'NODE-ED25519' },
+          false,
+          ['verify']
+        );
+        return await globalThis.crypto.subtle.verify('NODE-ED25519', key, signatureBuffer, messageBuffer);
+      } catch {
+        // Fallback to standard Node.js crypto
+      }
+    }
+
+    // 2. Node.js SPKI DER fallback
     const ed25519DerPrefix = Buffer.from('302a300506032b6570032100', 'hex');
     const spkiPublicKey = Buffer.concat([ed25519DerPrefix, keyBuffer]);
 
@@ -51,7 +67,7 @@ export async function POST(req: NextRequest) {
 
     // Cryptographic Ed25519 Signature Verification
     if (publicKey && signature && timestamp) {
-      const isValid = verifyDiscordSignature(rawBody, signature, timestamp, publicKey);
+      const isValid = await verifyDiscordSignature(rawBody, signature, timestamp, publicKey);
       if (!isValid) {
         return new NextResponse('Invalid request signature', { status: 401 });
       }

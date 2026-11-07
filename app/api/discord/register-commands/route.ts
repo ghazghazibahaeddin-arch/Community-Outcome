@@ -86,7 +86,7 @@ export async function POST(req: NextRequest) {
       body: JSON.stringify(commands)
     });
 
-    const data = await res.json();
+    const data = (await res.json()) as any;
     if (!res.ok) {
       return NextResponse.json({
         success: false,

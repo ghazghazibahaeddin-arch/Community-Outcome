@@ -34,7 +34,7 @@ export default function PublicOutcomePage() {
     const fetchOutcome = async () => {
       try {
         const res = await fetch('/api/data');
-        const json = await res.json();
+        const json = (await res.json()) as any;
         if (json.success && json.data) {
           const found = (json.data.outcomes || []).find((o: OutcomeRecord) => o.id === outcomeId);
           if (found) {

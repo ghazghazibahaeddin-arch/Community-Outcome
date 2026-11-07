@@ -1365,19 +1365,22 @@ export function getDatabase(): DatabaseSchema {
 
 export function saveDatabase(db: DatabaseSchema): void {
   cachedDb = db;
+
+  // Supabase PostgreSQL persistence (Primary production database)
+  if (isSupabaseConfigured()) {
+    syncDatabaseToSupabase(db).catch((err: any) => {
+      console.warn('[Supabase Sync Warning]:', err?.message || err);
+    });
+  }
+
+  // Local filesystem persistence (Node.js & local development only)
   try {
     ensureDataFile();
     const tempFile = `${DB_FILE}.tmp.${Date.now()}`;
     fs.writeFileSync(tempFile, JSON.stringify(db, null, 2), 'utf-8');
     fs.renameSync(tempFile, DB_FILE);
-
-    if (isSupabaseConfigured()) {
-      syncDatabaseToSupabase(db).catch((err: any) => {
-        console.warn('[Supabase Sync Warning]:', err?.message || err);
-      });
-    }
-  } catch (err) {
-    console.error('Failed to persist database file:', err);
+  } catch {
+    // Ephemeral serverless/Workers filesystem: gracefully fallback to Supabase & memory
   }
 }
 

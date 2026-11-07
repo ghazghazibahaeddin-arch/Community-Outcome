@@ -25,7 +25,7 @@ export default function SignupPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, email, password, bio })
       });
-      const data = await res.json();
+      const data = (await res.json()) as any;
 
       if (!res.ok || !data.success) {
         setError(data.error || 'Registration failed');

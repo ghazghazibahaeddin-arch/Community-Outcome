@@ -3,7 +3,7 @@ import { registerUser, createSession, setSessionCookie } from '@/lib/services/au
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
+    const body = (await req.json()) as { email?: string; password?: string; name?: string; bio?: string };
     const { email, password, name, bio } = body;
 
     if (!email || !password || !name) {

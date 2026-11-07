@@ -60,12 +60,12 @@ export async function GET(req: NextRequest) {
         });
 
         if (tokenRes.ok) {
-          const tokenData = await tokenRes.json();
+          const tokenData = (await tokenRes.json()) as any;
           const userRes = await fetch('https://discord.com/api/users/@me', {
             headers: { Authorization: `Bearer ${tokenData.access_token}` }
           });
           if (userRes.ok) {
-            discordUser = await userRes.json();
+            discordUser = (await userRes.json()) as any;
           }
         }
       } catch (e) {
@@ -171,7 +171,7 @@ export async function GET(req: NextRequest) {
           }
         });
         if (guildRes.ok) {
-          const guildData = await guildRes.json();
+          const guildData = (await guildRes.json()) as any;
           serverName = guildData.name || serverName;
         }
       } catch (fetchErr) {

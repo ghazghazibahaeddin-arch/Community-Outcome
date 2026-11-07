@@ -5,8 +5,12 @@ import { getAuthenticatedUserFromRequest, getUserRoleInCommunity } from '@/lib/s
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
+    const body = (await req.json()) as { communityId?: string };
     const { communityId } = body;
+
+    if (!communityId) {
+      return NextResponse.json({ success: false, error: 'communityId is required' }, { status: 400 });
+    }
 
     const authUser = await getAuthenticatedUserFromRequest(req);
     const actorId = authUser?.id || 'usr_sarah';
@@ -28,7 +32,7 @@ export async function POST(req: NextRequest) {
     if (token) {
       try {
         const getMeRes = await fetch(`https://api.telegram.org/bot${token.trim()}/getMe`);
-        const getMeJson = await getMeRes.json();
+        const getMeJson = (await getMeRes.json()) as any;
         if (getMeJson.ok && getMeJson.result?.username) {
           botUsername = getMeJson.result.username;
         }

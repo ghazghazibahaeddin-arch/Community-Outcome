@@ -162,9 +162,212 @@ export async function syncDatabaseToSupabase(dbData: any): Promise<{ success: bo
       else count += contribsToUpsert.length;
     }
 
+    // 7. Sync Subscriptions
+    if (Array.isArray(dbData.subscriptions) && dbData.subscriptions.length > 0) {
+      const subsToUpsert = dbData.subscriptions.map((s: any) => ({
+        id: s.id,
+        community_id: s.communityId,
+        tier: s.tier || 'free',
+        status: s.status || 'active',
+        provider: s.provider || 'whop',
+        provider_customer_id: s.providerCustomerId || null,
+        provider_subscription_id: s.providerSubscriptionId || null,
+        provider_plan_id: s.providerPlanId || null,
+        current_period_start: s.currentPeriodStart || new Date().toISOString(),
+        current_period_end: s.currentPeriodEnd || new Date(Date.now() + 30 * 86400000).toISOString(),
+        amount_usd: s.amountUsd || 0.0,
+        currency: s.currency || 'USD',
+        billing_interval: s.billingInterval || 'month',
+        created_at: s.createdAt || new Date().toISOString(),
+        updated_at: s.updatedAt || new Date().toISOString()
+      }));
+      const { error } = await client.from('subscriptions').upsert(subsToUpsert, { onConflict: 'id' });
+      if (error) console.warn('[Supabase Sync] Subscriptions upsert warning:', error.message);
+      else count += subsToUpsert.length;
+    }
+
+    // 8. Sync Referrals
+    if (Array.isArray(dbData.referrals) && dbData.referrals.length > 0) {
+      const refsToUpsert = dbData.referrals.map((r: any) => ({
+        id: r.id,
+        referral_code: r.referralCode,
+        community_id: r.communityId,
+        referrer_user_id: r.referrerUserId,
+        target_type: r.targetType || 'community',
+        target_id: r.targetId || null,
+        clicks_count: r.clicksCount || 0,
+        conversions_count: r.conversionsCount || 0,
+        created_at: r.createdAt || new Date().toISOString(),
+        last_clicked_at: r.lastClickedAt || null
+      }));
+      const { error } = await client.from('referrals').upsert(refsToUpsert, { onConflict: 'id' });
+      if (error) console.warn('[Supabase Sync] Referrals upsert warning:', error.message);
+      else count += refsToUpsert.length;
+    }
+
     return { success: true, syncedCount: count };
   } catch (err: any) {
     console.error('[Supabase Sync] Error during sync:', err.message);
     return { success: false, syncedCount: count, error: err.message };
+  }
+}
+
+/**
+ * Hydrate complete database state from Supabase PostgreSQL (Edge / Cloudflare Workers Native)
+ */
+export async function hydrateDatabaseFromSupabase(): Promise<any | null> {
+  const client = getSupabaseClient();
+  if (!client) return null;
+
+  try {
+    const [
+      usersRes,
+      commsRes,
+      memsRes,
+      reqsRes,
+      tasksRes,
+      contribsRes,
+      subsRes,
+      refsRes
+    ] = await Promise.all([
+      client.from('users').select('*'),
+      client.from('communities').select('*'),
+      client.from('memberships').select('*'),
+      client.from('requests').select('*'),
+      client.from('tasks').select('*'),
+      client.from('contributions').select('*'),
+      client.from('subscriptions').select('*'),
+      client.from('referrals').select('*')
+    ]);
+
+    if (usersRes.error || commsRes.error) {
+      console.warn('[Supabase Hydrate Warning] Failed to query primary tables:', usersRes.error?.message || commsRes.error?.message);
+      return null;
+    }
+
+    const users = (usersRes.data || []).map((u: any) => ({
+      id: u.id,
+      name: u.name,
+      email: u.email,
+      avatar: u.avatar,
+      bio: u.bio,
+      platformRole: u.platform_role || 'user',
+      createdAt: u.created_at,
+      identities: u.identities || {},
+      passport: u.passport || {},
+      privacy: u.privacy || {}
+    }));
+
+    const communities = (commsRes.data || []).map((c: any) => ({
+      id: c.id,
+      slug: c.slug || c.id,
+      name: c.name,
+      tagline: c.tagline,
+      description: c.description,
+      avatar: c.avatar,
+      coverImage: c.cover_image,
+      ownerId: c.owner_id,
+      contributionCategories: c.contribution_categories || [],
+      discordConfig: c.discord_config || {},
+      telegramConfig: c.telegram_config || {},
+      connectedDiscordServers: c.connected_discord_servers || [],
+      connectedTelegramGroups: c.connected_telegram_groups || [],
+      createdAt: c.created_at
+    }));
+
+    const memberships = (memsRes.data || []).map((m: any) => ({
+      id: m.id,
+      communityId: m.community_id,
+      userId: m.user_id,
+      role: m.role || 'member',
+      joinedAt: m.joined_at
+    }));
+
+    const requests = (reqsRes.data || []).map((r: any) => ({
+      id: r.id,
+      communityId: r.community_id,
+      creatorId: r.creator_id,
+      title: r.title,
+      description: r.description,
+      category: r.category,
+      skillsRequired: r.skills_required || [],
+      priority: r.priority || 'medium',
+      deadline: r.deadline,
+      status: r.status || 'open',
+      visibility: r.visibility || 'community',
+      createdAt: r.created_at
+    }));
+
+    const tasks = (tasksRes.data || []).map((t: any) => ({
+      id: t.id,
+      communityId: t.community_id,
+      planId: t.plan_id,
+      requestId: t.request_id,
+      assigneeId: t.assignee_id,
+      title: t.title,
+      description: t.description,
+      status: t.status || 'pending',
+      deadline: t.deadline,
+      deliverableUrl: t.deliverable_url,
+      createdAt: t.created_at
+    }));
+
+    const contributions = (contribsRes.data || []).map((cnt: any) => ({
+      id: cnt.id,
+      communityId: cnt.community_id,
+      contributorId: cnt.contributor_id,
+      taskId: cnt.task_id,
+      title: cnt.title,
+      description: cnt.description,
+      evidenceUrl: cnt.evidence_url,
+      status: cnt.status || 'pending_review',
+      peerReviews: cnt.peer_reviews || [],
+      submittedAt: cnt.submitted_at
+    }));
+
+    const subscriptions = (subsRes.data || []).map((s: any) => ({
+      id: s.id,
+      communityId: s.community_id,
+      tier: s.tier || 'free',
+      status: s.status || 'active',
+      provider: s.provider || 'whop',
+      providerCustomerId: s.provider_customer_id,
+      providerSubscriptionId: s.provider_subscription_id,
+      providerPlanId: s.provider_plan_id,
+      currentPeriodStart: s.current_period_start,
+      currentPeriodEnd: s.current_period_end,
+      amountUsd: Number(s.amount_usd || 0),
+      currency: s.currency || 'USD',
+      billingInterval: s.billing_interval || 'month',
+      createdAt: s.created_at,
+      updatedAt: s.updated_at
+    }));
+
+    const referrals = (refsRes.data || []).map((r: any) => ({
+      id: r.id,
+      referralCode: r.referral_code,
+      communityId: r.community_id,
+      referrerUserId: r.referrer_user_id,
+      targetType: r.target_type || 'community',
+      targetId: r.target_id,
+      clicksCount: r.clicks_count || 0,
+      conversionsCount: r.conversions_count || 0,
+      createdAt: r.created_at,
+      lastClickedAt: r.last_clicked_at
+    }));
+
+    return {
+      users,
+      communities,
+      memberships,
+      requests,
+      tasks,
+      contributions,
+      subscriptions,
+      referrals
+    };
+  } catch (err: any) {
+    console.error('[Supabase Hydrate Exception]:', err.message);
+    return null;
   }
 }

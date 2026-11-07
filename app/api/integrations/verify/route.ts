@@ -5,7 +5,7 @@ import { dbOperations } from '@/lib/db/store';
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
+    const body = (await req.json()) as { platform?: string; customToken?: string; customAppId?: string };
     const { platform, customToken, customAppId } = body;
 
     const checkedAt = new Date().toISOString();
@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
         });
 
         if (apiRes.ok) {
-          const botUser = await apiRes.json();
+          const botUser = (await apiRes.json()) as any;
           const inviteUrl = `https://discord.com/api/oauth2/authorize?client_id=${appId}&permissions=277025507392&scope=bot%20applications.commands`;
 
           const result: IntegrationCheckResult = {
@@ -51,7 +51,7 @@ export async function POST(req: NextRequest) {
           };
           return NextResponse.json({ success: true, result });
         } else {
-          const errData = await apiRes.json().catch(() => ({}));
+          const errData = ((await apiRes.json().catch(() => ({}))) || {}) as any;
           const result: IntegrationCheckResult = {
             platform: 'discord',
             configured: true,
@@ -92,7 +92,7 @@ export async function POST(req: NextRequest) {
       // Live verification against official Telegram Bot API
       try {
         const getMeRes = await fetch(`https://api.telegram.org/bot${token.trim()}/getMe`);
-        const getMeJson = await getMeRes.json();
+        const getMeJson = (await getMeRes.json()) as any;
 
         if (getMeJson.ok && getMeJson.result) {
           const bot = getMeJson.result;
@@ -101,7 +101,7 @@ export async function POST(req: NextRequest) {
           let webhookDetails = 'Webhook status unverified';
           try {
             const whRes = await fetch(`https://api.telegram.org/bot${token.trim()}/getWebhookInfo`);
-            const whJson = await whRes.json();
+            const whJson = (await whRes.json()) as any;
             if (whJson.ok) {
               webhookDetails = whJson.result.url
                 ? `Webhook registered at: ${whJson.result.url}`

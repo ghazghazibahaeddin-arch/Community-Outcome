@@ -3,7 +3,7 @@ import { requestPasswordReset } from '@/lib/services/auth';
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
+    const body = (await req.json()) as { email?: string };
     const { email } = body;
 
     if (!email || typeof email !== 'string') {

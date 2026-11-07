@@ -76,8 +76,12 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
+    const body = (await req.json()) as { communityId?: string; serverId?: string; serverName?: string; channelId?: string };
     const { communityId, serverId, serverName, channelId } = body;
+
+    if (!communityId) {
+      return NextResponse.json({ success: false, error: 'communityId is required' }, { status: 400 });
+    }
 
     const authUser = await getAuthenticatedUserFromRequest(req);
     const actorId = authUser?.id || 'usr_sarah';
@@ -122,7 +126,7 @@ export async function POST(req: NextRequest) {
           }
         });
         if (guildRes.ok) {
-          const guildData = await guildRes.json();
+          const guildData = (await guildRes.json()) as any;
           actualServerName = guildData.name || actualServerName;
           botPresent = true;
         } else if (guildRes.status === 404 || guildRes.status === 403) {

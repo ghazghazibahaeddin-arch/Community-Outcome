@@ -89,7 +89,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const authUser = await getAuthenticatedUserFromRequest(req);
-    const body = await req.json();
+    const body = (await req.json()) as { action?: string; payload?: any };
     const { action, payload } = body;
     const db = getDatabase();
 

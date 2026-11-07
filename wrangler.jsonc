@@ -1,0 +1,21 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "community-os",
+  "main": "cloudflare/worker.ts",
+  "compatibility_date": "2026-05-20",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "assets": {
+    "directory": ".next/static",
+    "binding": "ASSETS"
+  },
+  "vars": {
+    "NODE_ENV": "production",
+    "APP_URL": "https://community-os.workers.dev",
+    "TELEGRAM_BOT_USERNAME": "CommunityOutcomeBot",
+    "DISCORD_APPLICATION_ID": "1347000000000000000",
+    "WHOP_PRO_PRODUCT_ID": "prod_community_pro_15",
+    "NEXT_PUBLIC_WHOP_CHECKOUT_URL": "https://whop.com/baha-1a44/community-os-pro"
+  }
+}

@@ -52,8 +52,12 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const authUser = await getAuthenticatedUserFromRequest(req);
-    const body = await req.json();
-    const { communityId, targetType = 'community', targetId } = body;
+    const body = (await req.json()) as { communityId?: string; targetType?: 'passport' | 'community' | 'request' | 'task'; targetId?: string };
+    const { communityId, targetId } = body;
+    const targetType: 'passport' | 'community' | 'request' | 'task' =
+      body.targetType && ['passport', 'community', 'request', 'task'].includes(body.targetType)
+        ? body.targetType
+        : 'community';
 
     if (!communityId) {
       return NextResponse.json({ success: false, error: 'communityId is required' }, { status: 400 });
