@@ -21,8 +21,8 @@ async function runCloudflareVerification() {
   console.log('================================================================\n');
 
   // 1. Verify Next.js App Router and Wrangler Files
-  assert(fs.existsSync('wrangler.jsonc'), 'Wrangler: wrangler.jsonc configuration file present');
-  assert(fs.existsSync('wrangler.toml'), 'Wrangler: wrangler.toml configuration file present');
+  assert(fs.existsSync('wrangler.jsonc'), 'Wrangler: canonical wrangler.jsonc configuration file present');
+  assert(!fs.existsSync('wrangler.toml'), 'Wrangler: duplicate wrangler.toml removed to ensure single source of truth');
   assert(fs.existsSync('cloudflare/worker.ts'), 'Workers: Native cloudflare/worker.ts entrypoint present');
   assert(fs.existsSync('worker-configuration.d.ts'), 'Workers: Generated worker-configuration.d.ts environment types present');
 

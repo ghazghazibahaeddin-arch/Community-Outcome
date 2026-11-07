@@ -7,7 +7,11 @@ let supabaseInstance: SupabaseClient | null = null;
 
 export function isSupabaseConfigured(): boolean {
   const url = process.env.SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
+  const key =
+    process.env.SUPABASE_SECRET_KEY ||
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.SUPABASE_PUBLISHABLE_KEY ||
+    process.env.SUPABASE_ANON_KEY;
   return Boolean(url && url.trim().length > 0 && key && key.trim().length > 0 && !url.includes('your-project'));
 }
 
@@ -15,7 +19,12 @@ export function getSupabaseClient(): SupabaseClient | null {
   if (supabaseInstance) return supabaseInstance;
 
   const url = process.env.SUPABASE_URL?.trim();
-  const key = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY)?.trim();
+  const key = (
+    process.env.SUPABASE_SECRET_KEY ||
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.SUPABASE_PUBLISHABLE_KEY ||
+    process.env.SUPABASE_ANON_KEY
+  )?.trim();
 
   if (!url || !key || url.includes('your-project')) {
     return null;

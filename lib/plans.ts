@@ -2,6 +2,7 @@
 import { PlanTier, PlanEntitlements } from './types';
 
 export const WHOP_PRO_CHECKOUT_URL =
+  process.env.WHOP_PURCHASE_URL ||
   process.env.NEXT_PUBLIC_WHOP_CHECKOUT_URL ||
   'https://whop.com/baha-1a44/community-os-pro';
 

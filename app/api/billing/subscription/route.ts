@@ -39,7 +39,7 @@ export async function GET(req: NextRequest) {
         priceMonthlyUsd: PRO_PLAN_PRICE_USD,
         productName: 'Community Pro',
         checkoutUrl,
-        providerConfigured: Boolean(process.env.WHOP_API_KEY || process.env.WHOP_WEBHOOK_SECRET)
+        providerConfigured: Boolean(process.env.WHOP_COMPANY_API_KEY || process.env.WHOP_API_KEY || process.env.WHOP_WEBHOOK_SECRET)
       }
     });
   } catch (err: unknown) {

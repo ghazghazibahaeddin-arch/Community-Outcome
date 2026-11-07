@@ -76,7 +76,12 @@ function getDb() {
 
 async function syncToSupabaseAsync(db) {
   const url = process.env.SUPABASE_URL?.trim();
-  const key = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY)?.trim();
+  const key = (
+    process.env.SUPABASE_SECRET_KEY ||
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.SUPABASE_PUBLISHABLE_KEY ||
+    process.env.SUPABASE_ANON_KEY
+  )?.trim();
   if (!url || !key || url.includes('your-project')) return;
   try {
     const { createClient } = await import('@supabase/supabase-js');

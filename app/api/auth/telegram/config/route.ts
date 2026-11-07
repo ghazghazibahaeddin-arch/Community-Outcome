@@ -6,7 +6,7 @@ export async function GET(req: NextRequest) {
   const verifiedAppUrl = getVerifiedAppUrl();
   const redirectUri = getTelegramRedirectUri();
   const clientId = getTelegramOidcClientId();
-  const botUsername = process.env.TELEGRAM_BOT_NAME || 'CommunityOutcomeBot';
+  const botUsername = process.env.TELEGRAM_BOT_USERNAME || process.env.TELEGRAM_BOT_NAME || 'CommunityOutcomeBot';
   const hasToken = Boolean(process.env.TELEGRAM_BOT_TOKEN);
 
   return NextResponse.json({
