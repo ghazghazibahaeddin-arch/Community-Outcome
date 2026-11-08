@@ -5,6 +5,8 @@ export interface Env {
   ASSETS?: Fetcher;
   NODE_ENV?: string;
   APP_URL?: string;
+  APP_INTERNAL_URL?: string;
+  ORIGIN_URL?: string;
 
   // Discord
   DISCORD_APPLICATION_ID?: string;
@@ -116,19 +118,66 @@ const worker = {
           return assetResponse;
         }
       } catch {
-        // Fallback to route handler if asset not found
+        // Fallback to application route handler if asset not found
       }
     }
 
-    // 4. Default Workers response / Pass-through
-    return new Response(
-      `Community OS — Cloudflare Workers Free Runtime Active.\nRequest: ${request.method} ${url.pathname}\nConfigured on workers.dev`,
-      {
-        status: 200,
-        headers: { 'Content-Type': 'text/plain; charset=utf-8' }
-      }
-    );
+    // 4. Production Next.js Application Request Handler
+    // Forwards incoming requests (GET /, pages, API routes, and static assets) to the real application handler
+    return await handleApplicationRequest(request, env);
   }
 };
+
+/**
+ * Production Next.js Application Request Handler
+ * Dispatches incoming requests (GET /, pages, API routes, and dynamic content) to the application handler
+ */
+export async function handleApplicationRequest(request: Request, env: Env): Promise<Response> {
+  const url = new URL(request.url);
+
+  // 1. Check Cloudflare Worker ASSETS binding first for static asset matches
+  if (env.ASSETS) {
+    try {
+      const assetResponse = await env.ASSETS.fetch(request);
+      if (assetResponse.status < 400 || assetResponse.status === 304) {
+        return assetResponse;
+      }
+    } catch {
+      // Continue to application router
+    }
+  }
+
+  // 2. Resolve destination application origin
+  const appOrigin =
+    (typeof process !== 'undefined' && process.env?.APP_INTERNAL_URL) ||
+    env.APP_INTERNAL_URL ||
+    (typeof process !== 'undefined' && process.env?.ORIGIN_URL) ||
+    env.ORIGIN_URL ||
+    'http://127.0.0.1:3000';
+
+  const targetUrl = new URL(url.pathname + url.search, appOrigin);
+  const reqHeaders = new Headers(request.headers);
+
+  // Preserve Host and forwarding metadata
+  if (!reqHeaders.has('host')) {
+    reqHeaders.set('host', url.host);
+  }
+  if (!reqHeaders.has('x-forwarded-host')) {
+    reqHeaders.set('x-forwarded-host', url.host);
+  }
+  if (!reqHeaders.has('x-forwarded-proto')) {
+    reqHeaders.set('x-forwarded-proto', url.protocol.replace(':', ''));
+  }
+
+  const hasBody = request.method !== 'GET' && request.method !== 'HEAD';
+  const proxyReq = new Request(targetUrl.toString(), {
+    method: request.method,
+    headers: reqHeaders,
+    body: hasBody ? request.body : undefined,
+    redirect: 'manual'
+  });
+
+  return await fetch(proxyReq);
+}
 
 export default worker;
