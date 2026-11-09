@@ -12,7 +12,7 @@
   },
   "vars": {
     "NODE_ENV": "production",
-    "APP_URL": "https://community-os.workers.dev",
+    "APP_URL": "https://community-outcome.ghazghazibahaeddin.workers.dev",
     "TELEGRAM_BOT_USERNAME": "CommunityOutcomeBot",
     "DISCORD_APPLICATION_ID": "1347000000000000000",
     "WHOP_PRO_PLAN_ID": "prod_community_pro_15",
