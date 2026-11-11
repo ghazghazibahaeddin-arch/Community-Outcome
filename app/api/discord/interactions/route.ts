@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { dbOperations, getDatabase } from '@/lib/db/store';
+import { getRuntimeEnv, CloudflareEnv } from '@/lib/env';
 
 // Discord Interaction Types
 const InteractionType = {
@@ -58,12 +59,13 @@ async function verifyDiscordSignature(
   }
 }
 
-export async function POST(req: NextRequest) {
+export async function POST(req: NextRequest, _context?: any) {
+  const env = getRuntimeEnv(_context?.env || _context);
   try {
     const rawBody = await req.text();
     const signature = req.headers.get('x-signature-ed25519');
     const timestamp = req.headers.get('x-signature-timestamp');
-    const publicKey = process.env.DISCORD_PUBLIC_KEY;
+    const publicKey = env.DISCORD_PUBLIC_KEY;
 
     // Cryptographic Ed25519 Signature Verification
     if (publicKey && signature && timestamp) {
@@ -94,7 +96,7 @@ export async function POST(req: NextRequest) {
       const discordUsername = discordUser.username ? `${discordUser.username}#${discordUser.discriminator || '0'}` : 'discord_user';
 
       const db = getDatabase();
-      const appUrl = (process.env.APP_URL || 'https://community-os.org').replace(/\/$/, '');
+      const appUrl = (env.APP_URL || 'https://community-os.org').replace(/\/$/, '');
 
       // Resolve community by guild ID or fallback to default community
       const community =
@@ -334,7 +336,7 @@ export async function POST(req: NextRequest) {
       const discordUsername = discordUser.username || 'discord_user';
 
       const db = getDatabase();
-      const appUrl = (process.env.APP_URL || 'https://community-os.org').replace(/\/$/, '');
+      const appUrl = (env.APP_URL || 'https://community-os.org').replace(/\/$/, '');
       const community =
         db.communities.find((c) => c.discordConfig?.serverId === guildId) ||
         db.communities.find((c) => c.id === 'comm_devforge') ||

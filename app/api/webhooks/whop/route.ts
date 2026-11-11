@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyWhopWebhook, processVerifiedPaymentEvent } from '@/lib/services/paymentService';
+import { getRuntimeEnv, CloudflareEnv } from '@/lib/env';
 
 /**
  * POST /api/webhooks/whop
@@ -9,10 +10,11 @@ import { verifyWhopWebhook, processVerifiedPaymentEvent } from '@/lib/services/p
  * - payment.failed -> past_due
  * Strictly idempotent, rejects forged payloads, never trusts client frontend assertions.
  */
-export async function POST(req: NextRequest) {
+export async function POST(req: NextRequest, _context?: any) {
+  const env = getRuntimeEnv(_context?.env || _context);
   try {
     const rawBody = await req.text();
-    const verification = verifyWhopWebhook(rawBody, req.headers);
+    const verification = verifyWhopWebhook(rawBody, req.headers, env);
 
     if (!verification.valid) {
       console.warn('[Whop Webhook] Signature verification failed:', verification.error);

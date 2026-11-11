@@ -2,8 +2,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { dbOperations, getDatabase } from '@/lib/db/store';
 import { getAuthenticatedUserFromRequest, getUserRoleInCommunity } from '@/lib/services/auth';
+import { getRuntimeEnv, CloudflareEnv } from '@/lib/env';
 
-export async function POST(req: NextRequest) {
+export async function POST(req: NextRequest, _context?: any) {
+  const env = getRuntimeEnv(_context?.env || _context);
   try {
     const body = (await req.json()) as { communityId?: string; groupId?: string; pinMessage?: boolean };
     const { communityId, groupId, pinMessage = true } = body;
@@ -34,9 +36,9 @@ export async function POST(req: NextRequest) {
       }, { status: 400 });
     }
 
-    const appUrl = (process.env.APP_URL || 'https://community-os.org').replace(/\/$/, '');
+    const appUrl = (env.APP_URL || 'https://community-os.org').replace(/\/$/, '');
     const hubLink = `${appUrl}/l/${community.slug || community.id}-hub`;
-    const token = process.env.TELEGRAM_BOT_TOKEN;
+    const token = env.TELEGRAM_BOT_TOKEN;
 
     const menuText =
       `🌟 *${community.name} — Community OS Action Menu*\n\n` +

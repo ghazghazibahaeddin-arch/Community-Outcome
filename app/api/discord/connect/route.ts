@@ -4,8 +4,10 @@ import { dbOperations } from '@/lib/db/store';
 import { getAuthenticatedUserFromRequest, getUserRoleInCommunity } from '@/lib/services/auth';
 import { getDiscordRedirectUri, getVerifiedAppUrl } from '@/lib/services/securityConfig';
 import { verifyCommunityEntitlement } from '@/lib/services/subscriptionService';
+import { getRuntimeEnv, CloudflareEnv } from '@/lib/env';
 
-export async function GET(req: NextRequest) {
+export async function GET(req: NextRequest, _context?: any) {
+  const env = getRuntimeEnv(_context?.env || _context);
   try {
     const url = new URL(req.url);
     const mode = url.searchParams.get('mode') || 'bot'; // 'bot' (server install) or 'user' (user OAuth login/link)
@@ -24,7 +26,7 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    const appId = process.env.DISCORD_APPLICATION_ID || '1347000000000000000';
+    const appId = env.DISCORD_APPLICATION_ID || '1347000000000000000';
     // Permissions bitfield explicitly includes VIEW_CHANNEL (1024), SEND_MESSAGES (2048), EMBED_LINKS (16384),
     // ATTACH_FILES (32768), READ_MESSAGE_HISTORY (65536), ADD_REACTIONS (64), USE_EXTERNAL_EMOJIS (262144),
     // MANAGE_MESSAGES (8192), USE_APPLICATION_COMMANDS (2147483648), SEND_MESSAGES_IN_THREADS (274877906944)
@@ -34,7 +36,7 @@ export async function GET(req: NextRequest) {
     const state = `os_discord_${mode}_${communityId}_${userSessionSuffix}_${Date.now()}`;
     
     // Fixed production APP_URL and DISCORD_REDIRECT_URI from server env validated against allowlist
-    const verifiedRedirectUri = getDiscordRedirectUri();
+    const verifiedRedirectUri = getDiscordRedirectUri(env);
     const encodedRedirectUri = encodeURIComponent(verifiedRedirectUri);
 
     // Bot + slash command install URL vs User Identity OAuth URL
@@ -54,7 +56,7 @@ export async function GET(req: NextRequest) {
       installUrl,
       mode,
       redirectUri: verifiedRedirectUri,
-      appUrl: getVerifiedAppUrl(),
+      appUrl: getVerifiedAppUrl(env),
       permissionsInteger: permissions,
       requiredScopes: mode === 'user' ? ['identify', 'email'] : ['bot', 'applications.commands'],
       requiredPermissions: [
@@ -74,7 +76,8 @@ export async function GET(req: NextRequest) {
   }
 }
 
-export async function POST(req: NextRequest) {
+export async function POST(req: NextRequest, _context?: any) {
+  const env = getRuntimeEnv(_context?.env || _context);
   try {
     const body = (await req.json()) as { communityId?: string; serverId?: string; serverName?: string; channelId?: string };
     const { communityId, serverId, serverName, channelId } = body;
@@ -106,7 +109,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Verify bot token and check live guild if token is configured
-    const token = process.env.DISCORD_BOT_TOKEN;
+    const token = env.DISCORD_BOT_TOKEN;
     let actualServerName = serverName?.trim() || `Discord Guild (${serverId.trim()})`;
     let botPresent = true;
     const permissions = [

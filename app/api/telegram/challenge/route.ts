@@ -2,8 +2,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { dbOperations, getDatabase } from '@/lib/db/store';
 import { getAuthenticatedUserFromRequest, getUserRoleInCommunity } from '@/lib/services/auth';
+import { getRuntimeEnv, CloudflareEnv } from '@/lib/env';
 
-export async function POST(req: NextRequest) {
+export async function POST(req: NextRequest, _context?: any) {
+  const env = getRuntimeEnv(_context?.env || _context);
   try {
     const body = (await req.json()) as { communityId?: string };
     const { communityId } = body;
@@ -28,7 +30,7 @@ export async function POST(req: NextRequest) {
 
     // Determine bot identity
     let botUsername = 'CommunityOutcomeBot';
-    const token = process.env.TELEGRAM_BOT_TOKEN;
+    const token = env.TELEGRAM_BOT_TOKEN;
     if (token) {
       try {
         const getMeRes = await fetch(`https://api.telegram.org/bot${token.trim()}/getMe`);

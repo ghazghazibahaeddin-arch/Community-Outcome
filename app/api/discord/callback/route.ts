@@ -4,8 +4,10 @@ import { dbOperations, getDatabase, saveDatabase } from '@/lib/db/store';
 import { createSession, getAuthenticatedUserFromRequest, setSessionCookie } from '@/lib/services/auth';
 import { getDiscordRedirectUri, getVerifiedAppUrl } from '@/lib/services/securityConfig';
 import { User } from '@/lib/types';
+import { getRuntimeEnv, CloudflareEnv } from '@/lib/env';
 
-export async function GET(req: NextRequest) {
+export async function GET(req: NextRequest, _context?: any) {
+  const env = getRuntimeEnv(_context?.env || _context);
   const url = new URL(req.url);
   const code = url.searchParams.get('code');
   const guildId = url.searchParams.get('guild_id');
@@ -13,7 +15,7 @@ export async function GET(req: NextRequest) {
   const error = url.searchParams.get('error');
   const errorDescription = url.searchParams.get('error_description');
 
-  const appUrl = getVerifiedAppUrl();
+  const appUrl = getVerifiedAppUrl(env);
   const existingUser = await getAuthenticatedUserFromRequest(req);
 
   // 1. Handle user cancellation or OAuth error
@@ -39,9 +41,9 @@ export async function GET(req: NextRequest) {
 
   // 3. User Identity OAuth Mode ("Continue with Discord" or link personal account)
   if (isUserAuthMode && code) {
-    const clientId = process.env.DISCORD_APPLICATION_ID || '1347000000000000000';
-    const clientSecret = process.env.DISCORD_CLIENT_SECRET;
-    const redirectUri = getDiscordRedirectUri();
+    const clientId = env.DISCORD_APPLICATION_ID || '1347000000000000000';
+    const clientSecret = env.DISCORD_CLIENT_SECRET;
+    const redirectUri = getDiscordRedirectUri(env);
 
     let discordUser: { id: string; username: string; email?: string; avatar?: string } | null = null;
 
@@ -160,7 +162,7 @@ export async function GET(req: NextRequest) {
   // 4. Bot Server Installation Mode (guild_id returned)
   if (guildId) {
     let serverName = `Discord Server (${guildId})`;
-    const token = process.env.DISCORD_BOT_TOKEN;
+    const token = env.DISCORD_BOT_TOKEN;
 
     if (token) {
       try {

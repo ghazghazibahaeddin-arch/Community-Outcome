@@ -5,6 +5,7 @@ import crypto from 'crypto';
 import { PaymentProvider, PlanTier, SubscriptionStatus } from '@/lib/types';
 import { applySubscriptionUpdate, downgradeToFree, WHOP_PRO_CHECKOUT_URL } from './subscriptionService';
 import { getDatabase, saveDatabase } from '@/lib/db/store';
+import { getRuntimeEnv, CloudflareEnv } from '../env';
 
 export interface WebhookVerificationResult {
   valid: boolean;
@@ -29,7 +30,8 @@ export interface WebhookVerificationResult {
  */
 export function verifyWhopWebhook(
   rawBody: string,
-  headers: Headers | Record<string, string | null>
+  headers: Headers | Record<string, string | null>,
+  explicitEnv?: CloudflareEnv
 ): WebhookVerificationResult {
   const getHeader = (name: string): string | null => {
     if (typeof (headers as any).get === 'function') {
@@ -39,10 +41,11 @@ export function verifyWhopWebhook(
     return rec[name.toLowerCase()] || rec[name] || null;
   };
 
+  const env = getRuntimeEnv(explicitEnv);
   const signature = getHeader('webhook-signature') || getHeader('x-whop-signature');
   const eventId = getHeader('webhook-id') || getHeader('x-whop-event-id');
   const timestamp = getHeader('webhook-timestamp') || getHeader('x-whop-timestamp');
-  const secret = process.env.WHOP_WEBHOOK_SECRET;
+  const secret = env.WHOP_WEBHOOK_SECRET;
 
   let payload: any;
   try {
@@ -148,8 +151,9 @@ export function verifyWhopWebhook(
 /**
  * Verify Gumroad Webhook as modular backup if Whop payouts are unavailable
  */
-export function verifyGumroadWebhook(formData: Record<string, any>): WebhookVerificationResult {
-  const sellerId = process.env.GUMROAD_SELLER_ID;
+export function verifyGumroadWebhook(formData: Record<string, any>, explicitEnv?: CloudflareEnv): WebhookVerificationResult {
+  const env = getRuntimeEnv(explicitEnv);
+  const sellerId = env.GUMROAD_SELLER_ID;
   if (sellerId && formData.seller_id && formData.seller_id !== sellerId) {
     return { valid: false, provider: 'gumroad', error: 'Seller ID mismatch' };
   }

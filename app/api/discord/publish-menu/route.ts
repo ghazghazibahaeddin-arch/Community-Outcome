@@ -2,8 +2,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { dbOperations, getDatabase } from '@/lib/db/store';
 import { getAuthenticatedUserFromRequest, getUserRoleInCommunity } from '@/lib/services/auth';
+import { getRuntimeEnv, CloudflareEnv } from '@/lib/env';
 
-export async function POST(req: NextRequest) {
+export async function POST(req: NextRequest, _context?: any) {
+  const env = getRuntimeEnv(_context?.env || _context);
   try {
     const body = (await req.json()) as { communityId?: string; channelId?: string };
     const { communityId, channelId } = body;
@@ -27,9 +29,9 @@ export async function POST(req: NextRequest) {
     }
 
     const targetChannelId = channelId?.trim() || community.discordConfig.channelId || 'ch_actions_main';
-    const appUrl = (process.env.APP_URL || 'https://community-os.org').replace(/\/$/, '');
+    const appUrl = (env.APP_URL || 'https://community-os.org').replace(/\/$/, '');
     const hubLink = `${appUrl}/l/${community.slug || community.id}-hub`;
-    const token = process.env.DISCORD_BOT_TOKEN;
+    const token = env.DISCORD_BOT_TOKEN;
 
     const payload = {
       embeds: [

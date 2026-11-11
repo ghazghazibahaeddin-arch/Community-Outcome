@@ -2176,6 +2176,66 @@
         "allowCrossCommunitySharing": false,
         "shareableRecordIds": []
       }
+    },
+    {
+      "id": "usr_1794224454240_7917c630",
+      "name": "Security Auditor",
+      "email": "security_tester_1794224452456@domain.org",
+      "avatar": "https://picsum.photos/seed/usr_1794224454240_7917c630/200/200",
+      "bio": "Auditing production security invariants",
+      "platformRole": "user",
+      "createdAt": "2026-11-09T11:40:54.289Z",
+      "identities": {},
+      "passport": {
+        "displayName": "Security Auditor",
+        "biography": "Auditing production security invariants",
+        "skills": [],
+        "interests": [],
+        "languages": [
+          "English"
+        ],
+        "collaborationPreferences": "Open to community collaborations.",
+        "portfolioLinks": [],
+        "isPublic": true
+      },
+      "privacy": {
+        "showBio": true,
+        "showSkills": true,
+        "showVerifiedOnly": false,
+        "allowDiscovery": true,
+        "allowCrossCommunitySharing": false,
+        "shareableRecordIds": []
+      }
+    },
+    {
+      "id": "usr_1794385605224_9a540bcb",
+      "name": "Security Auditor",
+      "email": "security_tester_1794385602777@domain.org",
+      "avatar": "https://picsum.photos/seed/usr_1794385605224_9a540bcb/200/200",
+      "bio": "Auditing production security invariants",
+      "platformRole": "user",
+      "createdAt": "2026-11-11T08:26:45.269Z",
+      "identities": {},
+      "passport": {
+        "displayName": "Security Auditor",
+        "biography": "Auditing production security invariants",
+        "skills": [],
+        "interests": [],
+        "languages": [
+          "English"
+        ],
+        "collaborationPreferences": "Open to community collaborations.",
+        "portfolioLinks": [],
+        "isPublic": true
+      },
+      "privacy": {
+        "showBio": true,
+        "showSkills": true,
+        "showVerifiedOnly": false,
+        "allowDiscovery": true,
+        "allowCrossCommunitySharing": false,
+        "shareableRecordIds": []
+      }
     }
   ],
   "communities": [
@@ -12236,6 +12296,24 @@
       "emailVerified": false,
       "createdAt": "2026-11-09T09:30:25.573Z",
       "updatedAt": "2026-11-09T09:30:25.573Z"
+    },
+    {
+      "id": "usr_1794224454240_7917c630",
+      "email": "security_tester_1794224452456@domain.org",
+      "passwordHash": "2802d8617c0f582fd74822cdc4303ab965c7af89c520e5c8ff76d37fd89a20e99798ef093244dd560247c8f67acc9f8ff1049c7171d6b340cf16dafb07659416",
+      "salt": "71cb167c42c63fed635d1e28a4f03f5c",
+      "emailVerified": false,
+      "createdAt": "2026-11-09T11:40:54.289Z",
+      "updatedAt": "2026-11-09T11:40:54.289Z"
+    },
+    {
+      "id": "usr_1794385605224_9a540bcb",
+      "email": "security_tester_1794385602777@domain.org",
+      "passwordHash": "05bc4c1708514f389272288ccf1475bd12f51bebd944f8e1977981fc7d4a356710a74edee58673ecc2686698ccc90d49e0b31afffab3205866bc2b57fcc93a4d",
+      "salt": "0bbe4c8a65a296fb84000dd5515c294b",
+      "emailVerified": false,
+      "createdAt": "2026-11-11T08:26:45.269Z",
+      "updatedAt": "2026-11-11T08:26:45.269Z"
     }
   ],
   "sessions": [
@@ -13025,6 +13103,20 @@
       "userId": "usr_tg_tg_88921029",
       "createdAt": "2026-11-09T09:30:27.001Z",
       "expiresAt": "2026-11-16T09:30:27.001Z",
+      "userAgent": "node"
+    },
+    {
+      "token": "ab286f6a046ec84ad1d8c279f9a3e732e007b81cac20663dbf2e1f102f9e2ad6",
+      "userId": "usr_tg_tg_88921029",
+      "createdAt": "2026-11-09T11:40:56.845Z",
+      "expiresAt": "2026-11-16T11:40:56.845Z",
+      "userAgent": "node"
+    },
+    {
+      "token": "6fa33f3f764e5d044eace505b4864901d3625dcbd98a28336638481ea5bbb066",
+      "userId": "usr_tg_tg_88921029",
+      "createdAt": "2026-11-11T08:26:47.126Z",
+      "expiresAt": "2026-11-18T08:26:47.126Z",
       "userAgent": "node"
     }
   ],

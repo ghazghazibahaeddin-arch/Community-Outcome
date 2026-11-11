@@ -2,17 +2,19 @@ import { NextRequest, NextResponse } from 'next/server';
 import {
   getCommunitySubscription,
   getCommunityEntitlements,
-  WHOP_PRO_CHECKOUT_URL,
   PRO_PLAN_PRICE_USD,
   PLAN_DEFINITIONS
 } from '@/lib/services/subscriptionService';
+import { getWhopCheckoutUrl } from '@/lib/plans';
 import { getAuthenticatedUserFromRequest, getUserRoleInCommunity } from '@/lib/services/auth';
+import { getRuntimeEnv, CloudflareEnv } from '@/lib/env';
 
 /**
  * GET /api/billing/subscription?communityId=comm_devforge
  * Returns active subscription tier, limits, entitlement breakdown and Whop checkout URL
  */
-export async function GET(req: NextRequest) {
+export async function GET(req: NextRequest, _context?: any) {
+  const env = getRuntimeEnv(_context?.env || _context);
   try {
     const url = new URL(req.url);
     const communityId = url.searchParams.get('communityId') || 'comm_devforge';
@@ -24,7 +26,8 @@ export async function GET(req: NextRequest) {
     const subscription = getCommunitySubscription(communityId);
     const entitlements = getCommunityEntitlements(communityId);
 
-    const checkoutUrl = `${WHOP_PRO_CHECKOUT_URL}?custom_community_id=${encodeURIComponent(communityId)}&email=${encodeURIComponent(authUser?.email || '')}`;
+    const baseCheckoutUrl = getWhopCheckoutUrl(env);
+    const checkoutUrl = `${baseCheckoutUrl}?custom_community_id=${encodeURIComponent(communityId)}&email=${encodeURIComponent(authUser?.email || '')}`;
 
     return NextResponse.json({
       success: true,
@@ -39,7 +42,7 @@ export async function GET(req: NextRequest) {
         priceMonthlyUsd: PRO_PLAN_PRICE_USD,
         productName: 'Community Pro',
         checkoutUrl,
-        providerConfigured: Boolean(process.env.WHOP_COMPANY_API_KEY || process.env.WHOP_API_KEY || process.env.WHOP_WEBHOOK_SECRET)
+        providerConfigured: Boolean(env.WHOP_COMPANY_API_KEY || env.WHOP_API_KEY || env.WHOP_WEBHOOK_SECRET)
       }
     });
   } catch (err: unknown) {

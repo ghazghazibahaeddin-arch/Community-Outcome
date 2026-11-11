@@ -4,6 +4,7 @@ import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import { getDatabase, saveDatabase } from '@/lib/db/store';
 import { AuthAccount, AuthSession, User, UserRole, DevEmail } from '@/lib/types';
+import { getRuntimeEnv, CloudflareEnv } from '../env';
 
 export const SESSION_COOKIE_NAME = 'community_os_session';
 export const SESSION_DURATION_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
@@ -58,7 +59,8 @@ export function clearSessionCookie(
  */
 export function verifyTelegramAuthData(
   authData: Record<string, string>,
-  botToken?: string
+  botToken?: string,
+  explicitEnv?: CloudflareEnv
 ): { valid: boolean; error?: string } {
   const { hash, ...dataToCheck } = authData;
   if (!hash) {
@@ -70,7 +72,8 @@ export function verifyTelegramAuthData(
     return { valid: true };
   }
 
-  const token = botToken || process.env.TELEGRAM_BOT_TOKEN;
+  const env = getRuntimeEnv(explicitEnv);
+  const token = botToken || env.TELEGRAM_BOT_TOKEN;
   if (!token) {
     return { valid: false, error: 'Telegram bot token is not configured on the server' };
   }
@@ -304,7 +307,11 @@ export function destroyAllUserSessions(userId: string): void {
 /**
  * Create a cryptographically secure, single-use, time-limited password reset token
  */
-export function requestPasswordReset(email: string, appUrl: string): {
+export function requestPasswordReset(
+  email: string,
+  appUrl: string,
+  explicitEnv?: CloudflareEnv
+): {
   success: boolean;
   message: string;
   devToken?: string;
@@ -338,8 +345,9 @@ export function requestPasswordReset(email: string, appUrl: string): {
   const baseUrl = appUrl.replace(/\/$/, '');
   const resetUrl = `${baseUrl}/auth/reset-password?token=${resetToken}`;
 
+  const env = getRuntimeEnv(explicitEnv);
   // Check if external SMTP is configured
-  const hasRealSmtp = Boolean(process.env.SMTP_HOST && process.env.SMTP_USER);
+  const hasRealSmtp = Boolean(env.SMTP_HOST && env.SMTP_USER);
 
   // Record email in devEmails store for inspection / testing
   const devEmail: DevEmail = {

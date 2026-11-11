@@ -1,13 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getTelegramRedirectUri, getVerifiedAppUrl } from '@/lib/services/securityConfig';
 import { getTelegramOidcClientId } from '@/lib/services/telegramOidc';
+import { getRuntimeEnv, CloudflareEnv } from '@/lib/env';
 
-export async function GET(req: NextRequest) {
-  const verifiedAppUrl = getVerifiedAppUrl();
-  const redirectUri = getTelegramRedirectUri();
-  const clientId = getTelegramOidcClientId();
-  const botUsername = process.env.TELEGRAM_BOT_USERNAME || process.env.TELEGRAM_BOT_NAME || 'CommunityOutcomeBot';
-  const hasToken = Boolean(process.env.TELEGRAM_BOT_TOKEN);
+export async function GET(req: NextRequest, _context?: any) {
+  const env = getRuntimeEnv(_context?.env || _context);
+  const verifiedAppUrl = getVerifiedAppUrl(env);
+  const redirectUri = getTelegramRedirectUri(env);
+  const clientId = getTelegramOidcClientId(env);
+  const botUsername = env.TELEGRAM_BOT_USERNAME || env.TELEGRAM_BOT_NAME || 'CommunityOutcomeBot';
+  const hasToken = Boolean(env.TELEGRAM_BOT_TOKEN);
 
   return NextResponse.json({
     success: true,

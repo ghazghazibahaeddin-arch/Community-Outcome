@@ -2,12 +2,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createOrGetReferral, trackReferralEvent } from '@/lib/services/subscriptionService';
 import { getAuthenticatedUserFromRequest } from '@/lib/services/auth';
 import { getVerifiedAppUrl } from '@/lib/services/securityConfig';
+import { getRuntimeEnv, CloudflareEnv } from '@/lib/env';
 
 /**
  * GET /api/referrals?code=ref_xxx
  * Resolves referral code and records a click event
  */
-export async function GET(req: NextRequest) {
+export async function GET(req: NextRequest, _context?: any) {
+  const env = getRuntimeEnv(_context?.env || _context);
   try {
     const url = new URL(req.url);
     const code = url.searchParams.get('code');
@@ -21,7 +23,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ success: false, error: 'Referral code not found' }, { status: 404 });
     }
 
-    const appUrl = getVerifiedAppUrl();
+    const appUrl = getVerifiedAppUrl(env);
     const ref = result.referral;
 
     // Generate redirect target URL based on target type
@@ -49,7 +51,8 @@ export async function GET(req: NextRequest) {
  * POST /api/referrals
  * Generates or retrieves a shareable viral invitation / referral link
  */
-export async function POST(req: NextRequest) {
+export async function POST(req: NextRequest, _context?: any) {
+  const env = getRuntimeEnv(_context?.env || _context);
   try {
     const authUser = await getAuthenticatedUserFromRequest(req);
     const body = (await req.json()) as { communityId?: string; targetType?: 'passport' | 'community' | 'request' | 'task'; targetId?: string };
@@ -71,7 +74,7 @@ export async function POST(req: NextRequest) {
       targetId
     });
 
-    const appUrl = getVerifiedAppUrl();
+    const appUrl = getVerifiedAppUrl(env);
     let shareUrl = `${appUrl}/?ref=${referral.referralCode}&communityId=${communityId}`;
     if (targetType === 'request' && targetId) {
       shareUrl = `${appUrl}/?ref=${referral.referralCode}&communityId=${communityId}&tab=requests&requestId=${targetId}`;

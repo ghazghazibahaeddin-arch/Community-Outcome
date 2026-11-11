@@ -1,5 +1,6 @@
 // Community OS — Central Security Configuration & Origin Validation Service
 import { NextRequest } from 'next/server';
+import { getRuntimeEnv, CloudflareEnv } from '../env';
 
 /**
  * Strict allowlist of authorized application origins for production and development.
@@ -8,6 +9,7 @@ import { NextRequest } from 'next/server';
 export const ALLOWED_APP_ORIGINS: readonly string[] = Object.freeze([
   'https://ais-dev-x3f327qfyrgqv3sqcrumjr-942709702494.europe-west2.run.app',
   'https://ais-pre-x3f327qfyrgqv3sqcrumjr-942709702494.europe-west2.run.app',
+  'https://community-os.workers.dev',
   'http://localhost:3000',
   'http://127.0.0.1:3000'
 ]);
@@ -18,13 +20,21 @@ export const ALLOWED_APP_ORIGINS: readonly string[] = Object.freeze([
 export const DEFAULT_PRODUCTION_APP_URL = 'https://ais-dev-x3f327qfyrgqv3sqcrumjr-942709702494.europe-west2.run.app';
 
 /**
- * Validates a given URL string against the ALLOWED_APP_ORIGINS allowlist.
+ * Validates a given URL string against the ALLOWED_APP_ORIGINS allowlist or valid Cloudflare workers domain.
  */
 export function isAllowedOrigin(urlStr: string): boolean {
   if (!urlStr) return false;
   try {
-    const origin = new URL(urlStr).origin.toLowerCase();
-    return ALLOWED_APP_ORIGINS.some((allowed) => allowed.toLowerCase() === origin);
+    const parsed = new URL(urlStr);
+    const origin = parsed.origin.toLowerCase();
+    if (ALLOWED_APP_ORIGINS.some((allowed) => allowed.toLowerCase() === origin)) {
+      return true;
+    }
+    // Allow any Cloudflare Workers or Pages domain (.workers.dev or .pages.dev)
+    if (parsed.hostname.endsWith('.workers.dev') || parsed.hostname.endsWith('.pages.dev')) {
+      return true;
+    }
+    return false;
   } catch {
     return false;
   }
@@ -32,16 +42,17 @@ export function isAllowedOrigin(urlStr: string): boolean {
 
 /**
  * Retrieve the securely verified application base URL.
- * Reads from process.env.APP_URL and validates strictly against allowlist.
+ * Reads directly from env.APP_URL and validates strictly against allowlist.
  * Never trusts incoming request headers.
  */
-export function getVerifiedAppUrl(): string {
-  const envUrl = process.env.APP_URL ? process.env.APP_URL.trim().replace(/\/$/, '') : '';
+export function getVerifiedAppUrl(explicitEnv?: CloudflareEnv): string {
+  const env = getRuntimeEnv(explicitEnv);
+  const envUrl = env.APP_URL ? env.APP_URL.trim().replace(/\/$/, '') : '';
   if (envUrl && isAllowedOrigin(envUrl)) {
     return envUrl;
   }
 
-  if (process.env.NODE_ENV === 'development') {
+  if (env.NODE_ENV === 'development') {
     return 'http://localhost:3000';
   }
 
@@ -50,45 +61,48 @@ export function getVerifiedAppUrl(): string {
 
 /**
  * Retrieve and validate the fixed Discord OAuth redirect URI.
- * Reads DISCORD_REDIRECT_URI from environment and validates against allowlist.
+ * Reads env.DISCORD_REDIRECT_URI from Cloudflare Workers environment and validates against allowlist.
  */
-export function getDiscordRedirectUri(): string {
-  const customUri = process.env.DISCORD_REDIRECT_URI ? process.env.DISCORD_REDIRECT_URI.trim() : '';
+export function getDiscordRedirectUri(explicitEnv?: CloudflareEnv): string {
+  const env = getRuntimeEnv(explicitEnv);
+  const customUri = env.DISCORD_REDIRECT_URI ? env.DISCORD_REDIRECT_URI.trim() : '';
   if (customUri && isAllowedOrigin(customUri)) {
     return customUri;
   }
-  return `${getVerifiedAppUrl()}/api/discord/callback`;
+  return `${getVerifiedAppUrl(env)}/api/discord/callback`;
 }
 
 /**
  * Retrieve and validate the fixed Telegram OpenID Connect redirect URI.
- * Reads TELEGRAM_REDIRECT_URI from environment and validates against allowlist.
+ * Reads env.TELEGRAM_REDIRECT_URI from Cloudflare Workers environment and validates against allowlist.
  */
-export function getTelegramRedirectUri(): string {
-  const customUri = process.env.TELEGRAM_REDIRECT_URI ? process.env.TELEGRAM_REDIRECT_URI.trim() : '';
+export function getTelegramRedirectUri(explicitEnv?: CloudflareEnv): string {
+  const env = getRuntimeEnv(explicitEnv);
+  const customUri = env.TELEGRAM_REDIRECT_URI ? env.TELEGRAM_REDIRECT_URI.trim() : '';
   if (customUri && isAllowedOrigin(customUri)) {
     return customUri;
   }
-  return `${getVerifiedAppUrl()}/api/auth/telegram/callback`;
+  return `${getVerifiedAppUrl(env)}/api/auth/telegram/callback`;
 }
 
 /**
  * Verify CSRF protection for state-changing requests (POST/PUT/DELETE).
  * Compares Origin or Referer header against the allowlist.
  */
-export function verifyCsrfProtection(req: NextRequest): { valid: boolean; reason?: string } {
+export function verifyCsrfProtection(req: NextRequest, explicitEnv?: CloudflareEnv): { valid: boolean; reason?: string } {
   // Safe HTTP methods do not require CSRF origin validation
   if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) {
     return { valid: true };
   }
 
+  const env = getRuntimeEnv(explicitEnv);
   const originHeader = req.headers.get('origin');
   const refererHeader = req.headers.get('referer');
   const checkOrigin = originHeader || (refererHeader ? new URL(refererHeader).origin : null);
 
   if (!checkOrigin) {
     // If neither Origin nor Referer provided, allow only if internal or dev, but enforce in production
-    if (process.env.NODE_ENV === 'production') {
+    if (env.NODE_ENV === 'production') {
       return { valid: false, reason: 'Missing Origin or Referer header on state-changing request' };
     }
     return { valid: true };

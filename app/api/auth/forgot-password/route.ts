@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requestPasswordReset } from '@/lib/services/auth';
+import { getRuntimeEnv, CloudflareEnv } from '@/lib/env';
 
-export async function POST(req: NextRequest) {
+export async function POST(req: NextRequest, _context?: any) {
+  const env = getRuntimeEnv(_context?.env || _context);
   try {
     const body = (await req.json()) as { email?: string };
     const { email } = body;
@@ -10,8 +12,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: 'Email address is required' }, { status: 400 });
     }
 
-    const appUrl = process.env.APP_URL || `${req.nextUrl.protocol}//${req.nextUrl.host}`;
-    const result = requestPasswordReset(email, appUrl);
+    const appUrl = env.APP_URL || `${req.nextUrl.protocol}//${req.nextUrl.host}`;
+    const result = requestPasswordReset(email, appUrl, env);
 
     return NextResponse.json(result);
   } catch (err: unknown) {

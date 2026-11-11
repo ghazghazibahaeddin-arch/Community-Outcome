@@ -4,6 +4,7 @@ import './shims';
 
 import { NextRequest } from 'next/server';
 import templateData from './html_template.json';
+import { setRuntimeEnv } from '../lib/env';
 
 // In-process Route Handlers for full Edge Execution
 import * as authMe from '../app/api/auth/me/route';
@@ -122,7 +123,7 @@ function syncEnvironment(env: Env): void {
   if (env.WHOP_PRODUCT_URL && !procEnv.WHOP_PRODUCT_URL) procEnv.WHOP_PRODUCT_URL = env.WHOP_PRODUCT_URL;
 }
 
-async function dispatchApiRoute(request: Request, pathname: string): Promise<Response | null> {
+async function dispatchApiRoute(request: Request, pathname: string, env: Env): Promise<Response | null> {
   const method = request.method.toUpperCase();
   const nextReq = new NextRequest(request);
 
@@ -140,73 +141,75 @@ async function dispatchApiRoute(request: Request, pathname: string): Promise<Res
       if (method === 'POST') return await authLogout.POST(nextReq);
       break;
     case '/api/auth/forgot-password':
-      if (method === 'POST') return await authForgotPw.POST(nextReq);
+      if (method === 'POST') return await authForgotPw.POST(nextReq, env);
       break;
     case '/api/auth/reset-password':
       if (method === 'POST') return await authResetPw.POST(nextReq);
       break;
     case '/api/auth/dev-emails':
-      if (method === 'GET') return await authDevEmails.GET(nextReq);
+      if (method === 'GET') return await authDevEmails.GET(nextReq, env);
       break;
     case '/api/auth/telegram/authorize':
-      if (method === 'GET') return await tgAuth.GET(nextReq);
+      if (method === 'GET') return await tgAuth.GET(nextReq, env);
       break;
     case '/api/auth/telegram/callback':
-      if (method === 'GET') return await tgCallback.GET(nextReq);
+      if (method === 'GET') return await tgCallback.GET(nextReq, env);
       break;
     case '/api/auth/telegram/config':
-      if (method === 'GET') return await tgConfig.GET(nextReq);
+      if (method === 'GET') return await tgConfig.GET(nextReq, env);
       break;
     case '/api/auth/telegram/login':
-      if (method === 'POST') return await tgLogin.POST(nextReq);
+      if (method === 'POST') return await tgLogin.POST(nextReq, env);
+      if (method === 'GET') return await tgLogin.GET(nextReq, env);
       break;
     case '/api/data':
       if (method === 'POST') return await dataRoute.POST(nextReq);
       if (method === 'GET') return await dataRoute.GET(nextReq);
       break;
     case '/api/discord/connect':
-      if (method === 'GET') return await discordConnect.GET(nextReq);
+      if (method === 'GET') return await discordConnect.GET(nextReq, env);
+      if (method === 'POST') return await discordConnect.POST(nextReq, env);
       break;
     case '/api/discord/callback':
-      if (method === 'GET') return await discordCallback.GET(nextReq);
+      if (method === 'GET') return await discordCallback.GET(nextReq, env);
       break;
     case '/api/discord/interactions':
-      if (method === 'POST') return await discordInteractions.POST(nextReq);
+      if (method === 'POST') return await discordInteractions.POST(nextReq, env);
       break;
     case '/api/discord/register-commands':
-      if (method === 'POST') return await discordRegCommands.POST(nextReq);
+      if (method === 'POST') return await discordRegCommands.POST(nextReq, env);
       break;
     case '/api/discord/publish-menu':
-      if (method === 'POST') return await discordPubMenu.POST(nextReq);
+      if (method === 'POST') return await discordPubMenu.POST(nextReq, env);
       break;
     case '/api/telegram/webhook':
-      if (method === 'POST') return await tgWebhook.POST(nextReq);
+      if (method === 'POST') return await tgWebhook.POST(nextReq, env);
       break;
     case '/api/telegram/register-webhook':
-      if (method === 'POST') return await tgRegWebhook.POST(nextReq);
-      if (method === 'GET') return await (tgRegWebhook as any).GET?.(nextReq);
+      if (method === 'POST') return await tgRegWebhook.POST(nextReq, env);
+      if (method === 'GET') return await (tgRegWebhook as any).GET?.(nextReq, env);
       break;
     case '/api/telegram/challenge':
-      if (method === 'POST') return await tgChallenge.POST(nextReq);
+      if (method === 'POST') return await tgChallenge.POST(nextReq, env);
       break;
     case '/api/telegram/publish-menu':
-      if (method === 'POST') return await tgPubMenu.POST(nextReq);
+      if (method === 'POST') return await tgPubMenu.POST(nextReq, env);
       break;
     case '/api/billing/subscription':
-      if (method === 'GET') return await billingSub.GET(nextReq);
+      if (method === 'GET') return await billingSub.GET(nextReq, env);
       break;
     case '/api/webhooks/whop':
-      if (method === 'POST') return await whopWebhook.POST(nextReq);
+      if (method === 'POST') return await whopWebhook.POST(nextReq, env);
       break;
     case '/api/webhooks/gumroad':
-      if (method === 'POST') return await gumroadWebhook.POST(nextReq);
+      if (method === 'POST') return await gumroadWebhook.POST(nextReq, env);
       break;
     case '/api/integrations/verify':
-      if (method === 'POST') return await intVerify.POST(nextReq);
+      if (method === 'POST') return await intVerify.POST(nextReq, env);
       break;
     case '/api/referrals':
-      if (method === 'GET') return await referrals.GET(nextReq);
-      if (method === 'POST') return await referrals.POST(nextReq);
+      if (method === 'GET') return await referrals.GET(nextReq, env);
+      if (method === 'POST') return await referrals.POST(nextReq, env);
       break;
   }
   return null;
@@ -216,20 +219,22 @@ const worker = {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
 
-    // 1. Forward environment variables and secrets to process.env
+    // 1. Forward runtime environment variables and secrets
+    setRuntimeEnv(env);
     syncEnvironment(env);
 
-    // 2. Health & Status check endpoint
+    // 2. Health & Status check endpoint (reads directly from env.*)
     if (url.pathname === '/api/cf-health') {
       return new Response(JSON.stringify({
         status: 'healthy',
         platform: 'Cloudflare Workers Free',
         workerRuntime: 'workerd',
         timestamp: new Date().toISOString(),
-        supabaseConfigured: Boolean(env.SUPABASE_URL || process.env.SUPABASE_URL),
-        telegramConfigured: Boolean(env.TELEGRAM_BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN),
-        discordConfigured: Boolean(env.DISCORD_BOT_TOKEN || process.env.DISCORD_BOT_TOKEN),
-        appUrl: env.APP_URL || process.env.APP_URL || url.origin
+        supabaseConfigured: Boolean(env.SUPABASE_URL && (env.SUPABASE_SECRET_KEY || env.SUPABASE_SERVICE_ROLE_KEY || env.SUPABASE_PUBLISHABLE_KEY || env.SUPABASE_ANON_KEY)),
+        telegramConfigured: Boolean(env.TELEGRAM_BOT_TOKEN),
+        discordConfigured: Boolean(env.DISCORD_BOT_TOKEN),
+        whopConfigured: Boolean(env.WHOP_WEBHOOK_SECRET || env.WHOP_COMPANY_API_KEY || env.WHOP_API_KEY),
+        appUrl: env.APP_URL || url.origin
       }), {
         headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }
       });
@@ -238,7 +243,7 @@ const worker = {
     // 3. In-process API Route Dispatching
     if (url.pathname.startsWith('/api/')) {
       try {
-        const apiResponse = await dispatchApiRoute(request, url.pathname);
+        const apiResponse = await dispatchApiRoute(request, url.pathname, env);
         if (apiResponse) {
           return apiResponse;
         }
@@ -288,7 +293,7 @@ export async function handleApplicationRequest(request: Request, env: Env): Prom
 
   // If request is for an API route not handled earlier, dispatch it
   if (url.pathname.startsWith('/api/')) {
-    const apiRes = await dispatchApiRoute(request, url.pathname);
+    const apiRes = await dispatchApiRoute(request, url.pathname, env);
     if (apiRes) return apiRes;
     return new Response(JSON.stringify({ error: 'Endpoint not found' }), {
       status: 404,
@@ -297,12 +302,12 @@ export async function handleApplicationRequest(request: Request, env: Env): Prom
   }
 
   // If an external origin is explicitly configured (not 127.0.0.1 or localhost), proxy to it
-  const customOrigin = env.ORIGIN_URL || (typeof process !== 'undefined' ? process.env?.ORIGIN_URL : undefined);
-  if (customOrigin && !customOrigin.includes('127.0.0.1') && !customOrigin.includes('localhost')) {
+  const customOrigin = env.ORIGIN_URL;
+  if (customOrigin && !customOrigin.includes('127.0.0.1') && !customOrigin.includes('localhost') && !/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/.test(new URL(customOrigin).hostname)) {
     try {
       const targetUrl = new URL(url.pathname + url.search, customOrigin);
       const reqHeaders = new Headers(request.headers);
-      if (!reqHeaders.has('host')) reqHeaders.set('host', url.host);
+      reqHeaders.set('host', targetUrl.host);
       return await fetch(new Request(targetUrl.toString(), {
         method: request.method,
         headers: reqHeaders,

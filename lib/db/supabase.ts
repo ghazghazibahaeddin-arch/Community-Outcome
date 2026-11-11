@@ -2,28 +2,31 @@
 // Server-side only: never expose service role key to browser
 
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { getRuntimeEnv, CloudflareEnv } from '../env';
 
 let supabaseInstance: SupabaseClient | null = null;
 
-export function isSupabaseConfigured(): boolean {
-  const url = process.env.SUPABASE_URL;
+export function isSupabaseConfigured(explicitEnv?: CloudflareEnv): boolean {
+  const env = getRuntimeEnv(explicitEnv);
+  const url = env.SUPABASE_URL;
   const key =
-    process.env.SUPABASE_SECRET_KEY ||
-    process.env.SUPABASE_SERVICE_ROLE_KEY ||
-    process.env.SUPABASE_PUBLISHABLE_KEY ||
-    process.env.SUPABASE_ANON_KEY;
+    env.SUPABASE_SECRET_KEY ||
+    env.SUPABASE_SERVICE_ROLE_KEY ||
+    env.SUPABASE_PUBLISHABLE_KEY ||
+    env.SUPABASE_ANON_KEY;
   return Boolean(url && url.trim().length > 0 && key && key.trim().length > 0 && !url.includes('your-project'));
 }
 
-export function getSupabaseClient(): SupabaseClient | null {
+export function getSupabaseClient(explicitEnv?: CloudflareEnv): SupabaseClient | null {
   if (supabaseInstance) return supabaseInstance;
 
-  const url = process.env.SUPABASE_URL?.trim();
+  const env = getRuntimeEnv(explicitEnv);
+  const url = env.SUPABASE_URL?.trim();
   const key = (
-    process.env.SUPABASE_SECRET_KEY ||
-    process.env.SUPABASE_SERVICE_ROLE_KEY ||
-    process.env.SUPABASE_PUBLISHABLE_KEY ||
-    process.env.SUPABASE_ANON_KEY
+    env.SUPABASE_SECRET_KEY ||
+    env.SUPABASE_SERVICE_ROLE_KEY ||
+    env.SUPABASE_PUBLISHABLE_KEY ||
+    env.SUPABASE_ANON_KEY
   )?.trim();
 
   if (!url || !key || url.includes('your-project')) {
@@ -47,8 +50,8 @@ export function getSupabaseClient(): SupabaseClient | null {
 /**
  * Sync in-memory/JSON store with Supabase PostgreSQL
  */
-export async function syncDatabaseToSupabase(dbData: any): Promise<{ success: boolean; syncedCount: number; error?: string }> {
-  const client = getSupabaseClient();
+export async function syncDatabaseToSupabase(dbData: any, explicitEnv?: CloudflareEnv): Promise<{ success: boolean; syncedCount: number; error?: string }> {
+  const client = getSupabaseClient(explicitEnv);
   if (!client) {
     return { success: false, syncedCount: 0, error: 'Supabase credentials not configured' };
   }
@@ -224,8 +227,8 @@ export async function syncDatabaseToSupabase(dbData: any): Promise<{ success: bo
 /**
  * Hydrate complete database state from Supabase PostgreSQL (Edge / Cloudflare Workers Native)
  */
-export async function hydrateDatabaseFromSupabase(): Promise<any | null> {
-  const client = getSupabaseClient();
+export async function hydrateDatabaseFromSupabase(explicitEnv?: CloudflareEnv): Promise<any | null> {
+  const client = getSupabaseClient(explicitEnv);
   if (!client) return null;
 
   try {

@@ -13,6 +13,7 @@ import {
   verifyTelegramIdToken
 } from '@/lib/services/telegramOidc';
 import { User } from '@/lib/types';
+import { getRuntimeEnv, CloudflareEnv } from '@/lib/env';
 
 /**
  * Handles the official Telegram OpenID Connect (OIDC) callback.
@@ -21,8 +22,9 @@ import { User } from '@/lib/types';
  * 3. Verifies Telegram ID Token JWT via RS256 JWKS, checks issuer, audience, exp, and nonce.
  * 4. Resolves or creates user, provisions session with SameSite=Lax HttpOnly cookie.
  */
-export async function GET(req: NextRequest) {
-  const appUrl = getVerifiedAppUrl();
+export async function GET(req: NextRequest, _context?: any) {
+  const env = getRuntimeEnv(_context?.env || _context);
+  const appUrl = getVerifiedAppUrl(env);
   const url = new URL(req.url);
   const code = url.searchParams.get('code');
   const state = url.searchParams.get('state');
@@ -78,7 +80,7 @@ export async function GET(req: NextRequest) {
     code,
     codeVerifier: sessionState.codeVerifier,
     redirectUri: sessionState.redirectUri
-  });
+  }, env);
 
   if (!exchangeResult.success || !exchangeResult.idToken) {
     return NextResponse.redirect(

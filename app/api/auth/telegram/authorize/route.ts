@@ -3,15 +3,17 @@ import {
   buildTelegramOidcAuthorization,
   TELEGRAM_OIDC_COOKIE_NAME
 } from '@/lib/services/telegramOidc';
+import { getRuntimeEnv, CloudflareEnv } from '@/lib/env';
 
 /**
  * Initiates the official Telegram OpenID Connect (OIDC) flow with PKCE S256.
  * Generates code_verifier, code_challenge (S256), state, and nonce.
  * Stores session parameters in an HttpOnly, Secure cookie.
  */
-export async function GET(req: NextRequest) {
+export async function GET(req: NextRequest, _context?: any) {
+  const env = getRuntimeEnv(_context?.env || _context);
   try {
-    const { authUrl, sessionState } = buildTelegramOidcAuthorization();
+    const { authUrl, sessionState } = buildTelegramOidcAuthorization(env);
     const url = new URL(req.url);
     const shouldRedirect = url.searchParams.get('redirect') !== 'false';
 

@@ -1,6 +1,7 @@
 // Community OS — Official Telegram OpenID Connect (OIDC) & PKCE S256 Service
 import crypto from 'crypto';
 import { getTelegramRedirectUri, getVerifiedAppUrl } from '@/lib/services/securityConfig';
+import { getRuntimeEnv, CloudflareEnv } from '../env';
 
 export const TELEGRAM_OIDC_ISSUER = 'https://oauth.telegram.org';
 export const TELEGRAM_OIDC_AUTH_ENDPOINT = 'https://oauth.telegram.org/auth';
@@ -84,13 +85,14 @@ export function generatePkcePair(): PkcePair {
 /**
  * Retrieve configured Telegram OIDC Client ID
  */
-export function getTelegramOidcClientId(): string {
-  if (process.env.TELEGRAM_OIDC_CLIENT_ID && process.env.TELEGRAM_OIDC_CLIENT_ID.trim()) {
-    return process.env.TELEGRAM_OIDC_CLIENT_ID.trim();
+export function getTelegramOidcClientId(explicitEnv?: CloudflareEnv): string {
+  const env = getRuntimeEnv(explicitEnv);
+  if (env.TELEGRAM_OIDC_CLIENT_ID && env.TELEGRAM_OIDC_CLIENT_ID.trim()) {
+    return env.TELEGRAM_OIDC_CLIENT_ID.trim();
   }
   // If not explicitly set, use Bot ID (first segment of bot token) or default
-  if (process.env.TELEGRAM_BOT_TOKEN && process.env.TELEGRAM_BOT_TOKEN.includes(':')) {
-    return process.env.TELEGRAM_BOT_TOKEN.split(':')[0].trim();
+  if (env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_BOT_TOKEN.includes(':')) {
+    return env.TELEGRAM_BOT_TOKEN.split(':')[0].trim();
   }
   return '1347000000';
 }
@@ -98,15 +100,16 @@ export function getTelegramOidcClientId(): string {
 /**
  * Build the official Telegram OpenID Connect Authorization Request URL
  */
-export function buildTelegramOidcAuthorization(): {
+export function buildTelegramOidcAuthorization(explicitEnv?: CloudflareEnv): {
   authUrl: string;
   sessionState: TelegramOidcSessionState;
 } {
+  const env = getRuntimeEnv(explicitEnv);
   const pkce = generatePkcePair();
   const state = crypto.randomBytes(24).toString('hex');
   const nonce = crypto.randomBytes(24).toString('hex');
-  const clientId = getTelegramOidcClientId();
-  const redirectUri = getTelegramRedirectUri();
+  const clientId = getTelegramOidcClientId(env);
+  const redirectUri = getTelegramRedirectUri(env);
 
   const params = new URLSearchParams({
     response_type: 'code',
@@ -136,14 +139,18 @@ export function buildTelegramOidcAuthorization(): {
 /**
  * Exchange Authorization Code with PKCE for Tokens at Telegram Token Endpoint
  */
-export async function exchangeTelegramAuthorizationCode(params: {
-  code: string;
-  codeVerifier: string;
-  redirectUri: string;
-}): Promise<{ success: boolean; idToken?: string; error?: string }> {
-  const clientId = getTelegramOidcClientId();
+export async function exchangeTelegramAuthorizationCode(
+  params: {
+    code: string;
+    codeVerifier: string;
+    redirectUri: string;
+  },
+  explicitEnv?: CloudflareEnv
+): Promise<{ success: boolean; idToken?: string; error?: string }> {
+  const env = getRuntimeEnv(explicitEnv);
+  const clientId = getTelegramOidcClientId(env);
   const clientSecret =
-    process.env.TELEGRAM_OIDC_CLIENT_SECRET || process.env.TELEGRAM_BOT_TOKEN || '';
+    env.TELEGRAM_OIDC_CLIENT_SECRET || env.TELEGRAM_BOT_TOKEN || '';
 
   // Check for test mock code during local automated testing
   if (params.code.startsWith('mock_test_oidc_code_')) {

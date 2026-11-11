@@ -2,8 +2,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { IntegrationCheckResult } from '@/lib/types';
 import { dbOperations } from '@/lib/db/store';
+import { getRuntimeEnv, CloudflareEnv } from '@/lib/env';
 
-export async function POST(req: NextRequest) {
+export async function POST(req: NextRequest, _context?: any) {
+  const env = getRuntimeEnv(_context?.env || _context);
   try {
     const body = (await req.json()) as { platform?: string; customToken?: string; customAppId?: string };
     const { platform, customToken, customAppId } = body;
@@ -11,8 +13,8 @@ export async function POST(req: NextRequest) {
     const checkedAt = new Date().toISOString();
 
     if (platform === 'discord') {
-      const token = customToken || process.env.DISCORD_BOT_TOKEN;
-      const appId = customAppId || process.env.DISCORD_APPLICATION_ID || '1347000000000000000';
+      const token = customToken || env.DISCORD_BOT_TOKEN;
+      const appId = customAppId || env.DISCORD_APPLICATION_ID || '1347000000000000000';
 
       if (!token || token.trim() === '') {
         const result: IntegrationCheckResult = {
@@ -76,7 +78,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (platform === 'telegram') {
-      const token = customToken || process.env.TELEGRAM_BOT_TOKEN;
+      const token = customToken || env.TELEGRAM_BOT_TOKEN;
 
       if (!token || token.trim() === '') {
         const result: IntegrationCheckResult = {

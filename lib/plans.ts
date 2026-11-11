@@ -1,10 +1,20 @@
 // Community OS — Plan Tier Constants and Entitlement Definitions (Universal / Client-Safe)
 import { PlanTier, PlanEntitlements } from './types';
+import { getRuntimeEnv, CloudflareEnv } from './env';
+
+export function getWhopCheckoutUrl(explicitEnv?: CloudflareEnv): string {
+  const env = getRuntimeEnv(explicitEnv);
+  return (
+    env.WHOP_PURCHASE_URL ||
+    env.NEXT_PUBLIC_WHOP_CHECKOUT_URL ||
+    'https://whop.com/baha-1a44/community-os-pro'
+  );
+}
 
 export const WHOP_PRO_CHECKOUT_URL =
-  process.env.WHOP_PURCHASE_URL ||
-  process.env.NEXT_PUBLIC_WHOP_CHECKOUT_URL ||
-  'https://whop.com/baha-1a44/community-os-pro';
+  typeof process !== 'undefined' && process.env?.WHOP_PURCHASE_URL
+    ? process.env.WHOP_PURCHASE_URL
+    : 'https://whop.com/baha-1a44/community-os-pro';
 
 export const PRO_PLAN_PRICE_USD = 15;
 

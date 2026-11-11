@@ -1,10 +1,12 @@
 // Community OS — Telegram Bot Webhook Auto-Registration Handler
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthenticatedUserFromRequest } from '@/lib/services/auth';
+import { getRuntimeEnv, CloudflareEnv } from '@/lib/env';
 
-export async function GET(req: NextRequest) {
+export async function GET(req: NextRequest, _context?: any) {
+  const env = getRuntimeEnv(_context?.env || _context);
   try {
-    const token = process.env.TELEGRAM_BOT_TOKEN;
+    const token = env.TELEGRAM_BOT_TOKEN;
     if (!token) {
       return NextResponse.json({
         configured: false,
@@ -25,7 +27,8 @@ export async function GET(req: NextRequest) {
   }
 }
 
-export async function POST(req: NextRequest) {
+export async function POST(req: NextRequest, _context?: any) {
+  const env = getRuntimeEnv(_context?.env || _context);
   try {
     const authUser = await getAuthenticatedUserFromRequest(req);
     // Only platform admin can register webhooks
@@ -33,7 +36,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: 'Unauthorized: requires platform admin role' }, { status: 403 });
     }
 
-    const token = process.env.TELEGRAM_BOT_TOKEN;
+    const token = env.TELEGRAM_BOT_TOKEN;
     if (!token) {
       return NextResponse.json({
         success: false,
@@ -42,11 +45,11 @@ export async function POST(req: NextRequest) {
     }
 
     const body = ((await req.json().catch(() => ({}))) || {}) as { appUrl?: string; dropPending?: boolean };
-    const rawAppUrl = body.appUrl || process.env.APP_URL || 'https://community-os.workers.dev';
+    const rawAppUrl = body.appUrl || env.APP_URL || 'https://community-os.workers.dev';
     const appUrl = rawAppUrl.trim().replace(/\/$/, '');
     const webhookUrl = `${appUrl}/api/telegram/webhook`;
 
-    const rawSecret = process.env.TELEGRAM_WEBHOOK_SECRET || 'comm_tg_sec_prod_9918';
+    const rawSecret = env.TELEGRAM_WEBHOOK_SECRET || 'comm_tg_sec_prod_9918';
     const sanitizedSecret = rawSecret.trim().replace(/[^A-Za-z0-9_-]/g, '');
 
     const params = new URLSearchParams({

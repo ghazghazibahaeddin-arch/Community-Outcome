@@ -1,13 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDatabase } from '@/lib/db/store';
+import { getRuntimeEnv, CloudflareEnv } from '@/lib/env';
 
-export async function GET(req: NextRequest) {
+export async function GET(req: NextRequest, _context?: any) {
+  const env = getRuntimeEnv(_context?.env || _context);
   try {
     const db = getDatabase();
     const emails = db.devEmails || [];
     return NextResponse.json({
       success: true,
-      hasExternalSmtp: Boolean(process.env.SMTP_HOST && process.env.SMTP_USER),
+      hasExternalSmtp: Boolean(env.SMTP_HOST && env.SMTP_USER),
       emails: emails.slice(0, 10)
     });
   } catch (err: unknown) {

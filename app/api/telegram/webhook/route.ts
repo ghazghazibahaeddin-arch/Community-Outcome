@@ -1,15 +1,17 @@
 // Community OS — Telegram Bot Webhook Endpoint with Cryptographic Secret Token Verification
 import { NextRequest, NextResponse } from 'next/server';
 import { dbOperations, getDatabase } from '@/lib/db/store';
+import { getRuntimeEnv, CloudflareEnv } from '@/lib/env';
 
 // Deduplicate Telegram update retries
 const recentUpdateIds = new Set<number>();
 const MAX_RECENT_UPDATES = 2000;
 
-export async function POST(req: NextRequest) {
+export async function POST(req: NextRequest, _context?: any) {
+  const env = getRuntimeEnv(_context?.env || _context);
   try {
     // 1. Validate incoming Telegram secret token header if configured
-    const rawSecret = process.env.TELEGRAM_WEBHOOK_SECRET;
+    const rawSecret = env.TELEGRAM_WEBHOOK_SECRET;
     if (rawSecret) {
       const sanitizedSecret = rawSecret.trim().replace(/[^A-Za-z0-9_-]/g, '');
       const headerSecret = req.headers.get('x-telegram-bot-api-secret-token');
@@ -39,8 +41,8 @@ export async function POST(req: NextRequest) {
       const cbChatId = cb.message?.chat?.id;
       const cbData = cb.data || '';
       const cbFrom = cb.from || {};
-      const token = process.env.TELEGRAM_BOT_TOKEN;
-      const appUrl = (process.env.APP_URL || 'https://community-os.org').replace(/\/$/, '');
+      const token = env.TELEGRAM_BOT_TOKEN;
+      const appUrl = (env.APP_URL || 'https://community-os.org').replace(/\/$/, '');
       const db = getDatabase();
       const community =
         db.communities.find((c) => c.telegramConfig?.groupId === String(cbChatId)) ||
@@ -135,7 +137,7 @@ export async function POST(req: NextRequest) {
     const argsString = rawText.slice(rawText.split(/\s+/)[0].length).trim();
 
     const db = getDatabase();
-    const appUrl = (process.env.APP_URL || 'https://community-os.org').replace(/\/$/, '');
+    const appUrl = (env.APP_URL || 'https://community-os.org').replace(/\/$/, '');
     // Dynamically resolve community by telegramConfig.groupId if present, else fallback
     const community =
       db.communities.find((c) => c.telegramConfig?.groupId === String(chatId)) ||
@@ -407,7 +409,7 @@ export async function POST(req: NextRequest) {
         }
 
         // Verify group admin status via Telegram Bot API if configured
-        const token = process.env.TELEGRAM_BOT_TOKEN;
+        const token = env.TELEGRAM_BOT_TOKEN;
         if (token && message.from?.id) {
           try {
             const adminCheckRes = await fetch(

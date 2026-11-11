@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getRuntimeEnv, CloudflareEnv } from '@/lib/env';
 
-export async function POST(req: NextRequest) {
+export async function POST(req: NextRequest, _context?: any) {
+  const env = getRuntimeEnv(_context?.env || _context);
   try {
-    const token = process.env.DISCORD_BOT_TOKEN;
-    const appId = process.env.DISCORD_APPLICATION_ID;
+    const token = env.DISCORD_BOT_TOKEN;
+    const appId = env.DISCORD_APPLICATION_ID;
 
     if (!token || !appId) {
       return NextResponse.json({
