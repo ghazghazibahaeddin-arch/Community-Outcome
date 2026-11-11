@@ -2296,6 +2296,36 @@
         "allowCrossCommunitySharing": false,
         "shareableRecordIds": []
       }
+    },
+    {
+      "id": "usr_1794389242836_3499500e",
+      "name": "Security Auditor",
+      "email": "security_tester_1794389241164@domain.org",
+      "avatar": "https://picsum.photos/seed/usr_1794389242836_3499500e/200/200",
+      "bio": "Auditing production security invariants",
+      "platformRole": "user",
+      "createdAt": "2026-11-11T09:27:22.881Z",
+      "identities": {},
+      "passport": {
+        "displayName": "Security Auditor",
+        "biography": "Auditing production security invariants",
+        "skills": [],
+        "interests": [],
+        "languages": [
+          "English"
+        ],
+        "collaborationPreferences": "Open to community collaborations.",
+        "portfolioLinks": [],
+        "isPublic": true
+      },
+      "privacy": {
+        "showBio": true,
+        "showSkills": true,
+        "showVerifiedOnly": false,
+        "allowDiscovery": true,
+        "allowCrossCommunitySharing": false,
+        "shareableRecordIds": []
+      }
     }
   ],
   "communities": [
@@ -12392,6 +12422,15 @@
       "emailVerified": false,
       "createdAt": "2026-11-11T09:00:56.839Z",
       "updatedAt": "2026-11-11T09:00:56.839Z"
+    },
+    {
+      "id": "usr_1794389242836_3499500e",
+      "email": "security_tester_1794389241164@domain.org",
+      "passwordHash": "dcb3139f4e736b6d6a4666c5c5bd2ca9530a6c5d3dbe9bccce610282303967e6d8fcc7e08f3713b2a01e450febcb41db6ffcb7d3614d3f7b98dcf5d3e42cc1f5",
+      "salt": "cb225713091881cf6c5068fc36862fa0",
+      "emailVerified": false,
+      "createdAt": "2026-11-11T09:27:22.881Z",
+      "updatedAt": "2026-11-11T09:27:22.881Z"
     }
   ],
   "sessions": [
@@ -13209,6 +13248,13 @@
       "userId": "usr_tg_tg_88921029",
       "createdAt": "2026-11-11T09:00:58.876Z",
       "expiresAt": "2026-11-18T09:00:58.876Z",
+      "userAgent": "node"
+    },
+    {
+      "token": "3dd0d88de4b8886269e26ea77262e782fdf9642114ecb7c21362e16e54f3abd2",
+      "userId": "usr_tg_tg_88921029",
+      "createdAt": "2026-11-11T09:27:26.844Z",
+      "expiresAt": "2026-11-18T09:27:26.844Z",
       "userAgent": "node"
     }
   ],
