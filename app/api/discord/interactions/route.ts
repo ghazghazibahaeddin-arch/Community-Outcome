@@ -111,19 +111,20 @@ export async function POST(req: NextRequest, _context?: any) {
     });
 
     // Cryptographic Ed25519 Signature Verification
-    if (publicKey) {
-      if (!signature || !timestamp) {
-        console.warn('[Discord Interactions] Rejected request missing signature headers');
-        return new NextResponse('Invalid request signature', { status: 401 });
-      }
+    if (!publicKey) {
+      console.error('[Discord Interactions] DISCORD_PUBLIC_KEY is not configured in runtime environment. Add DISCORD_PUBLIC_KEY to Cloudflare dashboard Variables and Secrets.');
+      return new NextResponse('DISCORD_PUBLIC_KEY not configured', { status: 401 });
+    }
 
-      const isValid = await verifyDiscordSignature(rawBody, signature, timestamp, publicKey);
-      console.log('[Discord Interactions] Signature verification outcome:', isValid ? 'SUCCESS' : 'FAILED');
-      if (!isValid) {
-        return new NextResponse('Invalid request signature', { status: 401 });
-      }
-    } else {
-      console.warn('[Discord Interactions] Warning: DISCORD_PUBLIC_KEY is not configured in runtime environment');
+    if (!signature || !timestamp) {
+      console.warn('[Discord Interactions] Rejected request missing signature headers');
+      return new NextResponse('Invalid request signature', { status: 401 });
+    }
+
+    const isValid = await verifyDiscordSignature(rawBody, signature, timestamp, publicKey);
+    console.log('[Discord Interactions] Signature verification outcome:', isValid ? 'SUCCESS' : 'FAILED');
+    if (!isValid) {
+      return new NextResponse('Invalid request signature', { status: 401 });
     }
 
     let interaction: any;
@@ -483,4 +484,12 @@ export async function POST(req: NextRequest, _context?: any) {
     const message = err instanceof Error ? err.message : String(err);
     return NextResponse.json({ error: message }, { status: 500 });
   }
+}
+
+export async function GET() {
+  return NextResponse.json({
+    status: 'online',
+    endpoint: 'Discord Interactions Endpoint',
+    url: 'https://community-outcome.ghazghazibahaeddin.workers.dev/api/discord/interactions'
+  });
 }

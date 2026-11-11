@@ -68,6 +68,17 @@ async function runTests() {
     throw new Error('Test 3 failed: Expected status 401 for missing headers');
   }
 
+  // Test 4: Missing DISCORD_PUBLIC_KEY
+  delete process.env.DISCORD_PUBLIC_KEY;
+  const resNoKey = await route.POST(mockValidReq);
+  console.log('Test 4 (Missing DISCORD_PUBLIC_KEY): status =', resNoKey.status);
+  if (resNoKey.status !== 401) {
+    throw new Error('Test 4 failed: Expected status 401 when DISCORD_PUBLIC_KEY is not set');
+  }
+
+  // Restore
+  process.env.DISCORD_PUBLIC_KEY = pubHex;
+
   console.log('ALL DISCORD INTERACTIONS TESTS PASSED!');
 }
 

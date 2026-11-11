@@ -175,6 +175,7 @@ async function dispatchApiRoute(request: Request, pathname: string, env: Env): P
       break;
     case '/api/discord/interactions':
       if (method === 'POST') return await discordInteractions.POST(nextReq, env);
+      if (method === 'GET') return await discordInteractions.GET();
       break;
     case '/api/discord/register-commands':
       if (method === 'POST') return await discordRegCommands.POST(nextReq, env);
