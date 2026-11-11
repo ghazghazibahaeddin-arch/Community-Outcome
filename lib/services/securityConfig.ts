@@ -9,6 +9,7 @@ import { getRuntimeEnv, CloudflareEnv } from '../env';
 export const ALLOWED_APP_ORIGINS: readonly string[] = Object.freeze([
   'https://ais-dev-x3f327qfyrgqv3sqcrumjr-942709702494.europe-west2.run.app',
   'https://ais-pre-x3f327qfyrgqv3sqcrumjr-942709702494.europe-west2.run.app',
+  'https://community-outcome.ghazghazibahaeddin.workers.dev',
   'https://community-os.workers.dev',
   'http://localhost:3000',
   'http://127.0.0.1:3000'

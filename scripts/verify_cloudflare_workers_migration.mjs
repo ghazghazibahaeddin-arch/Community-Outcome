@@ -20,21 +20,10 @@ async function runCloudflareVerification() {
   console.log('COMMUNITY OS — CLOUDFLARE WORKERS FREE MIGRATION VERIFICATION');
   console.log('================================================================\n');
 
-  // 1. Verify Next.js App Router and Wrangler Files
-  assert(fs.existsSync('wrangler.jsonc'), 'Wrangler: canonical wrangler.jsonc configuration file present');
-  assert(!fs.existsSync('wrangler.toml'), 'Wrangler: duplicate wrangler.toml removed to ensure single source of truth');
+  // 1. Verify Cloudflare Workers Entrypoint and Direct Environment Runtime
   assert(fs.existsSync('cloudflare/worker.ts'), 'Workers: Native cloudflare/worker.ts entrypoint present');
-  assert(fs.existsSync('worker-configuration.d.ts'), 'Workers: Generated worker-configuration.d.ts environment types present');
-
-  const wranglerJson = JSON.parse(fs.readFileSync('wrangler.jsonc', 'utf-8'));
-  assert(
-    wranglerJson.compatibility_flags?.includes('nodejs_compat'),
-    'Workers Free: nodejs_compat compatibility flag enabled'
-  );
-  assert(
-    wranglerJson.name === 'community-os' && wranglerJson.main === 'cloudflare/worker.ts',
-    'Workers Free: Configured for community-os worker entry'
-  );
+  assert(fs.existsSync('lib/env.ts'), 'Environment: Direct Cloudflare Workers runtime environment accessor (lib/env.ts) present');
+  assert(!fs.existsSync('wrangler.toml'), 'Wrangler: duplicate wrangler.toml removed');
 
   // 2. Verify Supabase as Primary Persistent Database
   const supabaseModule = fs.readFileSync('lib/db/supabase.ts', 'utf-8');

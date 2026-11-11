@@ -2236,6 +2236,66 @@
         "allowCrossCommunitySharing": false,
         "shareableRecordIds": []
       }
+    },
+    {
+      "id": "usr_1794387408128_a1e8f8b2",
+      "name": "Security Auditor",
+      "email": "security_tester_1794387406893@domain.org",
+      "avatar": "https://picsum.photos/seed/usr_1794387408128_a1e8f8b2/200/200",
+      "bio": "Auditing production security invariants",
+      "platformRole": "user",
+      "createdAt": "2026-11-11T08:56:48.174Z",
+      "identities": {},
+      "passport": {
+        "displayName": "Security Auditor",
+        "biography": "Auditing production security invariants",
+        "skills": [],
+        "interests": [],
+        "languages": [
+          "English"
+        ],
+        "collaborationPreferences": "Open to community collaborations.",
+        "portfolioLinks": [],
+        "isPublic": true
+      },
+      "privacy": {
+        "showBio": true,
+        "showSkills": true,
+        "showVerifiedOnly": false,
+        "allowDiscovery": true,
+        "allowCrossCommunitySharing": false,
+        "shareableRecordIds": []
+      }
+    },
+    {
+      "id": "usr_1794387656785_9c30777e",
+      "name": "Security Auditor",
+      "email": "security_tester_1794387654933@domain.org",
+      "avatar": "https://picsum.photos/seed/usr_1794387656785_9c30777e/200/200",
+      "bio": "Auditing production security invariants",
+      "platformRole": "user",
+      "createdAt": "2026-11-11T09:00:56.839Z",
+      "identities": {},
+      "passport": {
+        "displayName": "Security Auditor",
+        "biography": "Auditing production security invariants",
+        "skills": [],
+        "interests": [],
+        "languages": [
+          "English"
+        ],
+        "collaborationPreferences": "Open to community collaborations.",
+        "portfolioLinks": [],
+        "isPublic": true
+      },
+      "privacy": {
+        "showBio": true,
+        "showSkills": true,
+        "showVerifiedOnly": false,
+        "allowDiscovery": true,
+        "allowCrossCommunitySharing": false,
+        "shareableRecordIds": []
+      }
     }
   ],
   "communities": [
@@ -12314,6 +12374,24 @@
       "emailVerified": false,
       "createdAt": "2026-11-11T08:26:45.269Z",
       "updatedAt": "2026-11-11T08:26:45.269Z"
+    },
+    {
+      "id": "usr_1794387408128_a1e8f8b2",
+      "email": "security_tester_1794387406893@domain.org",
+      "passwordHash": "8acfb28d9c0c5c5a9c7faec7b243f6169fc765851d4d484b6b9bac63e7ff272575980a7e04e62ada0ecff61104c21adca6018a612691e6ace1cc4f63c3c309bf",
+      "salt": "d43f1a5e0fa6b335ed432208da392036",
+      "emailVerified": false,
+      "createdAt": "2026-11-11T08:56:48.174Z",
+      "updatedAt": "2026-11-11T08:56:48.174Z"
+    },
+    {
+      "id": "usr_1794387656785_9c30777e",
+      "email": "security_tester_1794387654933@domain.org",
+      "passwordHash": "79c4b420cf20bc3a1fd4ae84b9adac139f3fe695e0971414eccce35e944a15e2e5a29ccc5f8e2fbb81449c38aaaf4a1d133c1124bc683bae4e525df9098bb86e",
+      "salt": "baa09a35920bb91742df589108554bbf",
+      "emailVerified": false,
+      "createdAt": "2026-11-11T09:00:56.839Z",
+      "updatedAt": "2026-11-11T09:00:56.839Z"
     }
   ],
   "sessions": [
@@ -13118,6 +13196,20 @@
       "createdAt": "2026-11-11T08:26:47.126Z",
       "expiresAt": "2026-11-18T08:26:47.126Z",
       "userAgent": "node"
+    },
+    {
+      "token": "3d1c1204265056a8b53b5e8d13d3d364d6923aab36abf5249c159b2f6db361f5",
+      "userId": "usr_tg_tg_88921029",
+      "createdAt": "2026-11-11T08:56:49.922Z",
+      "expiresAt": "2026-11-18T08:56:49.922Z",
+      "userAgent": "node"
+    },
+    {
+      "token": "af282d6f456cfa85f6b152782d90da8faed6dac0657b2e388f48efa7dce05f77",
+      "userId": "usr_tg_tg_88921029",
+      "createdAt": "2026-11-11T09:00:58.876Z",
+      "expiresAt": "2026-11-18T09:00:58.876Z",
+      "userAgent": "node"
     }
   ],
   "devEmails": [
@@ -13627,6 +13719,21 @@
       "billingInterval": "month",
       "createdAt": "2026-11-04T16:45:09.790Z",
       "updatedAt": "2026-11-04T16:45:09.790Z"
+    },
+    {
+      "id": "sub_free_comm_1",
+      "communityId": "comm_1",
+      "tier": "free",
+      "status": "active",
+      "provider": "manual",
+      "currentPeriodStart": "2026-11-11T08:54:57.360Z",
+      "currentPeriodEnd": "2027-11-11T08:54:57.360Z",
+      "cancelAtPeriodEnd": false,
+      "amountUsd": 0,
+      "currency": "USD",
+      "billingInterval": "month",
+      "createdAt": "2026-11-11T08:54:57.360Z",
+      "updatedAt": "2026-11-11T08:54:57.360Z"
     }
   ],
   "webhookEvents": [
