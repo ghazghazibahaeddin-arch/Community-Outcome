@@ -41,7 +41,7 @@ export async function GET(req: NextRequest, _context?: any) {
 
   // 3. User Identity OAuth Mode ("Continue with Discord" or link personal account)
   if (isUserAuthMode && code) {
-    const clientId = env.DISCORD_APPLICATION_ID || '1347000000000000000';
+    const clientId = env.DISCORD_APPLICATION_ID || '1565501338597462099';
     const clientSecret = env.DISCORD_CLIENT_SECRET;
     const redirectUri = getDiscordRedirectUri(env);
 

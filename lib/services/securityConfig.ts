@@ -7,8 +7,6 @@ import { getRuntimeEnv, CloudflareEnv } from '../env';
  * Arbitrary Host or X-Forwarded-Host headers are NEVER trusted for OAuth redirects.
  */
 export const ALLOWED_APP_ORIGINS: readonly string[] = Object.freeze([
-  'https://ais-dev-x3f327qfyrgqv3sqcrumjr-942709702494.europe-west2.run.app',
-  'https://ais-pre-x3f327qfyrgqv3sqcrumjr-942709702494.europe-west2.run.app',
   'https://community-outcome.ghazghazibahaeddin.workers.dev',
   'https://community-os.workers.dev',
   'http://localhost:3000',
@@ -18,7 +16,7 @@ export const ALLOWED_APP_ORIGINS: readonly string[] = Object.freeze([
 /**
  * Primary canonical application URL.
  */
-export const DEFAULT_PRODUCTION_APP_URL = 'https://ais-dev-x3f327qfyrgqv3sqcrumjr-942709702494.europe-west2.run.app';
+export const DEFAULT_PRODUCTION_APP_URL = 'https://community-outcome.ghazghazibahaeddin.workers.dev';
 
 /**
  * Validates a given URL string against the ALLOWED_APP_ORIGINS allowlist or valid Cloudflare workers domain.

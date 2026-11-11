@@ -90,11 +90,11 @@ export function getTelegramOidcClientId(explicitEnv?: CloudflareEnv): string {
   if (env.TELEGRAM_OIDC_CLIENT_ID && env.TELEGRAM_OIDC_CLIENT_ID.trim()) {
     return env.TELEGRAM_OIDC_CLIENT_ID.trim();
   }
-  // If not explicitly set, use Bot ID (first segment of bot token) or default
+  // If not explicitly set, use Bot ID (first segment of bot token) or known client ID
   if (env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_BOT_TOKEN.includes(':')) {
     return env.TELEGRAM_BOT_TOKEN.split(':')[0].trim();
   }
-  return '1347000000';
+  return '9018720052';
 }
 
 /**

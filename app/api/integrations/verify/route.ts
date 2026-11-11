@@ -14,7 +14,7 @@ export async function POST(req: NextRequest, _context?: any) {
 
     if (platform === 'discord') {
       const token = customToken || env.DISCORD_BOT_TOKEN;
-      const appId = customAppId || env.DISCORD_APPLICATION_ID || '1347000000000000000';
+      const appId = customAppId || env.DISCORD_APPLICATION_ID || '1565501338597462099';
 
       if (!token || token.trim() === '') {
         const result: IntegrationCheckResult = {
