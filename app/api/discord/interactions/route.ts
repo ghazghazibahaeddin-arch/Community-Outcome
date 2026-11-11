@@ -18,8 +18,19 @@ const InteractionResponseType = {
   DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE: 5
 };
 
+function hexToUint8Array(hex: string): Uint8Array {
+  const clean = hex.trim();
+  const length = clean.length;
+  const bytes = new Uint8Array(length / 2);
+  for (let i = 0; i < length; i += 2) {
+    bytes[i / 2] = parseInt(clean.substring(i, i + 2), 16);
+  }
+  return bytes;
+}
+
 /**
  * Verify Discord Ed25519 request signature (Dual Web Crypto + Node.js crypto support)
+ * Cloudflare Workers workerd runtime uses { name: 'Ed25519' }.
  */
 async function verifyDiscordSignature(
   rawBody: string,
@@ -29,31 +40,55 @@ async function verifyDiscordSignature(
 ): Promise<boolean> {
   if (!signature || !timestamp || !publicKeyHex) return false;
   try {
-    const keyBuffer = Buffer.from(publicKeyHex.trim(), 'hex');
-    const signatureBuffer = Buffer.from(signature.trim(), 'hex');
-    const messageBuffer = Buffer.from(timestamp + rawBody, 'utf-8');
+    const cleanKeyHex = publicKeyHex.trim();
+    const cleanSigHex = signature.trim();
 
-    // 1. Web Crypto API (Native in Cloudflare Workers workerd)
+    if (cleanKeyHex.length !== 64 || cleanSigHex.length !== 128) {
+      return false;
+    }
+
+    const keyBytes = hexToUint8Array(cleanKeyHex);
+    const sigBytes = hexToUint8Array(cleanSigHex);
+    const msgBytes = new TextEncoder().encode(timestamp + rawBody);
+
+    // 1. Standard Web Crypto API (Native in Cloudflare Workers workerd & Node.js 20+)
     if (typeof globalThis.crypto?.subtle?.importKey === 'function') {
       try {
         const key = await globalThis.crypto.subtle.importKey(
           'raw',
-          keyBuffer,
-          { name: 'NODE-ED25519', namedCurve: 'NODE-ED25519' },
+          keyBytes as any,
+          { name: 'Ed25519' },
           false,
           ['verify']
         );
-        return await globalThis.crypto.subtle.verify('NODE-ED25519', key, signatureBuffer, messageBuffer);
+        return await globalThis.crypto.subtle.verify({ name: 'Ed25519' }, key, sigBytes as any, msgBytes as any);
       } catch {
-        // Fallback to standard Node.js crypto
+        // Fallback to legacy Cloudflare Workers algorithm name if applicable
+        try {
+          const key = await globalThis.crypto.subtle.importKey(
+            'raw',
+            keyBytes as any,
+            { name: 'NODE-ED25519', namedCurve: 'NODE-ED25519' } as any,
+            false,
+            ['verify']
+          );
+          return await globalThis.crypto.subtle.verify('NODE-ED25519' as any, key, sigBytes as any, msgBytes as any);
+        } catch {
+          // Fall through to Node.js crypto fallback
+        }
       }
     }
 
     // 2. Node.js SPKI DER fallback
     const ed25519DerPrefix = Buffer.from('302a300506032b6570032100', 'hex');
-    const spkiPublicKey = Buffer.concat([ed25519DerPrefix, keyBuffer]);
+    const spkiPublicKey = Buffer.concat([ed25519DerPrefix, Buffer.from(keyBytes)]);
 
-    return crypto.verify(null, messageBuffer, { key: spkiPublicKey, format: 'der', type: 'spki' }, signatureBuffer);
+    return crypto.verify(
+      null,
+      Buffer.from(msgBytes),
+      { key: spkiPublicKey, format: 'der', type: 'spki' },
+      Buffer.from(sigBytes)
+    );
   } catch {
     return false;
   }
@@ -67,12 +102,28 @@ export async function POST(req: NextRequest, _context?: any) {
     const timestamp = req.headers.get('x-signature-timestamp');
     const publicKey = env.DISCORD_PUBLIC_KEY;
 
+    // Structured diagnostic log without sensitive data or payloads
+    console.log('[Discord Interactions] Request received', {
+      hasSignature: Boolean(signature),
+      hasTimestamp: Boolean(timestamp),
+      hasPublicKey: Boolean(publicKey),
+      bodyLength: rawBody.length
+    });
+
     // Cryptographic Ed25519 Signature Verification
-    if (publicKey && signature && timestamp) {
+    if (publicKey) {
+      if (!signature || !timestamp) {
+        console.warn('[Discord Interactions] Rejected request missing signature headers');
+        return new NextResponse('Invalid request signature', { status: 401 });
+      }
+
       const isValid = await verifyDiscordSignature(rawBody, signature, timestamp, publicKey);
+      console.log('[Discord Interactions] Signature verification outcome:', isValid ? 'SUCCESS' : 'FAILED');
       if (!isValid) {
         return new NextResponse('Invalid request signature', { status: 401 });
       }
+    } else {
+      console.warn('[Discord Interactions] Warning: DISCORD_PUBLIC_KEY is not configured in runtime environment');
     }
 
     let interaction: any;
@@ -82,8 +133,9 @@ export async function POST(req: NextRequest, _context?: any) {
       return NextResponse.json({ error: 'Malformed JSON payload' }, { status: 400 });
     }
 
-    // 1. Handle Discord PING challenge
+    // 1. Handle Discord PING challenge immediately after verification
     if (interaction.type === InteractionType.PING) {
+      console.log('[Discord Interactions] Responded to PING with PONG (type: 1)');
       return NextResponse.json({ type: InteractionResponseType.PONG });
     }
 

@@ -1,0 +1,30 @@
+Fix ONLY the Discord Interactions Endpoint verification failure.
+
+Discord rejects this production URL:
+
+https://community-outcome.ghazghazibahaeddin.workers.dev/api/discord/interactions
+
+Inspect and repair the existing production handler at:
+
+app/api/discord/interactions/route.ts
+
+Required corrections:
+
+1. Ensure POST requests reach this exact handler in production.
+2. Read the original raw request body before parsing JSON.
+3. Verify X-Signature-Ed25519 and X-Signature-Timestamp using the actual DISCORD_PUBLIC_KEY.
+4. Handle Discord PING interactions (type === 1) immediately after successful signature verification.
+5. Return HTTP 200, Content-Type application/json, and exactly {"type":1}.
+6. Ensure no redirect, authentication middleware, HTML response, or database dependency interferes with PING verification.
+7. Check that Cloudflare passes the correct DISCORD_PUBLIC_KEY to the deployed Worker.
+8. Inspect production Worker logs during a real Discord verification attempt. Record request status, response status, and signature verification outcome without logging secrets, signatures, or private payload data.
+9. Fix the actual cause, not merely the URL.
+10. Preserve all existing slash commands, buttons, bot functionality, OAuth, Supabase, and application features.
+
+Do not disable signature verification or bypass security.
+
+Run a production build and verify the deployed POST endpoint.
+
+Do not claim Discord accepted the endpoint unless the actual verification succeeds.
+
+Make only the necessary changes.
