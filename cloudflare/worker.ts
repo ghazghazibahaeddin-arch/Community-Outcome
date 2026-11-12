@@ -258,26 +258,31 @@ const worker = {
     }
 
     // 4. Static Assets serving via Cloudflare Worker Assets binding
-    if (env.ASSETS) {
-      try {
-        // Direct path match
-        const assetResponse = await env.ASSETS.fetch(request);
-        if (assetResponse.status < 400 || assetResponse.status === 304) {
-          return assetResponse;
-        }
-
-        // Handle Next.js /_next/static/ prefix stripping for chunk & css lookup
-        if (url.pathname.startsWith('/_next/static/')) {
-          const strippedUrl = new URL(request.url);
-          strippedUrl.pathname = url.pathname.replace(/^\/_next\/static\//, '/');
-          const strippedRes = await env.ASSETS.fetch(new Request(strippedUrl.toString(), request));
-          if (strippedRes.status < 400 || strippedRes.status === 304) {
-            return strippedRes;
+    if (/\.(css|js|map|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$/i.test(url.pathname)) {
+      if (env.ASSETS) {
+        try {
+          const directRes = await env.ASSETS.fetch(request);
+          if (directRes.status < 400 || directRes.status === 304) {
+            return directRes;
           }
+
+          // Handle Next.js /_next/static/ prefix stripping for chunk & css lookup
+          if (url.pathname.startsWith('/_next/static/')) {
+            const strippedUrl = new URL(request.url);
+            strippedUrl.pathname = url.pathname.replace(/^\/_next\/static\//, '/');
+            const strippedRes = await env.ASSETS.fetch(new Request(strippedUrl.toString(), request));
+            if (strippedRes.status < 400 || strippedRes.status === 304) {
+              return strippedRes;
+            }
+          }
+        } catch {
+          // Fall through
         }
-      } catch {
-        // Fallback to application shell
       }
+      return new Response('Asset not found', {
+        status: 404,
+        headers: { 'Content-Type': 'text/plain' }
+      });
     }
 
     // 5. Application Request Handling & HTML Shell
@@ -320,13 +325,19 @@ export async function handleApplicationRequest(request: Request, env: Env): Prom
     }
   }
 
-  // Check if ASSETS has index.html for root page
-  if (env.ASSETS && (url.pathname === '/' || url.pathname === '')) {
+  // Check if ASSETS can serve this request or index.html for root page
+  if (env.ASSETS) {
     try {
-      const indexReq = new Request(new URL('/index.html', request.url).toString(), request);
-      const indexRes = await env.ASSETS.fetch(indexReq);
-      if (indexRes.status < 400 || indexRes.status === 304) {
-        return indexRes;
+      const directRes = await env.ASSETS.fetch(request);
+      if (directRes.status < 400 || directRes.status === 304) {
+        return directRes;
+      }
+      if (url.pathname === '/' || url.pathname === '') {
+        const indexReq = new Request(new URL('/index.html', request.url).toString(), request);
+        const indexRes = await env.ASSETS.fetch(indexReq);
+        if (indexRes.status < 400 || indexRes.status === 304) {
+          return indexRes;
+        }
       }
     } catch {}
   }

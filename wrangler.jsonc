@@ -1,17 +1,12 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "community-outcome",
-  "main": "cloudflare/worker.ts",
-  "compatibility_date": "2026-05-20",
+  "compatibility_date": "2024-12-30",
   "compatibility_flags": [
     "nodejs_compat"
   ],
-  "assets": {
-    "directory": ".next/static",
-    "binding": "ASSETS"
-  },
   // Public application environment variables (non-secret).
-  // Cloudflare Workers reads these directly into the runtime `env` object.
+  // Cloudflare Workers merges these with Dashboard Variables & Secrets at runtime.
   "vars": {
     "NODE_ENV": "production",
     "APP_URL": "https://community-outcome.ghazghazibahaeddin.workers.dev",
