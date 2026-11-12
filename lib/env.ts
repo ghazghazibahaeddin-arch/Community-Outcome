@@ -10,7 +10,7 @@ export interface CloudflareEnv {
   DISCORD_APPLICATION_ID?: string;
   DISCORD_BOT_TOKEN?: string;
   DISCORD_CLIENT_SECRET?: string;
-  DISCORD_PUBLIC_KEY: string;b8eac088933e82f4025ac3063b4a35c1a5c53533225117b27e4910870f226482
+  DISCORD_PUBLIC_KEY?: string;
   DISCORD_REDIRECT_URI?: string;
 
   // Telegram
