@@ -69,13 +69,15 @@ async function verifyDiscordSignature(
   }
 }
 
+const KNOWN_DISCORD_PUBLIC_KEY = 'b8eac088933e82f4025ac3063b4a35c1a5c53533225117b27e4910870f226482';
+
 export async function POST(req: NextRequest, _context?: any) {
   const env = getRuntimeEnv(_context?.env || _context);
   try {
     const rawBody = await req.text();
     const signature = req.headers.get('x-signature-ed25519');
     const timestamp = req.headers.get('x-signature-timestamp');
-    const publicKey = env.DISCORD_PUBLIC_KEY;
+    const publicKey = (env.DISCORD_PUBLIC_KEY || process.env.DISCORD_PUBLIC_KEY || KNOWN_DISCORD_PUBLIC_KEY)?.trim();
 
     // Structured diagnostic log without sensitive data or payloads
     console.log('[Discord Interactions] Request received', {

@@ -39,6 +39,19 @@ export interface CloudflareEnv {
   [key: string]: any;
 }
 
+export const DEFAULT_VARS: Partial<CloudflareEnv> = Object.freeze({
+  APP_URL: 'https://community-outcome.ghazghazibahaeddin.workers.dev',
+  DISCORD_APPLICATION_ID: '1565501338597462099',
+  DISCORD_PUBLIC_KEY: 'b8eac088933e82f4025ac3063b4a35c1a5c53533225117b27e4910870f226482',
+  DISCORD_REDIRECT_URI: 'https://community-outcome.ghazghazibahaeddin.workers.dev/api/discord/callback',
+  TELEGRAM_BOT_USERNAME: 'CommunityOutcomeBot',
+  TELEGRAM_OIDC_CLIENT_ID: '9018720052',
+  TELEGRAM_REDIRECT_URI: 'https://community-outcome.ghazghazibahaeddin.workers.dev/api/auth/telegram/callback',
+  WHOP_PRO_PLAN_ID: 'prod_community_pro_15',
+  WHOP_PURCHASE_URL: 'https://whop.com/baha-1a44/community-os-pro',
+  WHOP_PRODUCT_URL: 'https://whop.com/baha-1a44'
+});
+
 let activeRuntimeEnv: CloudflareEnv | null = null;
 
 export function setRuntimeEnv(env: CloudflareEnv): void {
@@ -46,14 +59,15 @@ export function setRuntimeEnv(env: CloudflareEnv): void {
 }
 
 export function getRuntimeEnv(explicitEnv?: CloudflareEnv): CloudflareEnv {
-  if (explicitEnv && Object.keys(explicitEnv).length > 0) {
-    return explicitEnv;
-  }
-  if (activeRuntimeEnv && Object.keys(activeRuntimeEnv).length > 0) {
-    return activeRuntimeEnv;
-  }
-  if (typeof process !== 'undefined' && process.env) {
-    return process.env as CloudflareEnv;
-  }
-  return {};
+  const base = { ...DEFAULT_VARS };
+  const procEnv = (typeof process !== 'undefined' && process.env) ? (process.env as CloudflareEnv) : {};
+  const active = activeRuntimeEnv || {};
+  const explicit = explicitEnv || {};
+
+  return {
+    ...base,
+    ...procEnv,
+    ...active,
+    ...explicit
+  };
 }
