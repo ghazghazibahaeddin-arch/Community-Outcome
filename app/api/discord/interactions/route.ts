@@ -461,10 +461,16 @@ export async function POST(req: NextRequest, _context?: any) {
   }
 }
 
-export async function GET() {
+export async function GET(req: NextRequest, _context?: any) {
+  const env = getRuntimeEnv(_context?.env || _context);
+  const publicKey = env.DISCORD_PUBLIC_KEY;
   return NextResponse.json({
     status: 'online',
     endpoint: 'Discord Interactions Endpoint',
-    url: 'https://community-outcome.ghazghazibahaeddin.workers.dev/api/discord/interactions'
+    url: 'https://community-outcome.ghazghazibahaeddin.workers.dev/api/discord/interactions',
+    publicKeyConfigured: Boolean(publicKey),
+    message: publicKey
+      ? 'DISCORD_PUBLIC_KEY is configured. Ready for Discord verification.'
+      : 'DISCORD_PUBLIC_KEY is missing. Copy your 64-char PUBLIC KEY from Discord Developer Portal (General Information) and set DISCORD_PUBLIC_KEY in Cloudflare Dashboard (Settings > Variables and Secrets).'
   });
 }
