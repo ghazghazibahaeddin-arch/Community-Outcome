@@ -4,19 +4,7 @@ import crypto from 'crypto';
 import { dbOperations, getDatabase } from '@/lib/db/store';
 import { getRuntimeEnv, CloudflareEnv } from '@/lib/env';
 
-// Discord Interaction Types
-const InteractionType = {
-  PING: 1,
-  APPLICATION_COMMAND: 2,
-  MESSAGE_COMPONENT: 3
-};
-
-// Discord Callback Types
-const InteractionResponseType = {
-  PONG: 1,
-  CHANNEL_MESSAGE_WITH_SOURCE: 4,
-  DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE: 5
-};
+import { verifyKey, InteractionType, InteractionResponseType } from 'discord-interactions';
 
 function hexToUint8Array(hex: string): Uint8Array {
   const clean = hex.trim();
@@ -29,8 +17,8 @@ function hexToUint8Array(hex: string): Uint8Array {
 }
 
 /**
- * Verify Discord Ed25519 request signature (Dual Web Crypto + Node.js crypto support)
- * Cloudflare Workers workerd runtime uses { name: 'Ed25519' }.
+ * Verify Discord Ed25519 request signature using official discord-interactions library
+ * with native Web Crypto fallback.
  */
 async function verifyDiscordSignature(
   rawBody: string,
@@ -47,13 +35,21 @@ async function verifyDiscordSignature(
       return false;
     }
 
-    const keyBytes = hexToUint8Array(cleanKeyHex);
-    const sigBytes = hexToUint8Array(cleanSigHex);
-    const msgBytes = new TextEncoder().encode(timestamp + rawBody);
+    // 1. Official discord-interactions library verifyKey
+    try {
+      const ok = await verifyKey(rawBody, cleanSigHex, timestamp, cleanKeyHex);
+      if (ok) return true;
+    } catch {
+      // Fall through to native Web Crypto
+    }
 
-    // 1. Standard Web Crypto API (Native in Cloudflare Workers workerd & Node.js 20+)
+    // 2. Direct Web Crypto fallback (Native in Cloudflare Workers workerd)
     if (typeof globalThis.crypto?.subtle?.importKey === 'function') {
       try {
+        const keyBytes = hexToUint8Array(cleanKeyHex);
+        const sigBytes = hexToUint8Array(cleanSigHex);
+        const msgBytes = new TextEncoder().encode(timestamp + rawBody);
+
         const key = await globalThis.crypto.subtle.importKey(
           'raw',
           keyBytes as any,
@@ -63,32 +59,11 @@ async function verifyDiscordSignature(
         );
         return await globalThis.crypto.subtle.verify({ name: 'Ed25519' }, key, sigBytes as any, msgBytes as any);
       } catch {
-        // Fallback to legacy Cloudflare Workers algorithm name if applicable
-        try {
-          const key = await globalThis.crypto.subtle.importKey(
-            'raw',
-            keyBytes as any,
-            { name: 'NODE-ED25519', namedCurve: 'NODE-ED25519' } as any,
-            false,
-            ['verify']
-          );
-          return await globalThis.crypto.subtle.verify('NODE-ED25519' as any, key, sigBytes as any, msgBytes as any);
-        } catch {
-          // Fall through to Node.js crypto fallback
-        }
+        // Fall through
       }
     }
 
-    // 2. Node.js SPKI DER fallback
-    const ed25519DerPrefix = Buffer.from('302a300506032b6570032100', 'hex');
-    const spkiPublicKey = Buffer.concat([ed25519DerPrefix, Buffer.from(keyBytes)]);
-
-    return crypto.verify(
-      null,
-      Buffer.from(msgBytes),
-      { key: spkiPublicKey, format: 'der', type: 'spki' },
-      Buffer.from(sigBytes)
-    );
+    return false;
   } catch {
     return false;
   }
