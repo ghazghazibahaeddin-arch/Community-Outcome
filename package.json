@@ -4,18 +4,20 @@
   "private": true,
   "scripts": {
     "dev": "next dev -p 3000",
-    "build": "next build",
+    "build": "NODE_ENV=production next build && opennextjs-cloudflare build --skipNextBuild",
     "start": "next start -p 3000",
     "lint": "eslint .",
     "clean": "next clean",
-    "cf:check": "npx vinext check",
-    "cf:preview": "npx wrangler dev",
-    "cf:deploy": "npx wrangler deploy",
+    "cf:build": "opennextjs-cloudflare build",
+    "cf:preview": "opennextjs-cloudflare preview",
+    "cf:deploy": "opennextjs-cloudflare deploy",
+    "cf:typegen": "wrangler types worker-configuration.d.ts",
     "telegram:register": "node scripts/register_telegram_webhook.mjs"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
     "@hookform/resolvers": "^5.2.1",
+    "@opennextjs/cloudflare": "^1.19.11",
     "@supabase/supabase-js": "^2.118.0",
     "autoprefixer": "^10.4.21",
     "class-variance-authority": "^0.7.1",
@@ -27,7 +29,8 @@
     "postcss": "^8.5.6",
     "react": "^19.2.1",
     "react-dom": "^19.2.1",
-    "tailwind-merge": "^3.3.1"
+    "tailwind-merge": "^3.3.1",
+    "wrangler": "^4.161.0"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "4.1.11",

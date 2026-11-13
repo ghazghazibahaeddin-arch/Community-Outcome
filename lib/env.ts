@@ -58,16 +58,38 @@ export function setRuntimeEnv(env: CloudflareEnv): void {
   activeRuntimeEnv = env;
 }
 
-export function getRuntimeEnv(explicitEnv?: CloudflareEnv): CloudflareEnv {
-  const base = { ...DEFAULT_VARS };
-  const procEnv = (typeof process !== 'undefined' && process.env) ? (process.env as CloudflareEnv) : {};
-  const active = activeRuntimeEnv || {};
-  const explicit = explicitEnv || {};
+function mergeNonEmpty(target: CloudflareEnv, source?: Record<string, any> | null): void {
+  if (!source || typeof source !== 'object') return;
+  for (const key of Object.keys(source)) {
+    const val = source[key];
+    if (val !== undefined && val !== null && val !== '') {
+      target[key] = val;
+    }
+  }
+}
 
-  return {
-    ...base,
-    ...procEnv,
-    ...active,
-    ...explicit
-  };
+function getOpenNextCloudflareEnv(): CloudflareEnv | null {
+  try {
+    const ctx = (globalThis as any)[Symbol.for('__cloudflare-context__')];
+    if (ctx && ctx.env && typeof ctx.env === 'object') {
+      return ctx.env as CloudflareEnv;
+    }
+  } catch {
+    // Ignore outside request context
+  }
+  return null;
+}
+
+export function getRuntimeEnv(explicitEnv?: CloudflareEnv): CloudflareEnv {
+  const merged: CloudflareEnv = { ...DEFAULT_VARS };
+  const procEnv = typeof process !== 'undefined' && process.env ? (process.env as Record<string, any>) : null;
+  const cfContextEnv = getOpenNextCloudflareEnv();
+
+  // Merge layers: defaults -> process.env -> Cloudflare Workers runtime env -> active -> explicit
+  mergeNonEmpty(merged, procEnv);
+  mergeNonEmpty(merged, cfContextEnv);
+  mergeNonEmpty(merged, activeRuntimeEnv);
+  mergeNonEmpty(merged, explicitEnv);
+
+  return merged;
 }

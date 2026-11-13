@@ -1,6 +1,5 @@
 // Community OS — Official Discord Interactions Endpoint with Cryptographic Verification
 import { NextRequest, NextResponse } from 'next/server';
-import crypto from 'crypto';
 import { dbOperations, getDatabase } from '@/lib/db/store';
 import { getRuntimeEnv, CloudflareEnv } from '@/lib/env';
 

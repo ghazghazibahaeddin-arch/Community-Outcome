@@ -14,20 +14,26 @@ export const TELEGRAM_OIDC_COOKIE_NAME = 'community_os_tg_oidc_state';
 let cachedJwks: { keys: any[]; fetchedAt: number } | null = null;
 const JWKS_CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
 
-// Cryptographic Local Test Keypair for Verification Tests
-const testRsaKeypair = crypto.generateKeyPairSync('rsa', {
-  modulusLength: 2048,
-  publicKeyEncoding: { type: 'spki', format: 'pem' },
-  privateKeyEncoding: { type: 'pkcs8', format: 'pem' }
-});
+// Lazy Cryptographic Local Test Keypair for Verification Tests (never runs on Worker cold start)
+let cachedTestKeypair: { publicKey: string; privateKey: string; jwk: any } | null = null;
 
-const testJwk = {
-  kty: 'RSA',
-  use: 'sig',
-  alg: 'RS256',
-  kid: 'oidc-test-1',
-  ...crypto.createPublicKey(testRsaKeypair.publicKey).export({ format: 'jwk' })
-};
+function getTestKeypair(): { publicKey: string; privateKey: string; jwk: any } {
+  if (cachedTestKeypair) return cachedTestKeypair;
+  const kp = crypto.generateKeyPairSync('rsa', {
+    modulusLength: 2048,
+    publicKeyEncoding: { type: 'spki', format: 'pem' },
+    privateKeyEncoding: { type: 'pkcs8', format: 'pem' }
+  });
+  const jwk = {
+    kty: 'RSA',
+    use: 'sig',
+    alg: 'RS256',
+    kid: 'oidc-test-1',
+    ...crypto.createPublicKey(kp.publicKey).export({ format: 'jwk' })
+  };
+  cachedTestKeypair = { ...kp, jwk };
+  return cachedTestKeypair;
+}
 
 export interface PkcePair {
   codeVerifier: string;
@@ -216,15 +222,15 @@ export async function fetchTelegramJwks(): Promise<any[]> {
     if (res.ok) {
       const data = await res.json();
       if (Array.isArray(data.keys)) {
-        cachedJwks = { keys: [...data.keys, testJwk], fetchedAt: now };
+        cachedJwks = { keys: data.keys, fetchedAt: now };
         return cachedJwks.keys;
       }
     }
   } catch {
-    // If external endpoint is unreachable, fallback to internal cache + test JWK
+    // If external endpoint is unreachable, fallback below
   }
 
-  return [testJwk];
+  return [getTestKeypair().jwk];
 }
 
 /**
@@ -258,17 +264,58 @@ export async function verifyTelegramIdToken(
     }
 
     // 2. Fetch JWKS public keys
-    const jwks = await fetchTelegramJwks();
+    const jwks = header.kid === 'oidc-test-1'
+      ? [getTestKeypair().jwk]
+      : await fetchTelegramJwks();
     const key = jwks.find((k) => k.kid === header.kid) || jwks[0];
     if (!key) {
       return { valid: false, error: `Matching JWKS key not found for kid: ${header.kid}` };
     }
 
-    // 3. Cryptographic Signature Verification
-    const publicKey = crypto.createPublicKey({ key, format: 'jwk' });
-    const verify = crypto.createVerify('SHA256');
-    verify.update(`${headerB64}.${payloadB64}`);
-    const isSignatureValid = verify.verify(publicKey, Buffer.from(signatureB64, 'base64url'));
+    // 3. Cryptographic Signature Verification (Web Crypto native + Node fallback)
+    let isSignatureValid = false;
+    const signingInput = `${headerB64}.${payloadB64}`;
+    const sigBytes = Buffer.from(signatureB64, 'base64url');
+
+    if (typeof globalThis.crypto?.subtle?.importKey === 'function') {
+      try {
+        const importAlg =
+          header.alg === 'ES256'
+            ? { name: 'ECDSA', namedCurve: 'P-256' }
+            : { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' };
+        const verifyAlg =
+          header.alg === 'ES256'
+            ? { name: 'ECDSA', hash: 'SHA-256' }
+            : { name: 'RSASSA-PKCS1-v1_5' };
+
+        const cryptoKey = await globalThis.crypto.subtle.importKey(
+          'jwk',
+          key,
+          importAlg,
+          false,
+          ['verify']
+        );
+        isSignatureValid = await globalThis.crypto.subtle.verify(
+          verifyAlg,
+          cryptoKey,
+          sigBytes as any,
+          new TextEncoder().encode(signingInput) as any
+        );
+      } catch {
+        isSignatureValid = false;
+      }
+    }
+
+    if (!isSignatureValid) {
+      try {
+        const publicKey = crypto.createPublicKey({ key, format: 'jwk' });
+        const verify = crypto.createVerify('SHA256');
+        verify.update(signingInput);
+        isSignatureValid = verify.verify(publicKey, sigBytes);
+      } catch {
+        isSignatureValid = false;
+      }
+    }
 
     if (!isSignatureValid) {
       return { valid: false, error: 'Cryptographic JWKS signature verification failed' };
@@ -336,7 +383,7 @@ export function createTestSignedIdToken(params: {
   const payloadB64 = Buffer.from(JSON.stringify(payload)).toString('base64url');
   const sign = crypto.createSign('SHA256');
   sign.update(`${headerB64}.${payloadB64}`);
-  const signatureB64 = sign.sign(testRsaKeypair.privateKey, 'base64url');
+  const signatureB64 = sign.sign(getTestKeypair().privateKey, 'base64url');
 
   return `${headerB64}.${payloadB64}.${signatureB64}`;
 }

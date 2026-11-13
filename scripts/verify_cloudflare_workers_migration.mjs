@@ -20,8 +20,15 @@ async function runCloudflareVerification() {
   console.log('COMMUNITY OS — CLOUDFLARE WORKERS FREE MIGRATION VERIFICATION');
   console.log('================================================================\n');
 
-  // 1. Verify Cloudflare Workers Entrypoint and Direct Environment Runtime
-  assert(fs.existsSync('cloudflare/worker.ts'), 'Workers: Native cloudflare/worker.ts entrypoint present');
+  // 1. Verify OpenNext Cloudflare Workers Entrypoint, Wrangler Config, and Runtime Env
+  assert(fs.existsSync('open-next.config.ts'), 'Workers: open-next.config.ts adapter configuration present');
+  const wranglerConfig = fs.readFileSync('wrangler.jsonc', 'utf-8');
+  assert(
+    wranglerConfig.includes('".open-next/worker.js"') &&
+    wranglerConfig.includes('".open-next/assets"') &&
+    wranglerConfig.includes('"DISCORD_PUBLIC_KEY"'),
+    'Wrangler: wrangler.jsonc configures .open-next/worker.js, .open-next/assets, and runtime vars including DISCORD_PUBLIC_KEY'
+  );
   assert(fs.existsSync('lib/env.ts'), 'Environment: Direct Cloudflare Workers runtime environment accessor (lib/env.ts) present');
   assert(!fs.existsSync('wrangler.toml'), 'Wrangler: duplicate wrangler.toml removed');
 
@@ -68,8 +75,8 @@ async function runCloudflareVerification() {
   // 6. Verify Scripts in package.json
   const pkg = JSON.parse(fs.readFileSync('package.json', 'utf-8'));
   assert(
-    pkg.scripts['cf:check'] && pkg.scripts['cf:preview'] && pkg.scripts['cf:deploy'],
-    'Scripts: package.json includes cf:check, cf:preview, and cf:deploy commands'
+    pkg.scripts['cf:build'] && pkg.scripts['cf:preview'] && pkg.scripts['cf:deploy'] && pkg.scripts['cf:typegen'],
+    'Scripts: package.json includes cf:build, cf:preview, cf:deploy, and cf:typegen commands'
   );
 
   console.log('\n================================================================');
