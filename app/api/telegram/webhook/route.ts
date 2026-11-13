@@ -1,6 +1,7 @@
 // Community OS — Telegram Bot Webhook Endpoint with Cryptographic Secret Token Verification
 import { NextRequest, NextResponse } from 'next/server';
-import { dbOperations, getDatabase } from '@/lib/db/store';
+import { dbOperations, ensureDatabaseHydrated, getDatabase } from '@/lib/db/store';
+import { getVerifiedAppUrl } from '@/lib/services/securityConfig';
 import { getRuntimeEnv, CloudflareEnv } from '@/lib/env';
 
 // Deduplicate Telegram update retries
@@ -42,7 +43,8 @@ export async function POST(req: NextRequest, _context?: any) {
       const cbData = cb.data || '';
       const cbFrom = cb.from || {};
       const token = env.TELEGRAM_BOT_TOKEN;
-      const appUrl = (env.APP_URL || 'https://community-os.org').replace(/\/$/, '');
+      const appUrl = getVerifiedAppUrl(env);
+      await ensureDatabaseHydrated(env);
       const db = getDatabase();
       const community =
         db.communities.find((c) => c.telegramConfig?.groupId === String(cbChatId)) ||
@@ -136,8 +138,9 @@ export async function POST(req: NextRequest, _context?: any) {
     const firstWord = rawText.split(/\s+/)[0].toLowerCase().split('@')[0];
     const argsString = rawText.slice(rawText.split(/\s+/)[0].length).trim();
 
+    await ensureDatabaseHydrated(env);
     const db = getDatabase();
-    const appUrl = (env.APP_URL || 'https://community-os.org').replace(/\/$/, '');
+    const appUrl = getVerifiedAppUrl(env);
     // Dynamically resolve community by telegramConfig.groupId if present, else fallback
     const community =
       db.communities.find((c) => c.telegramConfig?.groupId === String(chatId)) ||

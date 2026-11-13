@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getDatabase, saveDatabase } from '@/lib/db/store';
+import { ensureDatabaseHydrated, getDatabase, saveDatabase } from '@/lib/db/store';
 import {
   createSession,
   getAuthenticatedUserFromRequest,
@@ -107,6 +107,7 @@ export async function GET(req: NextRequest, _context?: any) {
   const displayName =
     payload.name || [payload.given_name, payload.family_name].filter(Boolean).join(' ') || username || `tg_${telegramSub}`;
 
+  await ensureDatabaseHydrated(env);
   const db = getDatabase();
   if (!db.users) db.users = [];
 

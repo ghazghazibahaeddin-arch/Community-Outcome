@@ -114,7 +114,8 @@ export const LinkManagerSection: React.FC<LinkManagerSectionProps> = ({
   };
 
   const handleCopy = (slug: string) => {
-    const url = `https://community-os.org/l/${slug}`;
+    const origin = typeof window !== 'undefined' ? window.location.origin : 'https://community-outcome.ghazghazibahaeddin.workers.dev';
+    const url = `${origin}/l/${slug}`;
     navigator.clipboard.writeText(url);
     setCopiedSlug(slug);
     setTimeout(() => setCopiedSlug(null), 2500);

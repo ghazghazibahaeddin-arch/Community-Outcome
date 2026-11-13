@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { registerUser, createSession, setSessionCookie } from '@/lib/services/auth';
+import { ensureDatabaseHydrated } from '@/lib/db/store';
 
 export async function POST(req: NextRequest) {
   try {
+    await ensureDatabaseHydrated();
     const body = (await req.json()) as { email?: string; password?: string; name?: string; bio?: string };
     const { email, password, name, bio } = body;
 

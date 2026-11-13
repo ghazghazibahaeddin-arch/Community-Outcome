@@ -80,6 +80,18 @@ function getOpenNextCloudflareEnv(): CloudflareEnv | null {
   return null;
 }
 
+export function getCloudflareExecutionContext(): { waitUntil?: (promise: Promise<any>) => void } | null {
+  try {
+    const ctx = (globalThis as any)[Symbol.for('__cloudflare-context__')];
+    if (ctx && ctx.ctx && typeof ctx.ctx.waitUntil === 'function') {
+      return ctx.ctx;
+    }
+  } catch {
+    // Ignore outside Cloudflare Workers request context
+  }
+  return null;
+}
+
 export function getRuntimeEnv(explicitEnv?: CloudflareEnv): CloudflareEnv {
   const merged: CloudflareEnv = { ...DEFAULT_VARS };
   const procEnv = typeof process !== 'undefined' && process.env ? (process.env as Record<string, any>) : null;

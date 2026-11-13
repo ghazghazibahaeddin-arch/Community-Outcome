@@ -1,6 +1,6 @@
 // Community OS — Central Data & Actions API Route with Server-Side Authorization
 import { NextRequest, NextResponse } from 'next/server';
-import { dbOperations, getDatabase, saveDatabase } from '@/lib/db/store';
+import { dbOperations, ensureDatabaseHydrated, getDatabase, saveDatabase } from '@/lib/db/store';
 import { computeCommunityAnalytics } from '@/lib/services/analytics';
 import { runAllJourneyVerifications } from '@/lib/services/testingSuite';
 import { getAuthenticatedUserFromRequest, getUserRoleInCommunity } from '@/lib/services/auth';
@@ -17,6 +17,7 @@ export async function GET(req: NextRequest) {
     const url = new URL(req.url);
     const communityId = url.searchParams.get('communityId') || 'comm_devforge';
 
+    await ensureDatabaseHydrated();
     const authUser = await getAuthenticatedUserFromRequest(req);
     const db = getDatabase();
     const analytics = computeCommunityAnalytics(communityId);
@@ -88,6 +89,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
+    await ensureDatabaseHydrated();
     const authUser = await getAuthenticatedUserFromRequest(req);
     const body = (await req.json()) as { action?: string; payload?: any };
     const { action, payload } = body;

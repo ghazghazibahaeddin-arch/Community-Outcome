@@ -1,6 +1,7 @@
 // Community OS — Telegram Bot Webhook Auto-Registration Handler
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthenticatedUserFromRequest } from '@/lib/services/auth';
+import { getVerifiedAppUrl } from '@/lib/services/securityConfig';
 import { getRuntimeEnv, CloudflareEnv } from '@/lib/env';
 
 export async function GET(req: NextRequest, _context?: any) {
@@ -45,7 +46,7 @@ export async function POST(req: NextRequest, _context?: any) {
     }
 
     const body = ((await req.json().catch(() => ({}))) || {}) as { appUrl?: string; dropPending?: boolean };
-    const rawAppUrl = body.appUrl || env.APP_URL || 'https://community-os.workers.dev';
+    const rawAppUrl = body.appUrl || getVerifiedAppUrl(env);
     const appUrl = rawAppUrl.trim().replace(/\/$/, '');
     const webhookUrl = `${appUrl}/api/telegram/webhook`;
 

@@ -88,7 +88,8 @@ export const PassportPortfolioSection: React.FC<PassportPortfolioSectionProps> =
   };
 
   const handleCopyCardUrl = () => {
-    navigator.clipboard.writeText(`https://community-os.org/c/${selectedContributionId}`);
+    const origin = typeof window !== 'undefined' ? window.location.origin : 'https://community-outcome.ghazghazibahaeddin.workers.dev';
+    navigator.clipboard.writeText(`${origin}/c/${selectedContributionId}`);
     setCopiedNotification('Portable card URL copied to clipboard!');
     setTimeout(() => setCopiedNotification(null), 3000);
   };

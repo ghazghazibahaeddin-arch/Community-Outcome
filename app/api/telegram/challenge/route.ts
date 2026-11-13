@@ -1,6 +1,6 @@
 // Community OS — Telegram Group Connection Challenge Generator
 import { NextRequest, NextResponse } from 'next/server';
-import { dbOperations, getDatabase } from '@/lib/db/store';
+import { dbOperations, ensureDatabaseHydrated, getDatabase } from '@/lib/db/store';
 import { getAuthenticatedUserFromRequest, getUserRoleInCommunity } from '@/lib/services/auth';
 import { getRuntimeEnv, CloudflareEnv } from '@/lib/env';
 
@@ -14,6 +14,7 @@ export async function POST(req: NextRequest, _context?: any) {
       return NextResponse.json({ success: false, error: 'communityId is required' }, { status: 400 });
     }
 
+    await ensureDatabaseHydrated(env);
     const authUser = await getAuthenticatedUserFromRequest(req);
     const actorId = authUser?.id || 'usr_sarah';
     const role = getUserRoleInCommunity(actorId, communityId);

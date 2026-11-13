@@ -3,7 +3,7 @@
 
 const token = process.env.TELEGRAM_BOT_TOKEN;
 const secret = process.env.TELEGRAM_WEBHOOK_SECRET || 'comm_tg_sec_prod_9918';
-const appUrl = (process.argv[2] || process.env.APP_URL || 'https://community-os.workers.dev').replace(/\/$/, '');
+const appUrl = (process.argv[2] || process.env.APP_URL || 'https://community-outcome.ghazghazibahaeddin.workers.dev').replace(/\/$/, '');
 
 if (!token) {
   console.error('[Error] TELEGRAM_BOT_TOKEN environment variable is not defined.');

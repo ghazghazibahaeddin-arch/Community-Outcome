@@ -32,7 +32,7 @@ export async function POST(req: NextRequest, _context?: any) {
         const apiRes = await fetch('https://discord.com/api/v10/users/@me', {
           headers: {
             Authorization: `Bot ${token.trim()}`,
-            'User-Agent': 'CommunityOS/1.0 (https://community-os.org)'
+            'User-Agent': 'CommunityOS/1.0 (https://community-outcome.ghazghazibahaeddin.workers.dev)'
           }
         });
 

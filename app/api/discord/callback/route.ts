@@ -1,6 +1,6 @@
 // Community OS — Discord OAuth Installation & Identity Callback Route
 import { NextRequest, NextResponse } from 'next/server';
-import { dbOperations, getDatabase, saveDatabase } from '@/lib/db/store';
+import { dbOperations, ensureDatabaseHydrated, getDatabase, saveDatabase } from '@/lib/db/store';
 import { createSession, getAuthenticatedUserFromRequest, setSessionCookie } from '@/lib/services/auth';
 import { getDiscordRedirectUri, getVerifiedAppUrl } from '@/lib/services/securityConfig';
 import { User } from '@/lib/types';
@@ -30,6 +30,7 @@ export async function GET(req: NextRequest, _context?: any) {
   }
 
   const isUserAuthMode = state.startsWith('os_discord_user_');
+  await ensureDatabaseHydrated(env);
   const db = getDatabase();
 
   // Find target community from state or fallback
@@ -46,15 +47,16 @@ export async function GET(req: NextRequest, _context?: any) {
     const redirectUri = getDiscordRedirectUri(env);
 
     let discordUser: { id: string; username: string; email?: string; avatar?: string } | null = null;
+    let oauthExchangeError: string | null = null;
 
-    if (clientSecret) {
+    if (clientSecret && !code.startsWith('mock_')) {
       try {
         const tokenRes = await fetch('https://discord.com/api/oauth2/token', {
           method: 'POST',
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
           body: new URLSearchParams({
             client_id: clientId,
-            client_secret: clientSecret,
+            client_secret: clientSecret.trim(),
             grant_type: 'authorization_code',
             code,
             redirect_uri: redirectUri
@@ -68,20 +70,36 @@ export async function GET(req: NextRequest, _context?: any) {
           });
           if (userRes.ok) {
             discordUser = (await userRes.json()) as any;
+          } else {
+            oauthExchangeError = `Discord profile lookup failed (HTTP ${userRes.status})`;
           }
+        } else {
+          const errText = await tokenRes.text().catch(() => '');
+          oauthExchangeError = `Discord OAuth token exchange failed (HTTP ${tokenRes.status}): ${errText.slice(0, 180)}`;
         }
-      } catch (e) {
+      } catch (e: any) {
         console.error('Failed to exchange Discord OAuth code:', e);
+        oauthExchangeError = `Discord OAuth network error: ${e?.message || 'unknown error'}`;
       }
+    } else if (!clientSecret && !code.startsWith('mock_')) {
+      oauthExchangeError = 'DISCORD_CLIENT_SECRET is not configured in Cloudflare Workers Runtime Secrets.';
     }
 
-    // If clientSecret not set, generate verified Discord identity payload from code
-    if (!discordUser) {
+    if (oauthExchangeError) {
+      return NextResponse.redirect(`${appUrl}/?discord_error=${encodeURIComponent(oauthExchangeError)}`);
+    }
+
+    // Automated test mock code support
+    if (!discordUser && code.startsWith('mock_')) {
       discordUser = {
         id: `discord_${code.slice(0, 10)}`,
         username: `DiscordUser_${code.slice(0, 6)}`,
         email: `discord_${code.slice(0, 8)}@discord.user`
       };
+    }
+
+    if (!discordUser) {
+      return NextResponse.redirect(`${appUrl}/?discord_error=${encodeURIComponent('Unable to retrieve Discord user profile')}`);
     }
 
     // If user already logged in, link identity to existing user profile
@@ -169,7 +187,7 @@ export async function GET(req: NextRequest, _context?: any) {
         const guildRes = await fetch(`https://discord.com/api/v10/guilds/${guildId}`, {
           headers: {
             Authorization: `Bot ${token.trim()}`,
-            'User-Agent': 'CommunityOS/1.0 (https://community-os.org)'
+            'User-Agent': 'CommunityOS/1.0 (https://community-outcome.ghazghazibahaeddin.workers.dev)'
           }
         });
         if (guildRes.ok) {

@@ -118,16 +118,35 @@ export default function HomePage() {
     eventAttendanceRate: 0
   });
 
-  // Clean up any legacy localStorage tokens on load and clean OAuth callback URL parameters
+  // Clean up any legacy localStorage tokens on load and handle OAuth callback URL parameters
   React.useEffect(() => {
     if (typeof window === 'undefined') return;
     try {
       localStorage.removeItem('community_os_session_token');
       const urlParams = new URLSearchParams(window.location.search);
+      const tab = urlParams.get('tab');
+      const isDiscordGuildConnected =
+        urlParams.get('connected_platform') === 'discord' && Boolean(urlParams.get('guild_id'));
+
       if (urlParams.has('session_token')) {
         urlParams.delete('session_token');
         const cleanUrl = window.location.pathname + (urlParams.toString() ? `?${urlParams.toString()}` : '');
         window.history.replaceState({}, document.title, cleanUrl);
+      }
+
+      if (tab === 'member' || tab === 'owner' || isDiscordGuildConnected) {
+        const timer = setTimeout(() => {
+          if (tab === 'member') {
+            setWorkspaceMode('member');
+          } else if (tab === 'owner') {
+            setWorkspaceMode('owner');
+          }
+          if (isDiscordGuildConnected) {
+            setWorkspaceMode('modules');
+            setActiveTab('integrations');
+          }
+        }, 0);
+        return () => clearTimeout(timer);
       }
     } catch {}
   }, []);

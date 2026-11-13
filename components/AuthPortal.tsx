@@ -67,10 +67,6 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({
     origin?: string;
     botFatherInstructions: string[];
   } | null>(null);
-  const [telegramAuthLoading, setTelegramAuthLoading] = useState(false);
-  const [simulatedTgUsername, setSimulatedTgUsername] = useState('');
-  const [simulatedTgFirst, setSimulatedTgFirst] = useState('');
-
   const openTelegramLogin = async () => {
     setShowTelegramModal(true);
     setErrorMessage(null);
@@ -85,45 +81,21 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({
     }
   };
 
-  const handleTelegramAuthSubmit = async (customUsername?: string, customFirst?: string) => {
-    setTelegramAuthLoading(true);
-    setErrorMessage(null);
+  React.useEffect(() => {
+    if (typeof window === 'undefined') return;
     try {
-      const tgId = `tg_${Date.now()}`;
-      const username = (customUsername || simulatedTgUsername || 'telegram_user').trim().replace(/^@/, '');
-      const first = (customFirst || simulatedTgFirst || username || 'Telegram Member').trim();
-      const authDate = Math.floor(Date.now() / 1000);
-
-      // In client mode, compute/request auth via endpoint
-      const res = await fetch('/api/auth/telegram/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id: tgId,
-          first_name: first,
-          username,
-          auth_date: authDate,
-          // If server checks hash, send client hash payload
-          hash: 'verified_via_telegram_client_oidc'
-        })
-      });
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        setErrorMessage(data.error || 'Telegram authentication could not be completed.');
-        return;
+      const params = new URLSearchParams(window.location.search);
+      const oauthErr = params.get('auth_error') || params.get('discord_error');
+      if (oauthErr) {
+        params.delete('auth_error');
+        params.delete('discord_error');
+        const cleanUrl = window.location.pathname + (params.toString() ? `?${params.toString()}` : '');
+        window.history.replaceState({}, document.title, cleanUrl);
+        const timer = setTimeout(() => setErrorMessage(oauthErr), 0);
+        return () => clearTimeout(timer);
       }
-
-      setSuccessMessage(isRtl ? 'تم تسجيل الدخول عبر Telegram بنجاح!' : 'Telegram authentication successful!');
-      setShowTelegramModal(false);
-      setTimeout(() => {
-        onAuthenticated(data.user, 'member');
-      }, 400);
-    } catch (err: any) {
-      setErrorMessage(err.message || 'Error communicating with Telegram auth service');
-    } finally {
-      setTelegramAuthLoading(false);
-    }
-  };
+    } catch {}
+  }, []);
 
   // 1. Handle Login
   const handleLogin = async (e: React.FormEvent) => {
@@ -689,14 +661,23 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({
                     <span>{isRtl ? 'المتابعة بحساب Discord' : 'Continue with Discord'}</span>
                   </a>
 
-                  <button
-                    type="button"
-                    onClick={openTelegramLogin}
-                    className="w-full flex items-center justify-center gap-2 rounded-lg border border-[#229ED9]/40 bg-[#229ED9]/10 hover:bg-[#229ED9]/20 py-2.5 text-xs font-semibold text-[#54bbf0] transition-all"
-                  >
-                    <Send className="h-4 w-4" />
-                    <span>{isRtl ? 'المتابعة بحساب Telegram' : 'Continue with Telegram'}</span>
-                  </button>
+                  <div className="flex items-center gap-1.5">
+                    <a
+                      href="/api/auth/telegram/authorize?redirect=true"
+                      className="flex-1 flex items-center justify-center gap-2 rounded-lg border border-[#229ED9]/40 bg-[#229ED9]/10 hover:bg-[#229ED9]/20 py-2.5 text-xs font-semibold text-[#54bbf0] transition-all"
+                    >
+                      <Send className="h-4 w-4" />
+                      <span>{isRtl ? 'المتابعة بـ Telegram OIDC' : 'Continue with Telegram'}</span>
+                    </a>
+                    <button
+                      type="button"
+                      onClick={openTelegramLogin}
+                      title="Telegram Setup & BotFather Instructions"
+                      className="rounded-lg border border-[#229ED9]/30 bg-[#229ED9]/5 hover:bg-[#229ED9]/15 px-2.5 py-2.5 text-xs text-[#54bbf0]"
+                    >
+                      <Shield className="h-4 w-4" />
+                    </button>
+                  </div>
                 </div>
               </form>
             )}
@@ -879,55 +860,6 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({
                 <Send className="h-4 w-4" />
                 <span>{isRtl ? 'فتح نافذة تفويض Telegram الرسمية' : 'Launch Official Telegram OIDC Login'}</span>
               </a>
-
-              {/* Enter Telegram Handle to Authenticate */}
-              <div className="space-y-2 pt-1">
-                <label className="block text-xs font-medium text-slate-300">
-                  {isRtl ? 'اسم المستخدم على Telegram (@username)' : 'Your Telegram Username (@username)'}
-                </label>
-                <div className="relative">
-                  <span className="absolute top-2.5 left-3 text-xs text-slate-500">@</span>
-                  <input
-                    type="text"
-                    value={simulatedTgUsername}
-                    onChange={(e) => setSimulatedTgUsername(e.target.value)}
-                    placeholder="alice_dev"
-                    className="w-full rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 pl-7 text-xs text-white placeholder-slate-500 focus:border-sky-500 focus:outline-none"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <label className="block text-xs font-medium text-slate-300">
-                  {isRtl ? 'الاسم الظاهر في المجتمع' : 'Display Name'}
-                </label>
-                <input
-                  type="text"
-                  value={simulatedTgFirst}
-                  onChange={(e) => setSimulatedTgFirst(e.target.value)}
-                  placeholder="Alice Al-Mansoor"
-                  className="w-full rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 text-xs text-white placeholder-slate-500 focus:border-sky-500 focus:outline-none"
-                />
-              </div>
-
-              <button
-                type="button"
-                disabled={telegramAuthLoading || !simulatedTgUsername.trim()}
-                onClick={() => handleTelegramAuthSubmit()}
-                className="w-full flex items-center justify-center gap-2 rounded-lg bg-[#229ED9] hover:bg-[#1f8ec4] py-2.5 text-xs font-semibold text-white shadow-lg shadow-sky-600/30 transition-all disabled:opacity-50"
-              >
-                {telegramAuthLoading ? (
-                  <>
-                    <RefreshCw className="h-4 w-4 animate-spin" />
-                    <span>{isRtl ? 'جاري التحقق وإنشاء الجلسة...' : 'Verifying & Creating Session...'}</span>
-                  </>
-                ) : (
-                  <>
-                    <Send className="h-4 w-4" />
-                    <span>{isRtl ? 'تأكيد تسجيل الدخول بحساب Telegram' : 'Sign In with Telegram'}</span>
-                  </>
-                )}
-              </button>
             </div>
           </div>
         </div>

@@ -83,7 +83,7 @@ export async function POST(req: NextRequest, _context?: any) {
       headers: {
         Authorization: `Bot ${token.trim()}`,
         'Content-Type': 'application/json',
-        'User-Agent': 'CommunityOS/1.0 (https://community-os.org)'
+        'User-Agent': 'CommunityOS/1.0 (https://community-outcome.ghazghazibahaeddin.workers.dev)'
       },
       body: JSON.stringify(commands)
     });

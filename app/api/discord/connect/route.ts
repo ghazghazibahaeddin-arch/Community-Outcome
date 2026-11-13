@@ -1,6 +1,6 @@
 // Community OS — Real Discord Server Connection & Verification Handler
 import { NextRequest, NextResponse } from 'next/server';
-import { dbOperations } from '@/lib/db/store';
+import { dbOperations, ensureDatabaseHydrated } from '@/lib/db/store';
 import { getAuthenticatedUserFromRequest, getUserRoleInCommunity } from '@/lib/services/auth';
 import { getDiscordRedirectUri, getVerifiedAppUrl } from '@/lib/services/securityConfig';
 import { verifyCommunityEntitlement } from '@/lib/services/subscriptionService';
@@ -12,6 +12,7 @@ export async function GET(req: NextRequest, _context?: any) {
     const url = new URL(req.url);
     const mode = url.searchParams.get('mode') || 'bot'; // 'bot' (server install) or 'user' (user OAuth login/link)
     const communityId = url.searchParams.get('communityId') || 'comm_devforge';
+    await ensureDatabaseHydrated(env);
     const authUser = await getAuthenticatedUserFromRequest(req);
 
     // If installing bot for a community, verify owner or allow if initializing
@@ -86,6 +87,7 @@ export async function POST(req: NextRequest, _context?: any) {
       return NextResponse.json({ success: false, error: 'communityId is required' }, { status: 400 });
     }
 
+    await ensureDatabaseHydrated(env);
     const authUser = await getAuthenticatedUserFromRequest(req);
     const actorId = authUser?.id || 'usr_sarah';
     const role = getUserRoleInCommunity(actorId, communityId);
@@ -125,7 +127,7 @@ export async function POST(req: NextRequest, _context?: any) {
         const guildRes = await fetch(`https://discord.com/api/v10/guilds/${serverId.trim()}`, {
           headers: {
             Authorization: `Bot ${token.trim()}`,
-            'User-Agent': 'CommunityOS/1.0 (https://community-os.org)'
+            'User-Agent': 'CommunityOS/1.0 (https://community-outcome.ghazghazibahaeddin.workers.dev)'
           }
         });
         if (guildRes.ok) {

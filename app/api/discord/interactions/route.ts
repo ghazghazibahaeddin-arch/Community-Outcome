@@ -1,6 +1,7 @@
 // Community OS — Official Discord Interactions Endpoint with Cryptographic Verification
 import { NextRequest, NextResponse } from 'next/server';
-import { dbOperations, getDatabase } from '@/lib/db/store';
+import { dbOperations, ensureDatabaseHydrated, getDatabase } from '@/lib/db/store';
+import { getVerifiedAppUrl } from '@/lib/services/securityConfig';
 import { getRuntimeEnv, CloudflareEnv } from '@/lib/env';
 
 import { verifyKey, InteractionType, InteractionResponseType } from 'discord-interactions';
@@ -124,8 +125,9 @@ export async function POST(req: NextRequest, _context?: any) {
       const discordUserId = discordUser.id || '';
       const discordUsername = discordUser.username ? `${discordUser.username}#${discordUser.discriminator || '0'}` : 'discord_user';
 
+      await ensureDatabaseHydrated(env);
       const db = getDatabase();
-      const appUrl = (env.APP_URL || 'https://community-os.org').replace(/\/$/, '');
+      const appUrl = getVerifiedAppUrl(env);
 
       // Resolve community by guild ID or fallback to default community
       const community =
@@ -364,8 +366,9 @@ export async function POST(req: NextRequest, _context?: any) {
       const discordUserId = discordUser.id || '';
       const discordUsername = discordUser.username || 'discord_user';
 
+      await ensureDatabaseHydrated(env);
       const db = getDatabase();
-      const appUrl = (env.APP_URL || 'https://community-os.org').replace(/\/$/, '');
+      const appUrl = getVerifiedAppUrl(env);
       const community =
         db.communities.find((c) => c.discordConfig?.serverId === guildId) ||
         db.communities.find((c) => c.id === 'comm_devforge') ||

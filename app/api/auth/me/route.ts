@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthenticatedUserFromRequest } from '@/lib/services/auth';
-import { getDatabase } from '@/lib/db/store';
+import { ensureDatabaseHydrated, getDatabase } from '@/lib/db/store';
 
 export async function GET(req: NextRequest) {
   try {
+    await ensureDatabaseHydrated();
     const user = await getAuthenticatedUserFromRequest(req);
     if (!user) {
       return NextResponse.json({ success: true, authenticated: false, user: null });

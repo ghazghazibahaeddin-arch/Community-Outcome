@@ -3,8 +3,9 @@ import crypto from 'crypto';
 import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import { getDatabase, saveDatabase } from '@/lib/db/store';
+import { deleteSessionFromSupabase, isSupabaseConfigured } from '@/lib/db/supabase';
 import { AuthAccount, AuthSession, User, UserRole, DevEmail } from '@/lib/types';
-import { getRuntimeEnv, CloudflareEnv } from '../env';
+import { getCloudflareExecutionContext, getRuntimeEnv, CloudflareEnv } from '../env';
 
 export const SESSION_COOKIE_NAME = 'community_os_session';
 export const SESSION_DURATION_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
@@ -284,6 +285,14 @@ export function destroySession(token: string): boolean {
   if (!token) return false;
   const db = getDatabase();
   if (!db.sessions) return false;
+
+  if (isSupabaseConfigured()) {
+    const p = deleteSessionFromSupabase(token).catch(() => {});
+    const cfCtx = getCloudflareExecutionContext();
+    if (cfCtx?.waitUntil) {
+      cfCtx.waitUntil(p);
+    }
+  }
 
   const initialLen = db.sessions.length;
   db.sessions = db.sessions.filter((s) => s.token !== token);

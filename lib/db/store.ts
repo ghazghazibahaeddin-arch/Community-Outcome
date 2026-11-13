@@ -1,7 +1,8 @@
 // Community OS — Robust Server-Side Database & Store
 import fs from 'fs';
 import path from 'path';
-import { isSupabaseConfigured, syncDatabaseToSupabase } from './supabase';
+import { isSupabaseConfigured, syncDatabaseToSupabase, hydrateDatabaseFromSupabase } from './supabase';
+import { getCloudflareExecutionContext, getRuntimeEnv, CloudflareEnv } from '../env';
 import {
   User,
   Community,
@@ -1306,8 +1307,75 @@ function getInitialSeedData(): DatabaseSchema {
   };
 }
 
-// In-memory cache + file sync
+// In-memory cache + file sync + Supabase hydration state
 let cachedDb: DatabaseSchema | null = null;
+let lastHydratedAt = 0;
+let hydrationInFlight: Promise<DatabaseSchema> | null = null;
+const HYDRATION_TTL_MS = 15000;
+
+function mergeById<T>(existing: T[] = [], incoming: T[] = [], idKey: string = 'id'): T[] {
+  if (!Array.isArray(incoming) || incoming.length === 0) return existing;
+  const map = new Map<string, T>();
+  for (const item of existing) {
+    const key = String((item as any)?.[idKey] ?? '');
+    if (key) map.set(key, item);
+  }
+  for (const item of incoming) {
+    const key = String((item as any)?.[idKey] ?? '');
+    if (key) map.set(key, item);
+  }
+  return Array.from(map.values());
+}
+
+/**
+ * Hydrate in-memory database from Supabase on Cloudflare Workers cold start (or TTL refresh).
+ * Merges persisted Supabase state with baseline seed data without failing if Supabase is not configured.
+ */
+export async function ensureDatabaseHydrated(explicitEnv?: CloudflareEnv, force = false): Promise<DatabaseSchema> {
+  const db = getDatabase();
+  if (!isSupabaseConfigured(explicitEnv)) {
+    return db;
+  }
+
+  const now = Date.now();
+  if (!force && lastHydratedAt > 0 && now - lastHydratedAt < HYDRATION_TTL_MS) {
+    return db;
+  }
+
+  if (hydrationInFlight) {
+    return hydrationInFlight;
+  }
+
+  hydrationInFlight = (async () => {
+    try {
+      const remote = await hydrateDatabaseFromSupabase(explicitEnv);
+      if (remote) {
+        if (remote.users?.length) db.users = mergeById(db.users, remote.users, 'id');
+        if (remote.authAccounts?.length) db.authAccounts = mergeById(db.authAccounts || [], remote.authAccounts, 'id');
+        if (remote.sessions?.length) db.sessions = mergeById(db.sessions || [], remote.sessions, 'token');
+        if (remote.communities?.length) db.communities = mergeById(db.communities, remote.communities, 'id');
+        if (remote.memberships?.length) db.memberships = mergeById(db.memberships, remote.memberships, 'id');
+        if (remote.requests?.length) db.requests = mergeById(db.requests, remote.requests, 'id');
+        if (remote.tasks?.length) db.tasks = mergeById(db.tasks, remote.tasks, 'id');
+        if (remote.contributions?.length) db.contributions = mergeById(db.contributions, remote.contributions, 'id');
+        if (remote.subscriptions?.length) db.subscriptions = mergeById(db.subscriptions || [], remote.subscriptions, 'id');
+        if (remote.referrals?.length) db.referrals = mergeById(db.referrals || [], remote.referrals, 'id');
+        if (remote.identityChallenges?.length) db.identityChallenges = mergeById(db.identityChallenges || [], remote.identityChallenges, 'id');
+        if (remote.groupConnectionChallenges?.length) {
+          db.groupConnectionChallenges = mergeById(db.groupConnectionChallenges || [], remote.groupConnectionChallenges, 'id');
+        }
+        lastHydratedAt = Date.now();
+      }
+    } catch (err: any) {
+      console.warn('[Supabase Hydration Warning]:', err?.message || err);
+    } finally {
+      hydrationInFlight = null;
+    }
+    return db;
+  })();
+
+  return hydrationInFlight;
+}
 
 function ensureDataFile(): void {
   try {
@@ -1319,8 +1387,8 @@ function ensureDataFile(): void {
       fs.writeFileSync(DB_FILE, JSON.stringify(seed, null, 2), 'utf-8');
       cachedDb = seed;
     }
-  } catch (err) {
-    console.error('Failed to ensure database file:', err);
+  } catch {
+    // Ephemeral Workers filesystem: operate cleanly in memory + Supabase
   }
 }
 
@@ -1356,8 +1424,8 @@ export function getDatabase(): DatabaseSchema {
       }
       return cachedDb!;
     }
-  } catch (err) {
-    console.error('Failed to read database file, using seed data in memory:', err);
+  } catch {
+    // Ephemeral Workers runtime: initialize seed state in memory
   }
   cachedDb = getInitialSeedData();
   return cachedDb;
@@ -1366,11 +1434,15 @@ export function getDatabase(): DatabaseSchema {
 export function saveDatabase(db: DatabaseSchema): void {
   cachedDb = db;
 
-  // Supabase PostgreSQL persistence (Primary production database)
+  // Supabase PostgreSQL persistence (Primary production database on Cloudflare Workers)
   if (isSupabaseConfigured()) {
-    syncDatabaseToSupabase(db).catch((err: any) => {
+    const syncPromise = syncDatabaseToSupabase(db).catch((err: any) => {
       console.warn('[Supabase Sync Warning]:', err?.message || err);
     });
+    const cfCtx = getCloudflareExecutionContext();
+    if (cfCtx?.waitUntil) {
+      cfCtx.waitUntil(syncPromise);
+    }
   }
 
   // Local filesystem persistence (Node.js & local development only)
@@ -2108,7 +2180,8 @@ export const dbOperations = {
     let passed = true;
 
     if (commandName === '/help-request') {
-      resultMessage = `[Discord Bot] Created NeedSignal ticket for parameters: ${inputParams}. Link generated: https://community-os.org/l/devforge-request-help`;
+      const appUrl = (getRuntimeEnv().APP_URL || 'https://community-outcome.ghazghazibahaeddin.workers.dev').replace(/\/$/, '');
+      resultMessage = `[Discord Bot] Created NeedSignal ticket for parameters: ${inputParams}. Link generated: ${appUrl}/l/devforge-request-help`;
     } else if (commandName === '/my-tasks') {
       const activeTasks = db.tasks.filter(t => t.status !== 'completed').length;
       resultMessage = `[Discord Bot] Retrieved ${activeTasks} active tasks in QuestLoop for member.`;
