@@ -57,11 +57,15 @@ export default function PublicOutcomePage() {
     fetchOutcome();
   }, [outcomeId]);
 
-  const handleShare = () => {
-    if (typeof window !== 'undefined') {
-      navigator.clipboard.writeText(window.location.href);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2500);
+  const handleShare = async () => {
+    try {
+      if (typeof window !== 'undefined' && navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(window.location.href);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2500);
+      }
+    } catch {
+      // Clipboard restricted
     }
   };
 

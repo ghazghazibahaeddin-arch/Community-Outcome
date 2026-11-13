@@ -6,8 +6,9 @@ import {
   PLAN_DEFINITIONS
 } from '@/lib/services/subscriptionService';
 import { getWhopCheckoutUrl } from '@/lib/plans';
+import { ensureDatabaseHydrated } from '@/lib/db/store';
 import { getAuthenticatedUserFromRequest, getUserRoleInCommunity } from '@/lib/services/auth';
-import { getRuntimeEnv, CloudflareEnv } from '@/lib/env';
+import { getRuntimeEnv } from '@/lib/env';
 
 /**
  * GET /api/billing/subscription?communityId=comm_devforge
@@ -19,6 +20,7 @@ export async function GET(req: NextRequest, _context?: any) {
     const url = new URL(req.url);
     const communityId = url.searchParams.get('communityId') || 'comm_devforge';
 
+    await ensureDatabaseHydrated(env);
     const authUser = await getAuthenticatedUserFromRequest(req);
     const userRole = authUser ? getUserRoleInCommunity(authUser.id, communityId) : 'guest';
     const isOwner = ['platform_admin', 'community_owner', 'admin'].includes(userRole);

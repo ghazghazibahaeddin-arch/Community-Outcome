@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthenticatedUserFromRequest } from '@/lib/services/auth';
 import { ensureDatabaseHydrated, getDatabase } from '@/lib/db/store';
+import { getRuntimeEnv } from '@/lib/env';
 
-export async function GET(req: NextRequest) {
+export async function GET(req: NextRequest, _context?: any) {
+  const env = getRuntimeEnv(_context?.env || _context);
   try {
-    await ensureDatabaseHydrated();
+    await ensureDatabaseHydrated(env);
     const user = await getAuthenticatedUserFromRequest(req);
     if (!user) {
       return NextResponse.json({ success: true, authenticated: false, user: null });

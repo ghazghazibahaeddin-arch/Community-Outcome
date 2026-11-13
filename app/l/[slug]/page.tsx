@@ -14,7 +14,9 @@ export default function ActionLinkPage() {
   const [link, setLink] = useState<CommunityLink | null>(null);
   const [community, setCommunity] = useState<Community | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [inputText, setInputText] = useState('');
 
   useEffect(() => {
@@ -22,7 +24,7 @@ export default function ActionLinkPage() {
 
     const fetchLink = async () => {
       try {
-        const res = await fetch(`/api/data`);
+        const res = await fetch(`/api/data`, { credentials: 'include' });
         const json = (await res.json()) as any;
         if (json.success && json.data) {
           const foundLink = json.data.links?.find((l: CommunityLink) => l.slug === slug);
@@ -35,15 +37,18 @@ export default function ActionLinkPage() {
             fetch('/api/data', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
+              credentials: 'include',
               body: JSON.stringify({
                 action: 'record_link_event',
                 payload: { linkId: foundLink.id, eventType: 'visit' }
               })
-            }).catch(console.error);
+            }).catch(() => {});
           }
+        } else {
+          setErrorMsg(json.error || 'Failed to load link details.');
         }
-      } catch (err) {
-        console.error('Failed to load link:', err);
+      } catch (err: any) {
+        setErrorMsg(err?.message || 'Network error loading link.');
       } finally {
         setIsLoading(false);
       }
@@ -55,19 +60,29 @@ export default function ActionLinkPage() {
   const handleSubmitAction = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!link) return;
+    setErrorMsg(null);
+    setIsSubmitting(true);
 
     try {
-      await fetch('/api/data', {
+      const res = await fetch('/api/data', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
           action: 'record_link_event',
           payload: { linkId: link.id, eventType: 'submission' }
         })
       });
+      const json = (await res.json()) as any;
+      if (!res.ok || !json.success) {
+        setErrorMsg(json.error || 'Failed to record submission.');
+        return;
+      }
       setIsSubmitted(true);
-    } catch (err) {
-      console.error('Failed to submit link action:', err);
+    } catch (err: any) {
+      setErrorMsg(err?.message || 'Network error submitting action.');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -150,6 +165,11 @@ export default function ActionLinkPage() {
             </div>
           ) : (
             <form onSubmit={handleSubmitAction} className="space-y-4 pt-2">
+              {errorMsg && (
+                <div className="rounded-lg border border-rose-500/40 bg-rose-950/40 p-3 text-xs text-rose-300">
+                  {errorMsg}
+                </div>
+              )}
               <div>
                 <label className="text-xs font-medium text-slate-300 block mb-1">
                   Submission Details / Intent Statement
@@ -167,10 +187,11 @@ export default function ActionLinkPage() {
               <div className="flex justify-end gap-2">
                 <button
                   type="submit"
-                  className="flex items-center gap-1.5 rounded-md bg-indigo-600 px-4 py-2 text-xs font-semibold text-white hover:bg-indigo-500 transition-colors"
+                  disabled={isSubmitting}
+                  className="flex items-center gap-1.5 rounded-md bg-indigo-600 px-4 py-2 text-xs font-semibold text-white hover:bg-indigo-500 transition-colors disabled:opacity-50"
                 >
                   <Send className="h-3.5 w-3.5" />
-                  <span>Submit Action</span>
+                  <span>{isSubmitting ? 'Submitting...' : 'Submit Action'}</span>
                 </button>
               </div>
             </form>

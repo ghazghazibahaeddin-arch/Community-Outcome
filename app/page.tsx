@@ -71,6 +71,7 @@ export default function HomePage() {
   const [isAccountSettingsOpen, setIsAccountSettingsOpen] = useState<boolean>(false);
   const [isOnboardingOpen, setIsOnboardingOpen] = useState<boolean>(false);
   const [discordInstallUrl, setDiscordInstallUrl] = useState<string | null>(null);
+  const [statusBanner, setStatusBanner] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
 
   // App Data States
   const [communities, setCommunities] = useState<Community[]>([]);
@@ -125,16 +126,43 @@ export default function HomePage() {
       localStorage.removeItem('community_os_session_token');
       const urlParams = new URLSearchParams(window.location.search);
       const tab = urlParams.get('tab');
-      const isDiscordGuildConnected =
-        urlParams.get('connected_platform') === 'discord' && Boolean(urlParams.get('guild_id'));
+      const connectedPlatform = urlParams.get('connected_platform');
+      const guildId = urlParams.get('guild_id');
+      const guildName = urlParams.get('guild_name');
+      const loginSuccess = urlParams.get('login_success');
+      const provider = urlParams.get('provider');
+      const accountUpdated = urlParams.get('account_updated');
+      const connected = urlParams.get('connected');
+      const oauthError = urlParams.get('discord_error') || urlParams.get('auth_error');
 
-      if (urlParams.has('session_token')) {
-        urlParams.delete('session_token');
+      const isDiscordGuildConnected = connectedPlatform === 'discord' && Boolean(guildId);
+
+      // Clean transient callback params from address bar without reload
+      const transientKeys = [
+        'session_token',
+        'connected_platform',
+        'guild_id',
+        'guild_name',
+        'status',
+        'login_success',
+        'provider',
+        'account_updated',
+        'connected',
+        'discord_status'
+      ];
+      let urlChanged = false;
+      for (const k of transientKeys) {
+        if (urlParams.has(k)) {
+          urlParams.delete(k);
+          urlChanged = true;
+        }
+      }
+      if (urlChanged) {
         const cleanUrl = window.location.pathname + (urlParams.toString() ? `?${urlParams.toString()}` : '');
         window.history.replaceState({}, document.title, cleanUrl);
       }
 
-      if (tab === 'member' || tab === 'owner' || isDiscordGuildConnected) {
+      if (tab === 'member' || tab === 'owner' || isDiscordGuildConnected || oauthError || loginSuccess || accountUpdated || connected) {
         const timer = setTimeout(() => {
           if (tab === 'member') {
             setWorkspaceMode('member');
@@ -144,6 +172,25 @@ export default function HomePage() {
           if (isDiscordGuildConnected) {
             setWorkspaceMode('modules');
             setActiveTab('integrations');
+            setStatusBanner({
+              type: 'success',
+              text: guildName
+                ? `Discord server "${guildName}" linked to your community successfully!`
+                : 'Discord server linked to your community successfully!'
+            });
+          } else if (oauthError) {
+            setStatusBanner({ type: 'error', text: oauthError });
+          } else if (accountUpdated === 'discord_linked') {
+            setStatusBanner({ type: 'success', text: 'Your personal Discord account is now linked.' });
+          } else if (connected === 'telegram') {
+            setStatusBanner({ type: 'success', text: 'Your personal Telegram account is now linked.' });
+          } else if (loginSuccess === 'true') {
+            setStatusBanner({
+              type: 'success',
+              text: provider === 'telegram'
+                ? 'Signed in cleanly with Telegram OpenID Connect.'
+                : 'Signed in cleanly with Discord.'
+            });
           }
         }, 0);
         return () => clearTimeout(timer);
@@ -164,6 +211,9 @@ export default function HomePage() {
         setCommunities(d.communities || []);
         const foundComm = d.communities?.find((c: Community) => c.id === commId) || d.currentCommunity || d.communities?.[0] || null;
         setCurrentCommunity(foundComm);
+        if (foundComm && foundComm.id !== commId) {
+          setCurrentCommunityId(foundComm.id);
+        }
         setUsers(d.users || []);
         setRequests(d.requests || []);
         setOffers(d.offers || []);
@@ -212,34 +262,38 @@ export default function HomePage() {
           }
         }
 
-        // Derive notifications
+        // Derive valid NotificationItem objects
         const activeUserId = d.authUser?.id || d.users?.[0]?.id || 'usr_sarah';
         const notifs: NotificationItem[] = [
-          ...((d.requests || []).slice(0, 2).map((r: NeedSignalRequest) => ({
+          ...((d.requests || []).slice(0, 2).map((r: NeedSignalRequest): NotificationItem => ({
             id: `ntf_req_${r.id}`,
             userId: activeUserId,
+            communityId: r.communityId || commId,
             title: `New NeedSignal Request: ${r.title}`,
             message: `Priority: ${r.priority}. Match category: ${r.category}`,
-            type: 'request' as const,
-            actionUrl: '/requests',
-            isRead: false,
+            type: 'request',
+            linkUrl: '/requests',
+            read: false,
+            channelAttempts: { inApp: true, discord: false, telegram: false },
             createdAt: r.createdAt
           }))),
-          ...((d.contributions || []).filter((c: Contribution) => c.reviewStatus === 'verified').slice(0, 2).map((c: Contribution) => ({
+          ...((d.contributions || []).filter((c: Contribution) => c.reviewStatus === 'verified').slice(0, 2).map((c: Contribution): NotificationItem => ({
             id: `ntf_cnt_${c.id}`,
             userId: activeUserId,
+            communityId: c.communityId || commId,
             title: `Outcome Verified: ${c.title}`,
             message: `Verified and minted to the Trust Ledger`,
-            type: 'attestation' as const,
-            actionUrl: '/trust',
-            isRead: true,
+            type: 'review',
+            linkUrl: '/trust',
+            read: true,
+            channelAttempts: { inApp: true, discord: false, telegram: false },
             createdAt: c.createdAt || c.submissionDate
           })))
         ];
         setNotifications(notifs);
       }
-    } catch (err) {
-      console.error('Failed to load Community OS data:', err);
+    } catch (err: any) {
+      setStatusBanner({ type: 'error', text: err?.message || 'Failed to load Community OS state.' });
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
@@ -278,23 +332,28 @@ export default function HomePage() {
   const handleToggleDataMode = async () => {
     const nextMode: DataMode = dataMode === 'demo' ? 'production' : 'demo';
     try {
-      if (nextMode === 'demo') {
-        await fetch('/api/data', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'restore_demo_seed' })
-        });
-      } else {
-        await fetch('/api/data', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'set_data_mode', payload: { mode: 'production' } })
-        });
+      const res = nextMode === 'demo'
+        ? await fetch('/api/data', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ action: 'restore_demo_seed' })
+          })
+        : await fetch('/api/data', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ action: 'set_data_mode', payload: { mode: 'production' } })
+          });
+      const json = (await res.json()) as any;
+      if (!res.ok || !json.success) {
+        setStatusBanner({ type: 'error', text: json.error || 'Failed to switch data mode.' });
+        return;
       }
       setDataMode(nextMode);
       await fetchData(currentCommunityId);
-    } catch (err) {
-      console.error('Failed to toggle data mode:', err);
+    } catch (err: any) {
+      setStatusBanner({ type: 'error', text: err?.message || 'Failed to switch data mode.' });
     }
   };
 
@@ -311,8 +370,8 @@ export default function HomePage() {
       setCurrentUserRole('guest');
       setWorkspaceMode('member');
       await fetchData(currentCommunityId);
-    } catch (err) {
-      console.error('Failed to sign out:', err);
+    } catch (err: any) {
+      setStatusBanner({ type: 'error', text: err?.message || 'Failed to sign out cleanly.' });
     }
   };
 
@@ -341,11 +400,16 @@ export default function HomePage() {
             })
           });
           const json = (await res.json()) as any;
-          if (json.success && json.community) {
-            handleCommunityCreated(json.community);
+          const created = json.result || json.community;
+          if (!res.ok || !json.success) {
+            setStatusBanner({ type: 'error', text: json.error || 'Failed to create initial community.' });
+          } else if (created) {
+            handleCommunityCreated(created);
+            setStatusBanner({ type: 'success', text: `Community "${created.name}" created! You are the Community Owner.` });
+            return;
           }
-        } catch (e) {
-          console.error('Failed to create community during onboarding:', e);
+        } catch (e: any) {
+          setStatusBanner({ type: 'error', text: e?.message || 'Failed to create community during onboarding.' });
         }
       }
     } else {
@@ -356,7 +420,7 @@ export default function HomePage() {
   };
 
   const handleCommunityCreated = (newComm: Community) => {
-    setCommunities((prev) => [newComm, ...prev]);
+    setCommunities((prev) => [newComm, ...prev.filter((c) => c.id !== newComm.id)]);
     setCurrentCommunityId(newComm.id);
     setCurrentCommunity(newComm);
     setCurrentUserRole('community_owner');
@@ -455,6 +519,29 @@ export default function HomePage() {
 
       {/* Main Content Viewport */}
       <main className="min-h-[calc(100vh-140px)]">
+        {statusBanner && (
+          <div className="mx-auto max-w-7xl px-4 pt-4 sm:px-6">
+            <div
+              className={`rounded-xl border p-3.5 text-xs flex items-center justify-between gap-3 ${
+                statusBanner.type === 'success'
+                  ? 'border-emerald-500/40 bg-emerald-950/40 text-emerald-300'
+                  : statusBanner.type === 'error'
+                  ? 'border-rose-500/40 bg-rose-950/40 text-rose-300'
+                  : 'border-indigo-500/40 bg-indigo-950/40 text-indigo-300'
+              }`}
+            >
+              <span>{statusBanner.text}</span>
+              <button
+                type="button"
+                onClick={() => setStatusBanner(null)}
+                className="text-slate-400 hover:text-white px-1"
+              >
+                ✕
+              </button>
+            </div>
+          </div>
+        )}
+
         {isLoading ? (
           <div className="flex h-96 items-center justify-center">
             <div className="flex items-center gap-3 text-xs font-mono text-slate-400">
@@ -465,6 +552,24 @@ export default function HomePage() {
         ) : (
           <div>
             {/* WORKSPACE MODE 1: OWNER WORKSPACE */}
+            {workspaceMode === 'owner' && !currentCommunity && (
+              <div className="mx-auto max-w-2xl px-4 py-16 text-center space-y-4">
+                <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-8 space-y-4">
+                  <h2 className="text-lg font-bold text-white">No Community Selected Yet</h2>
+                  <p className="text-xs text-slate-400">
+                    Create your first community workspace to connect Discord servers, Telegram groups, and manage deliverables.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setIsCreateCommunityOpen(true)}
+                    className="rounded-lg bg-indigo-600 px-4 py-2 text-xs font-semibold text-white hover:bg-indigo-500"
+                  >
+                    + Create Your Community
+                  </button>
+                </div>
+              </div>
+            )}
+
             {workspaceMode === 'owner' && currentCommunity && (
               <OwnerWorkspace
                 community={currentCommunity}
@@ -659,11 +764,11 @@ export default function HomePage() {
                   )}
 
                   {/* Tab: NeedSignal & Match & Offer */}
-                  {activeTab === 'requests' && (
+                  {activeTab === 'requests' && currentCommunity && (
                     <NeedSignalSection
                       requests={requests}
                       offers={offers}
-                      community={currentCommunity!}
+                      community={currentCommunity}
                       currentUser={currentUser}
                       lang={lang}
                       onRefresh={() => fetchData(currentCommunityId)}
@@ -672,12 +777,12 @@ export default function HomePage() {
                   )}
 
                   {/* Tab: QuestLoop Tasks, MoveSure Handoffs, IntentReady */}
-                  {activeTab === 'tasks' && (
+                  {activeTab === 'tasks' && currentCommunity && (
                     <QuestLoopSection
                       tasks={tasks}
                       handoffs={handoffs}
                       intents={intents}
-                      community={currentCommunity!}
+                      community={currentCommunity}
                       currentUser={currentUser}
                       users={users}
                       lang={lang}
@@ -686,12 +791,12 @@ export default function HomePage() {
                   )}
 
                   {/* Tab: TrustGraph, Contribution Ledger, Community Shield */}
-                  {activeTab === 'trust' && (
+                  {activeTab === 'trust' && currentCommunity && (
                     <TrustGraphSection
                       contributions={contributions}
                       attestations={attestations}
                       disputes={disputes}
-                      community={currentCommunity!}
+                      community={currentCommunity}
                       currentUser={currentUser}
                       users={users}
                       lang={lang}
@@ -712,10 +817,10 @@ export default function HomePage() {
                   )}
 
                   {/* Tab: Community Links Manager */}
-                  {activeTab === 'links' && (
+                  {activeTab === 'links' && currentCommunity && (
                     <LinkManagerSection
                       links={links}
-                      community={currentCommunity!}
+                      community={currentCommunity}
                       currentUser={currentUser}
                       lang={lang}
                       onRefresh={() => fetchData(currentCommunityId)}
@@ -723,11 +828,11 @@ export default function HomePage() {
                   )}
 
                   {/* Tab: Knowledge & SourceTrail */}
-                  {activeTab === 'knowledge' && (
+                  {activeTab === 'knowledge' && currentCommunity && (
                     <KnowledgeSection
                       knowledge={knowledge}
                       sourceCards={sourceCards}
-                      community={currentCommunity!}
+                      community={currentCommunity}
                       currentUser={currentUser}
                       lang={lang}
                       onRefresh={() => fetchData(currentCommunityId)}
@@ -735,12 +840,12 @@ export default function HomePage() {
                   )}
 
                   {/* Tab: Owner Analytics & Recovery & Agent Kits */}
-                  {activeTab === 'analytics' && (
+                  {activeTab === 'analytics' && currentCommunity && (
                     <OwnerAnalyticsSection
                       analytics={analytics}
                       recoveryCandidates={recoveryCandidates}
                       agentKits={agentKits}
-                      community={currentCommunity!}
+                      community={currentCommunity}
                       currentUser={currentUser}
                       lang={lang}
                       onRefresh={() => fetchData(currentCommunityId)}
@@ -748,16 +853,29 @@ export default function HomePage() {
                   )}
 
                   {/* Tab: Integrations Center */}
-                  {activeTab === 'integrations' && (
+                  {activeTab === 'integrations' && currentCommunity && (
                     <IntegrationsSection
                       discordTests={discordTests}
                       miniAppTests={miniAppTests}
-                      community={currentCommunity!}
+                      community={currentCommunity}
                       currentUser={currentUser}
                       currentUserRole={currentUserRole}
                       lang={lang}
                       onRefresh={() => fetchData(currentCommunityId)}
                     />
+                  )}
+
+                  {activeTab !== 'hub' && activeTab !== 'passport' && activeTab !== 'tests' && !currentCommunity && (
+                    <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-8 text-center space-y-3">
+                      <p className="text-xs text-slate-400">Create a community first to manage this module.</p>
+                      <button
+                        type="button"
+                        onClick={() => setIsCreateCommunityOpen(true)}
+                        className="rounded-lg bg-indigo-600 px-4 py-2 text-xs font-semibold text-white hover:bg-indigo-500"
+                      >
+                        + Create Community
+                      </button>
+                    </div>
                   )}
 
                   {/* Tab: End-to-End User Journeys Testing Suite */}

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { ensureDatabaseHydrated } from '@/lib/db/store';
 import { verifyWhopWebhook, processVerifiedPaymentEvent } from '@/lib/services/paymentService';
-import { getRuntimeEnv, CloudflareEnv } from '@/lib/env';
+import { getRuntimeEnv } from '@/lib/env';
 
 /**
  * POST /api/webhooks/whop
@@ -24,6 +25,7 @@ export async function POST(req: NextRequest, _context?: any) {
       );
     }
 
+    await ensureDatabaseHydrated(env);
     const processResult = processVerifiedPaymentEvent(verification);
     if (!processResult.success) {
       return NextResponse.json({ success: false, error: processResult.message }, { status: 400 });

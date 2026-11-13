@@ -1,8 +1,8 @@
-// Community OS — Telegram Bot Webhook Auto-Registration Handler
 import { NextRequest, NextResponse } from 'next/server';
+import { ensureDatabaseHydrated } from '@/lib/db/store';
 import { getAuthenticatedUserFromRequest } from '@/lib/services/auth';
 import { getVerifiedAppUrl } from '@/lib/services/securityConfig';
-import { getRuntimeEnv, CloudflareEnv } from '@/lib/env';
+import { getRuntimeEnv } from '@/lib/env';
 
 export async function GET(req: NextRequest, _context?: any) {
   const env = getRuntimeEnv(_context?.env || _context);
@@ -31,6 +31,7 @@ export async function GET(req: NextRequest, _context?: any) {
 export async function POST(req: NextRequest, _context?: any) {
   const env = getRuntimeEnv(_context?.env || _context);
   try {
+    await ensureDatabaseHydrated(env);
     const authUser = await getAuthenticatedUserFromRequest(req);
     // Only platform admin can register webhooks
     if (authUser && authUser.platformRole !== 'platform_admin') {

@@ -16,7 +16,6 @@ export async function GET(req: NextRequest, _context?: any) {
   const errorDescription = url.searchParams.get('error_description');
 
   const appUrl = getVerifiedAppUrl(env);
-  const existingUser = await getAuthenticatedUserFromRequest(req);
 
   // 1. Handle user cancellation or OAuth error
   if (error) {
@@ -31,6 +30,7 @@ export async function GET(req: NextRequest, _context?: any) {
 
   const isUserAuthMode = state.startsWith('os_discord_user_');
   await ensureDatabaseHydrated(env);
+  const existingUser = await getAuthenticatedUserFromRequest(req);
   const db = getDatabase();
 
   // Find target community from state or fallback
@@ -38,7 +38,7 @@ export async function GET(req: NextRequest, _context?: any) {
   if (!matchedCommunity) {
     matchedCommunity = db.communities.find((c) => c.id === 'comm_devforge') || db.communities[0];
   }
-  const communityId = matchedCommunity.id;
+  const communityId = matchedCommunity?.id || 'comm_devforge';
 
   // 3. User Identity OAuth Mode ("Continue with Discord" or link personal account)
   if (isUserAuthMode && code) {

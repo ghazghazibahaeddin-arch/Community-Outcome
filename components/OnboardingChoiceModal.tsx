@@ -22,7 +22,7 @@ interface OnboardingChoiceModalProps {
   isOpen: boolean;
   user: User | null;
   lang: Language;
-  onSelectRole: (role: 'owner' | 'member', details?: { communityName?: string; inviteCode?: string }) => void;
+  onSelectRole: (role: 'owner' | 'member', details?: { communityName?: string; inviteCode?: string }) => void | Promise<void>;
   onClose: () => void;
 }
 
@@ -42,7 +42,7 @@ export const OnboardingChoiceModal: React.FC<OnboardingChoiceModalProps> = ({
 
   if (!isOpen) return null;
 
-  const handleProceed = () => {
+  const handleProceed = async () => {
     setError(null);
     if (!selectedPath) {
       setError(isRtl ? 'يرجى اختيار مسارك للبدء' : 'Please choose your primary path to get started.');
@@ -55,18 +55,21 @@ export const OnboardingChoiceModal: React.FC<OnboardingChoiceModalProps> = ({
     }
 
     setIsSubmitting(true);
-    setTimeout(() => {
-      onSelectRole(selectedPath, {
+    try {
+      await onSelectRole(selectedPath, {
         communityName: communityName.trim() || undefined,
         inviteCode: inviteCode.trim() || undefined
       });
-      setIsSubmitting(false);
       onClose();
-    }, 400);
+    } catch (err: any) {
+      setError(err?.message || (isRtl ? 'حدث خطأ أثناء الإعداد' : 'Setup failed. Please try again.'));
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4 overflow-y-auto">
+    <div dir={isRtl ? 'rtl' : 'ltr'} className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4 overflow-y-auto">
       <div className="relative w-full max-w-2xl rounded-2xl border border-slate-800 bg-slate-900 p-6 sm:p-8 shadow-2xl shadow-indigo-950/40 my-8">
         {/* Header */}
         <div className="text-center space-y-2 mb-8">

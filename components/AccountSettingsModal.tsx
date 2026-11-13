@@ -41,6 +41,17 @@ export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({
   const [isSaving, setIsSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
+  React.useEffect(() => {
+    if (!isOpen) return;
+    const timer = setTimeout(() => {
+      setName(user.name);
+      setBio(user.bio || user.passport?.biography || '');
+      setLanguages((user.passport?.languages || ['English']).join(', '));
+      setSaveStatus(null);
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [isOpen, user.id, user.name, user.bio, user.passport?.biography, user.passport?.languages]);
+
   if (!isOpen) return null;
 
   const handleSaveProfile = async (e: React.FormEvent) => {
@@ -51,6 +62,7 @@ export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({
       const res = await fetch('/api/data', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
           action: 'update_user_profile',
           payload: {
@@ -207,19 +219,19 @@ export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({
                 <div>
                   <div className="font-semibold text-slate-300">Discord</div>
                   <div className="text-[10px] text-slate-500 font-mono">
-                    {user.identities?.discordUsername ? `@${user.identities.discordUsername}` : 'Not Linked'}
+                    {user.identities?.discordUsername ? `@${user.identities.discordUsername}` : (isRtl ? 'غير مربوط' : 'Not Linked')}
                   </div>
                 </div>
                 {user.identities?.discordId ? (
                   <span className="text-[10px] text-emerald-400 font-mono bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
-                    Connected
+                    {isRtl ? 'متصل' : 'Connected'}
                   </span>
                 ) : (
                   <a
                     href="/api/discord/connect?mode=user&redirect=true"
                     className="text-[10px] text-[#8ea1ff] bg-[#5865F2]/20 hover:bg-[#5865F2]/30 px-2 py-1 rounded border border-[#5865F2]/40"
                   >
-                    Link OAuth
+                    {isRtl ? 'ربط الحساب' : 'Link OAuth'}
                   </a>
                 )}
               </div>
@@ -228,12 +240,12 @@ export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({
                 <div>
                   <div className="font-semibold text-slate-300">Telegram</div>
                   <div className="text-[10px] text-slate-500 font-mono">
-                    {user.identities?.telegramUsername ? `@${user.identities.telegramUsername}` : 'Not Linked'}
+                    {user.identities?.telegramUsername ? `@${user.identities.telegramUsername}` : (isRtl ? 'غير مربوط' : 'Not Linked')}
                   </div>
                 </div>
                 {user.identities?.telegramId ? (
                   <span className="text-[10px] text-sky-400 font-mono bg-sky-500/10 px-2 py-0.5 rounded border border-sky-500/20">
-                    Connected
+                    {isRtl ? 'متصل' : 'Connected'}
                   </span>
                 ) : (
                   <div className="flex items-center gap-1">

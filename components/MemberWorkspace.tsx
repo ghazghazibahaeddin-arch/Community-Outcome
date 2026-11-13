@@ -85,6 +85,7 @@ export const MemberWorkspace: React.FC<MemberWorkspaceProps> = ({
   const [completingTaskId, setCompletingTaskId] = useState<string | null>(null);
   const [evidenceUrl, setEvidenceUrl] = useState<string>('');
   const [evidenceNotes, setEvidenceNotes] = useState<string>('');
+  const [actionFeedback, setActionFeedback] = useState<{ type: 'error' | 'success'; text: string } | null>(null);
 
   // Personal Opportunity Feed matching
   const userSkillNames = currentUser.passport.skills.map((s) => s.name.toLowerCase());
@@ -107,10 +108,12 @@ export const MemberWorkspace: React.FC<MemberWorkspaceProps> = ({
 
   const handleGenerateChallenge = async () => {
     setIsGeneratingChallenge(true);
+    setActionFeedback(null);
     try {
       const res = await fetch('/api/data', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
           action: 'create_identity_challenge',
           payload: {
@@ -120,51 +123,65 @@ export const MemberWorkspace: React.FC<MemberWorkspaceProps> = ({
         })
       });
       const data = await res.json();
-      if (data.success && data.result) {
-        setCreatedChallengeCode(data.result.code);
-        onRefresh();
+      if (!res.ok || !data.success || !data.result) {
+        setActionFeedback({ type: 'error', text: data.error || 'Failed to create verification challenge code.' });
+        return;
       }
-    } catch (err) {
-      console.error('Failed to create identity challenge:', err);
+      setCreatedChallengeCode(data.result.code);
+      onRefresh();
+    } catch (err: any) {
+      setActionFeedback({ type: 'error', text: err?.message || 'Network error generating challenge.' });
     } finally {
       setIsGeneratingChallenge(false);
     }
   };
 
-  const handleCopyChallengeCode = () => {
+  const handleCopyChallengeCode = async () => {
     if (!createdChallengeCode) return;
-    navigator.clipboard.writeText(createdChallengeCode);
-    setCopiedCode(true);
-    setTimeout(() => setCopiedCode(false), 2500);
+    try {
+      if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(createdChallengeCode);
+        setCopiedCode(true);
+        setTimeout(() => setCopiedCode(false), 2500);
+      }
+    } catch {
+      // Ignore clipboard permission failure
+    }
   };
 
   const handleToggleChecklist = async (taskId: string, checklistId: string, completed: boolean) => {
+    setActionFeedback(null);
     try {
       const res = await fetch('/api/data', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
           action: 'update_checklist',
           payload: { taskId, checklistId, completed }
         })
       });
       const data = await res.json();
-      if (data.success) {
-        onRefresh();
+      if (!res.ok || !data.success) {
+        setActionFeedback({ type: 'error', text: data.error || 'Failed to update checklist item.' });
+        return;
       }
-    } catch (err) {
-      console.error('Failed to update task checklist:', err);
+      onRefresh();
+    } catch (err: any) {
+      setActionFeedback({ type: 'error', text: err?.message || 'Connection error updating checklist.' });
     }
   };
 
   const handleSubmitDeliverable = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!completingTaskId || !evidenceUrl.trim()) return;
+    setActionFeedback(null);
 
     try {
       const res = await fetch('/api/data', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
           action: 'complete_task',
           payload: {
@@ -176,14 +193,17 @@ export const MemberWorkspace: React.FC<MemberWorkspaceProps> = ({
         })
       });
       const data = await res.json();
-      if (data.success) {
-        setCompletingTaskId(null);
-        setEvidenceUrl('');
-        setEvidenceNotes('');
-        onRefresh();
+      if (!res.ok || !data.success) {
+        setActionFeedback({ type: 'error', text: data.error || 'Failed to submit deliverable.' });
+        return;
       }
-    } catch (err) {
-      console.error('Failed to submit deliverable:', err);
+      setCompletingTaskId(null);
+      setEvidenceUrl('');
+      setEvidenceNotes('');
+      setActionFeedback({ type: 'success', text: 'Deliverable submitted to the Contribution Ledger for verification.' });
+      onRefresh();
+    } catch (err: any) {
+      setActionFeedback({ type: 'error', text: err?.message || 'Connection error submitting deliverable.' });
     }
   };
 
@@ -279,6 +299,25 @@ export const MemberWorkspace: React.FC<MemberWorkspaceProps> = ({
         </button>
       </div>
 
+      {actionFeedback && (
+        <div
+          className={`rounded-xl border p-3 text-xs flex items-center justify-between gap-2 ${
+            actionFeedback.type === 'success'
+              ? 'border-emerald-500/40 bg-emerald-950/40 text-emerald-300'
+              : 'border-rose-500/40 bg-rose-950/40 text-rose-300'
+          }`}
+        >
+          <span>{actionFeedback.text}</span>
+          <button
+            type="button"
+            onClick={() => setActionFeedback(null)}
+            className="text-slate-400 hover:text-white px-1"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
       {/* SUBTAB 1: COMMUNITY INBOX (User-1) */}
       {activeSubTab === 'inbox' && (
         <div className="space-y-4">
@@ -311,7 +350,7 @@ export const MemberWorkspace: React.FC<MemberWorkspaceProps> = ({
                     </div>
 
                     <button
-                      onClick={() => onSelectTab(notif.linkUrl.replace('/', ''))}
+                      onClick={() => onSelectTab((notif.linkUrl || '/requests').replace(/^\//, ''))}
                       className="flex items-center gap-1 rounded-md border border-slate-700 bg-slate-800 px-2.5 py-1 text-xs text-white hover:bg-slate-700 shrink-0"
                     >
                       <span>Open Record</span>
@@ -319,7 +358,7 @@ export const MemberWorkspace: React.FC<MemberWorkspaceProps> = ({
                     </button>
                   </div>
                   <div className="mt-2 pt-2 border-t border-slate-800/60 text-[11px] text-slate-500 font-mono flex items-center justify-between">
-                    <span>Community: {notif.communityId}</span>
+                    <span>Community: {notif.communityId || 'Global'}</span>
                     <span>{new Date(notif.createdAt).toLocaleDateString()}</span>
                   </div>
                 </div>

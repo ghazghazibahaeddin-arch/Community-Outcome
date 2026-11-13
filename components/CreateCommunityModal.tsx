@@ -44,6 +44,7 @@ export const CreateCommunityModal: React.FC<CreateCommunityModalProps> = ({
       const res = await fetch('/api/data', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
           action: 'create_community',
           payload: {
@@ -62,6 +63,9 @@ export const CreateCommunityModal: React.FC<CreateCommunityModalProps> = ({
         return;
       }
 
+      setName('');
+      setSlug('');
+      setDescription('');
       onCreated(data.result);
       onClose();
     } catch (err: unknown) {
@@ -72,7 +76,7 @@ export const CreateCommunityModal: React.FC<CreateCommunityModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4">
+    <div dir={lang === 'ar' ? 'rtl' : 'ltr'} className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4">
       <div className="w-full max-w-lg rounded-2xl border border-slate-800 bg-[#0d1322] p-6 shadow-2xl space-y-5">
         <div className="flex items-center justify-between border-b border-slate-800/80 pb-3">
           <div className="flex items-center gap-2">

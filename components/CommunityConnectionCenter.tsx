@@ -73,8 +73,23 @@ export const CommunityConnectionCenter: React.FC<CommunityConnectionCenterProps>
   const [isPublishingMenu, setIsPublishingMenu] = useState(false);
   const [pinTelegramMenu, setPinTelegramMenu] = useState(true);
   const [publishResult, setPublishResult] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [confirmDisconnect, setConfirmDisconnect] = useState<'discord' | 'telegram' | null>(null);
+  const [isDisconnecting, setIsDisconnecting] = useState(false);
 
   const isOwnerOrAdmin = ['platform_admin', 'community_owner', 'admin'].includes(currentUserRole);
+
+  // Sync manual server inputs when selected community changes
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDiscordGuildInput(community.discordConfig?.serverId || '');
+      setDiscordGuildNameInput(community.discordConfig?.serverName || '');
+      setDiscordChannelInput(community.discordConfig?.channelId || '');
+      setConfirmDisconnect(null);
+      setTelegramChallenge(null);
+      setPublishResult(null);
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [community.id, community.discordConfig?.serverId, community.discordConfig?.serverName, community.discordConfig?.channelId]);
 
   // Load Discord install URL on mount
   useEffect(() => {
@@ -100,6 +115,7 @@ export const CommunityConnectionCenter: React.FC<CommunityConnectionCenterProps>
       const res = await fetch('/api/integrations/verify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ platform: 'discord' })
       });
       const data = await res.json();
@@ -133,6 +149,7 @@ export const CommunityConnectionCenter: React.FC<CommunityConnectionCenterProps>
       const res = await fetch('/api/discord/connect', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
           communityId: community.id,
           serverId: discordGuildInput.trim(),
@@ -163,6 +180,7 @@ export const CommunityConnectionCenter: React.FC<CommunityConnectionCenterProps>
       const res = await fetch('/api/integrations/verify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ platform: 'telegram' })
       });
       const data = await res.json();
@@ -195,6 +213,7 @@ export const CommunityConnectionCenter: React.FC<CommunityConnectionCenterProps>
       const res = await fetch('/api/telegram/challenge', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ communityId: community.id })
       });
       const data = await res.json();
@@ -210,13 +229,14 @@ export const CommunityConnectionCenter: React.FC<CommunityConnectionCenterProps>
     }
   };
 
-  // Handle Disconnect
+  // Handle Disconnect via inline confirmation (never use window.confirm)
   const handleDisconnect = async (platform: 'discord' | 'telegram') => {
-    if (!window.confirm(`Are you sure you want to disconnect ${platform.toUpperCase()} from ${community.name}?`)) return;
+    setIsDisconnecting(true);
     try {
       const res = await fetch('/api/data', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
           action: 'disconnect_platform',
           payload: {
@@ -227,16 +247,31 @@ export const CommunityConnectionCenter: React.FC<CommunityConnectionCenterProps>
         })
       });
       const data = await res.json();
-      if (data.success) {
+      if (!res.ok || !data.success) {
+        const msg = data.error || `Failed to disconnect ${platform}`;
         if (platform === 'discord') {
-          setDiscordStatusMsg({ type: 'info', text: 'Discord server disconnected.' });
+          setDiscordStatusMsg({ type: 'error', text: msg });
         } else {
-          setTelegramStatusMsg({ type: 'info', text: 'Telegram group disconnected.' });
+          setTelegramStatusMsg({ type: 'error', text: msg });
         }
-        onRefresh();
+        return;
       }
+      setConfirmDisconnect(null);
+      if (platform === 'discord') {
+        setDiscordStatusMsg({ type: 'info', text: 'Discord server disconnected.' });
+      } else {
+        setTelegramStatusMsg({ type: 'info', text: 'Telegram group disconnected.' });
+      }
+      onRefresh();
     } catch (err: any) {
-      console.error('Failed to disconnect platform:', err);
+      const msg = err?.message || `Failed to disconnect ${platform}`;
+      if (platform === 'discord') {
+        setDiscordStatusMsg({ type: 'error', text: msg });
+      } else {
+        setTelegramStatusMsg({ type: 'error', text: msg });
+      }
+    } finally {
+      setIsDisconnecting(false);
     }
   };
 
@@ -254,6 +289,7 @@ export const CommunityConnectionCenter: React.FC<CommunityConnectionCenterProps>
       const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify(payload)
       });
       const data = await res.json();
@@ -276,10 +312,16 @@ export const CommunityConnectionCenter: React.FC<CommunityConnectionCenterProps>
     }
   };
 
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
-    setCopiedCode(true);
-    setTimeout(() => setCopiedCode(false), 2500);
+  const copyToClipboard = async (text: string) => {
+    try {
+      if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+        setCopiedCode(true);
+        setTimeout(() => setCopiedCode(false), 2500);
+      }
+    } catch {
+      // Clipboard blocked in restricted browser context
+    }
   };
 
   const isDiscordConnected = community.discordConfig?.connected && community.discordConfig?.status !== 'disconnected';
@@ -481,13 +523,35 @@ export const CommunityConnectionCenter: React.FC<CommunityConnectionCenterProps>
                         <span>Open Server</span>
                       </a>
                     )}
-                    <button
-                      onClick={() => handleDisconnect('discord')}
-                      className="flex items-center gap-1.5 rounded-lg border border-rose-900/50 bg-rose-950/40 px-3 py-2 text-xs font-semibold text-rose-300 hover:bg-rose-900/50 hover:text-rose-200 transition-colors"
-                    >
-                      <Unlink className="h-3.5 w-3.5" />
-                      <span>Disconnect</span>
-                    </button>
+                    {confirmDisconnect === 'discord' ? (
+                      <div className="flex items-center gap-1.5 rounded-lg border border-rose-500/40 bg-rose-950/60 px-2.5 py-1.5 text-xs">
+                        <span className="text-rose-200 font-medium">Disconnect?</span>
+                        <button
+                          type="button"
+                          onClick={() => handleDisconnect('discord')}
+                          disabled={isDisconnecting}
+                          className="rounded bg-rose-600 px-2 py-0.5 font-semibold text-white hover:bg-rose-500 disabled:opacity-50"
+                        >
+                          {isDisconnecting ? '...' : 'Confirm'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setConfirmDisconnect(null)}
+                          className="rounded bg-slate-800 px-2 py-0.5 text-slate-300 hover:text-white"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setConfirmDisconnect('discord')}
+                        className="flex items-center gap-1.5 rounded-lg border border-rose-900/50 bg-rose-950/40 px-3 py-2 text-xs font-semibold text-rose-300 hover:bg-rose-900/50 hover:text-rose-200 transition-colors"
+                      >
+                        <Unlink className="h-3.5 w-3.5" />
+                        <span>Disconnect</span>
+                      </button>
+                    )}
                   </>
                 )}
               </div>
@@ -674,13 +738,35 @@ export const CommunityConnectionCenter: React.FC<CommunityConnectionCenterProps>
                 </button>
 
                 {isTelegramConnected && (
-                  <button
-                    onClick={() => handleDisconnect('telegram')}
-                    className="flex items-center gap-1.5 rounded-lg border border-rose-900/50 bg-rose-950/40 px-3 py-2 text-xs font-semibold text-rose-300 hover:bg-rose-900/50 hover:text-rose-200 transition-colors"
-                  >
-                    <Unlink className="h-3.5 w-3.5" />
-                    <span>Disconnect</span>
-                  </button>
+                  confirmDisconnect === 'telegram' ? (
+                    <div className="flex items-center gap-1.5 rounded-lg border border-rose-500/40 bg-rose-950/60 px-2.5 py-1.5 text-xs">
+                      <span className="text-rose-200 font-medium">Disconnect?</span>
+                      <button
+                        type="button"
+                        onClick={() => handleDisconnect('telegram')}
+                        disabled={isDisconnecting}
+                        className="rounded bg-rose-600 px-2 py-0.5 font-semibold text-white hover:bg-rose-500 disabled:opacity-50"
+                      >
+                        {isDisconnecting ? '...' : 'Confirm'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setConfirmDisconnect(null)}
+                        className="rounded bg-slate-800 px-2 py-0.5 text-slate-300 hover:text-white"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setConfirmDisconnect('telegram')}
+                      className="flex items-center gap-1.5 rounded-lg border border-rose-900/50 bg-rose-950/40 px-3 py-2 text-xs font-semibold text-rose-300 hover:bg-rose-900/50 hover:text-rose-200 transition-colors"
+                    >
+                      <Unlink className="h-3.5 w-3.5" />
+                      <span>Disconnect</span>
+                    </button>
+                  )
                 )}
               </div>
             </div>

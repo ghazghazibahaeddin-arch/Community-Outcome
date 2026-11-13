@@ -32,15 +32,26 @@ export const PassportPortfolioSection: React.FC<PassportPortfolioSectionProps> =
   // Platform Linking State
   const [discordUsername, setDiscordUsername] = useState(currentUser.identities.discordUsername || '');
   const [telegramUsername, setTelegramUsername] = useState(currentUser.identities.telegramUsername || '');
+  const [errorBanner, setErrorBanner] = useState<string | null>(null);
+
+  React.useEffect(() => {
+    const timer = setTimeout(() => {
+      setDiscordUsername(currentUser.identities?.discordUsername || '');
+      setTelegramUsername(currentUser.identities?.telegramUsername || '');
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [currentUser.id, currentUser.identities?.discordUsername, currentUser.identities?.telegramUsername]);
 
   const userPortfolio = portfolioItems.filter((p) => p.userId === currentUser.id);
   const selectedContribution = contributions.find((c) => c.id === selectedContributionId);
 
   const handleUpdatePrivacy = async (field: keyof User['privacy'], val: boolean) => {
+    setErrorBanner(null);
     try {
       const res = await fetch('/api/data', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
           action: 'update_privacy',
           payload: {
@@ -50,48 +61,60 @@ export const PassportPortfolioSection: React.FC<PassportPortfolioSectionProps> =
         })
       });
       const data = await res.json();
-      if (data.success) {
-        onRefresh();
+      if (!res.ok || !data.success) {
+        setErrorBanner(data.error || 'Failed to update privacy settings.');
+        return;
       }
-    } catch (err) {
-      console.error('Failed to update privacy:', err);
+      onRefresh();
+    } catch (err: any) {
+      setErrorBanner(err?.message || 'Connection error updating privacy settings.');
     }
   };
 
   const handleLinkPlatform = async (platform: 'discord' | 'telegram') => {
     const username = platform === 'discord' ? discordUsername : telegramUsername;
     if (!username.trim()) return;
+    setErrorBanner(null);
 
     try {
       const res = await fetch('/api/data', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
           action: 'link_platform',
           payload: {
             userId: currentUser.id,
             platform,
             id: `${platform}_${Date.now()}`,
-            username
+            username: username.trim().replace(/^@/, '')
           }
         })
       });
       const data = await res.json();
-      if (data.success) {
-        setCopiedNotification(`Linked ${platform} account!`);
-        setTimeout(() => setCopiedNotification(null), 3000);
-        onRefresh();
+      if (!res.ok || !data.success) {
+        setErrorBanner(data.error || `Failed to link ${platform} account.`);
+        return;
       }
-    } catch (err) {
-      console.error('Failed to link platform:', err);
+      setCopiedNotification(`Linked ${platform} account!`);
+      setTimeout(() => setCopiedNotification(null), 3000);
+      onRefresh();
+    } catch (err: any) {
+      setErrorBanner(err?.message || `Connection error linking ${platform}.`);
     }
   };
 
-  const handleCopyCardUrl = () => {
+  const handleCopyCardUrl = async () => {
     const origin = typeof window !== 'undefined' ? window.location.origin : 'https://community-outcome.ghazghazibahaeddin.workers.dev';
-    navigator.clipboard.writeText(`${origin}/c/${selectedContributionId}`);
-    setCopiedNotification('Portable card URL copied to clipboard!');
-    setTimeout(() => setCopiedNotification(null), 3000);
+    try {
+      if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(`${origin}/c/${selectedContributionId}`);
+        setCopiedNotification('Portable card URL copied to clipboard!');
+        setTimeout(() => setCopiedNotification(null), 3000);
+      }
+    } catch {
+      // Clipboard blocked
+    }
   };
 
   return (
@@ -139,6 +162,13 @@ export const PassportPortfolioSection: React.FC<PassportPortfolioSectionProps> =
           </span>
         )}
       </div>
+
+      {errorBanner && (
+        <div className="rounded-xl border border-rose-500/40 bg-rose-950/40 p-3 text-xs text-rose-300 flex items-center justify-between">
+          <span>{errorBanner}</span>
+          <button type="button" onClick={() => setErrorBanner(null)} className="text-slate-400 hover:text-white px-1">✕</button>
+        </div>
+      )}
 
       {/* SubTab 1: Member Passport */}
       {activeSubTab === 'passport' && (
@@ -439,12 +469,20 @@ export const PassportPortfolioSection: React.FC<PassportPortfolioSectionProps> =
                     className="w-full rounded-md border border-slate-700 bg-slate-800 px-2.5 py-1.5 text-xs text-white"
                   />
                 </div>
-                <button
-                  onClick={() => handleLinkPlatform('discord')}
-                  className="rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-500"
-                >
-                  Verify & Link Discord
-                </button>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    onClick={() => handleLinkPlatform('discord')}
+                    className="rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-500"
+                  >
+                    Verify & Link Discord
+                  </button>
+                  <a
+                    href="/api/discord/connect?mode=user&redirect=true"
+                    className="rounded-md border border-[#5865F2]/40 bg-[#5865F2]/10 px-3 py-1.5 text-xs font-semibold text-[#8ea1ff] hover:bg-[#5865F2]/20"
+                  >
+                    Link with Discord OAuth
+                  </a>
+                </div>
               </div>
 
               {/* Telegram */}
@@ -460,12 +498,20 @@ export const PassportPortfolioSection: React.FC<PassportPortfolioSectionProps> =
                     className="w-full rounded-md border border-slate-700 bg-slate-800 px-2.5 py-1.5 text-xs text-white"
                   />
                 </div>
-                <button
-                  onClick={() => handleLinkPlatform('telegram')}
-                  className="rounded-md bg-sky-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-sky-500"
-                >
-                  Verify & Link Telegram
-                </button>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    onClick={() => handleLinkPlatform('telegram')}
+                    className="rounded-md bg-sky-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-sky-500"
+                  >
+                    Verify & Link Telegram
+                  </button>
+                  <a
+                    href="/api/auth/telegram/authorize?redirect=true"
+                    className="rounded-md border border-[#229ED9]/40 bg-[#229ED9]/10 px-3 py-1.5 text-xs font-semibold text-[#54bbf0] hover:bg-[#229ED9]/20"
+                  >
+                    Link with Telegram OIDC
+                  </a>
+                </div>
               </div>
             </div>
           </div>

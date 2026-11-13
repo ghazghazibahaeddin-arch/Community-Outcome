@@ -12,12 +12,15 @@ import {
   WHOP_PRO_CHECKOUT_URL
 } from '@/lib/services/subscriptionService';
 
-export async function GET(req: NextRequest) {
+import { getRuntimeEnv } from '@/lib/env';
+
+export async function GET(req: NextRequest, _context?: any) {
+  const env = getRuntimeEnv(_context?.env || _context);
   try {
     const url = new URL(req.url);
     const communityId = url.searchParams.get('communityId') || 'comm_devforge';
 
-    await ensureDatabaseHydrated();
+    await ensureDatabaseHydrated(env);
     const authUser = await getAuthenticatedUserFromRequest(req);
     const db = getDatabase();
     const analytics = computeCommunityAnalytics(communityId);
@@ -87,18 +90,24 @@ export async function GET(req: NextRequest) {
   }
 }
 
-export async function POST(req: NextRequest) {
+export async function POST(req: NextRequest, _context?: any) {
+  const env = getRuntimeEnv(_context?.env || _context);
   try {
-    await ensureDatabaseHydrated();
+    await ensureDatabaseHydrated(env);
     const authUser = await getAuthenticatedUserFromRequest(req);
-    const body = (await req.json()) as { action?: string; payload?: any };
-    const { action, payload } = body;
+    const body = (await req.json()) as Record<string, any>;
+    const action = body.action as string | undefined;
+    const payload = (body.payload ?? body ?? {}) as any;
     const db = getDatabase();
 
     let result = null;
 
     switch (action) {
       case 'create_community': {
+        const communityName = String(payload?.name || '').trim();
+        if (!communityName) {
+          return NextResponse.json({ success: false, error: 'Community name is required' }, { status: 400 });
+        }
         const creatorId = authUser?.id || payload.ownerId || 'usr_sarah';
 
         // Entitlement Check: Free plan allows 1 community per owner. Community Pro required for multi-community ownership.
@@ -119,8 +128,8 @@ export async function POST(req: NextRequest) {
         }
 
         result = dbOperations.createCommunity({
-          name: payload.name,
-          slug: payload.slug || payload.name.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+          name: communityName,
+          slug: payload.slug || communityName.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
           description: payload.description || '',
           category: payload.category || 'General',
           avatar: payload.avatar || `https://picsum.photos/seed/${Date.now()}/200/200`,

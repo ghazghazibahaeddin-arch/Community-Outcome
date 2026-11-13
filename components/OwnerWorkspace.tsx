@@ -95,7 +95,7 @@ export const OwnerWorkspace: React.FC<OwnerWorkspaceProps> = ({
   const [activeSection, setActiveSection] = useState<'operations' | 'connect' | 'pricing' | 'requests' | 'reviews' | 'disputes' | 'roles' | 'config' | 'integrations'>('operations');
 
   // Role Management State
-  const [selectedUserForRole, setSelectedUserForRole] = useState<string>(users[1]?.id || 'usr_alex');
+  const [selectedUserForRole, setSelectedUserForRole] = useState<string>(users[1]?.id || users[0]?.id || '');
   const [selectedRole, setSelectedRole] = useState<UserRole>('reviewer');
   const [roleError, setRoleError] = useState<string | null>(null);
   const [roleSuccess, setRoleSuccess] = useState<string | null>(null);
@@ -105,8 +105,13 @@ export const OwnerWorkspace: React.FC<OwnerWorkspaceProps> = ({
   const [reviewDecision, setReviewDecision] = useState<'verified' | 'rejected' | 'disputed'>('verified');
   const [reviewReason, setReviewReason] = useState<string>('');
 
-  // Mode Switch State
+  // Mode Switch & Action Feedback State
   const [isResettingData, setIsResettingData] = useState<boolean>(false);
+  const [actionFeedback, setActionFeedback] = useState<{ type: 'error' | 'success'; text: string } | null>(null);
+
+  const effectiveSelectedUserForRole = users.some((u) => u.id === selectedUserForRole)
+    ? selectedUserForRole
+    : (users[0]?.id || '');
 
   const pendingContributions = contributions.filter((c) => c.reviewStatus === 'pending');
   const openDisputes = disputes.filter((d) => d.status === 'open');
@@ -150,15 +155,20 @@ export const OwnerWorkspace: React.FC<OwnerWorkspaceProps> = ({
     e.preventDefault();
     setRoleError(null);
     setRoleSuccess(null);
+    if (!effectiveSelectedUserForRole) {
+      setRoleError('No member selected.');
+      return;
+    }
     try {
       const res = await fetch('/api/data', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
           action: 'update_member_role',
           payload: {
             communityId: community.id,
-            userId: selectedUserForRole,
+            userId: effectiveSelectedUserForRole,
             role: selectedRole
           }
         })
@@ -170,7 +180,7 @@ export const OwnerWorkspace: React.FC<OwnerWorkspaceProps> = ({
       }
       setRoleSuccess(`Successfully assigned role ${selectedRole}`);
       onRefresh();
-    } catch (err) {
+    } catch {
       setRoleError('Network error while updating role');
     }
   };
@@ -178,11 +188,13 @@ export const OwnerWorkspace: React.FC<OwnerWorkspaceProps> = ({
   const handleReviewContribution = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!reviewingContribId || !reviewReason.trim()) return;
+    setActionFeedback(null);
 
     try {
       const res = await fetch('/api/data', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
           action: 'review_contribution',
           payload: {
@@ -194,57 +206,71 @@ export const OwnerWorkspace: React.FC<OwnerWorkspaceProps> = ({
         })
       });
       const data = await res.json();
-      if (data.success) {
-        setReviewingContribId(null);
-        setReviewReason('');
-        onRefresh();
+      if (!res.ok || !data.success) {
+        setActionFeedback({ type: 'error', text: data.error || 'Failed to submit contribution review.' });
+        return;
       }
-    } catch (err) {
-      console.error('Failed to submit review:', err);
+      setReviewingContribId(null);
+      setReviewReason('');
+      setActionFeedback({ type: 'success', text: `Contribution marked as ${reviewDecision}.` });
+      onRefresh();
+    } catch (err: any) {
+      setActionFeedback({ type: 'error', text: err?.message || 'Network error while submitting review.' });
     }
   };
 
   const handleAcceptOffer = async (offerId: string) => {
+    setActionFeedback(null);
     try {
       const res = await fetch('/api/data', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
           action: 'accept_offer',
           payload: { offerId }
         })
       });
       const data = await res.json();
-      if (data.success) {
-        onRefresh();
+      if (!res.ok || !data.success) {
+        setActionFeedback({ type: 'error', text: data.error || 'Failed to accept offer.' });
+        return;
       }
-    } catch (err) {
-      console.error('Failed to accept offer:', err);
+      setActionFeedback({ type: 'success', text: 'Offer accepted and task created.' });
+      onRefresh();
+    } catch (err: any) {
+      setActionFeedback({ type: 'error', text: err?.message || 'Network error while accepting offer.' });
     }
   };
 
   const handleToggleDataMode = async (targetMode: DataMode) => {
     setIsResettingData(true);
+    setActionFeedback(null);
     try {
-      if (targetMode === 'production') {
-        await fetch('/api/data', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            action: 'reset_to_clean_production',
-            payload: { communityId: community.id }
+      const res = targetMode === 'production'
+        ? await fetch('/api/data', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({
+              action: 'reset_to_clean_production',
+              payload: { communityId: community.id }
+            })
           })
-        });
-      } else {
-        await fetch('/api/data', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'restore_demo_seed' })
-        });
+        : await fetch('/api/data', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ action: 'restore_demo_seed' })
+          });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        setActionFeedback({ type: 'error', text: data.error || 'Failed to switch data mode.' });
+        return;
       }
       onRefresh();
-    } catch (err) {
-      console.error('Failed to switch data mode:', err);
+    } catch (err: any) {
+      setActionFeedback({ type: 'error', text: err?.message || 'Failed to switch data mode.' });
     } finally {
       setIsResettingData(false);
     }
@@ -381,6 +407,25 @@ export const OwnerWorkspace: React.FC<OwnerWorkspaceProps> = ({
           Bot Gateways Health
         </button>
       </div>
+
+      {actionFeedback && (
+        <div
+          className={`rounded-xl border p-3 text-xs flex items-center justify-between gap-2 ${
+            actionFeedback.type === 'success'
+              ? 'border-emerald-500/40 bg-emerald-950/40 text-emerald-300'
+              : 'border-rose-500/40 bg-rose-950/40 text-rose-300'
+          }`}
+        >
+          <span>{actionFeedback.text}</span>
+          <button
+            type="button"
+            onClick={() => setActionFeedback(null)}
+            className="text-slate-400 hover:text-white px-1"
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
       {/* SECTION: CONNECT YOUR COMMUNITY */}
       {activeSection === 'connect' && (
@@ -712,7 +757,7 @@ export const OwnerWorkspace: React.FC<OwnerWorkspaceProps> = ({
               <div>
                 <label className="text-[11px] text-slate-400 block mb-1">Select Member</label>
                 <select
-                  value={selectedUserForRole}
+                  value={effectiveSelectedUserForRole}
                   onChange={(e) => setSelectedUserForRole(e.target.value)}
                   className="w-full rounded-md border border-slate-700 bg-slate-800 px-2.5 py-1.5 text-xs text-white"
                 >

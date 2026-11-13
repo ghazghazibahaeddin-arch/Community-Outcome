@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { authenticateUser, createSession, setSessionCookie } from '@/lib/services/auth';
 import { ensureDatabaseHydrated } from '@/lib/db/store';
+import { getRuntimeEnv } from '@/lib/env';
 
-export async function POST(req: NextRequest) {
+export async function POST(req: NextRequest, _context?: any) {
+  const env = getRuntimeEnv(_context?.env || _context);
   try {
-    await ensureDatabaseHydrated();
+    await ensureDatabaseHydrated(env);
     const body = (await req.json()) as { email?: string; password?: string };
     const { email, password } = body;
 

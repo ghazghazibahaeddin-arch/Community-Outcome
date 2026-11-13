@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { ensureDatabaseHydrated } from '@/lib/db/store';
 import { requestPasswordReset } from '@/lib/services/auth';
-import { getRuntimeEnv, CloudflareEnv } from '@/lib/env';
+import { getRuntimeEnv } from '@/lib/env';
 
 export async function POST(req: NextRequest, _context?: any) {
   const env = getRuntimeEnv(_context?.env || _context);
@@ -12,6 +13,7 @@ export async function POST(req: NextRequest, _context?: any) {
       return NextResponse.json({ success: false, error: 'Email address is required' }, { status: 400 });
     }
 
+    await ensureDatabaseHydrated(env);
     const appUrl = env.APP_URL || `${req.nextUrl.protocol}//${req.nextUrl.host}`;
     const result = requestPasswordReset(email, appUrl, env);
 

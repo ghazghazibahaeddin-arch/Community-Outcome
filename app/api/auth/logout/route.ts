@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { ensureDatabaseHydrated } from '@/lib/db/store';
+import { getRuntimeEnv } from '@/lib/env';
 import { destroySession, clearSessionCookie, SESSION_COOKIE_NAME } from '@/lib/services/auth';
 
-export async function POST(req: NextRequest) {
+export async function POST(req: NextRequest, _context?: any) {
+  const env = getRuntimeEnv(_context?.env || _context);
   try {
+    await ensureDatabaseHydrated(env);
     const cookieToken = req.cookies.get(SESSION_COOKIE_NAME)?.value;
     const authHeader = req.headers.get('authorization');
     const headerToken = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : null;

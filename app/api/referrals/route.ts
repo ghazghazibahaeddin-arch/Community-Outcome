@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createOrGetReferral, trackReferralEvent } from '@/lib/services/subscriptionService';
+import { ensureDatabaseHydrated } from '@/lib/db/store';
 import { getAuthenticatedUserFromRequest } from '@/lib/services/auth';
 import { getVerifiedAppUrl } from '@/lib/services/securityConfig';
-import { getRuntimeEnv, CloudflareEnv } from '@/lib/env';
+import { getRuntimeEnv } from '@/lib/env';
 
 /**
  * GET /api/referrals?code=ref_xxx
@@ -18,6 +19,7 @@ export async function GET(req: NextRequest, _context?: any) {
       return NextResponse.json({ success: false, error: 'Missing referral code' }, { status: 400 });
     }
 
+    await ensureDatabaseHydrated(env);
     const result = trackReferralEvent(code, 'click');
     if (!result.success || !result.referral) {
       return NextResponse.json({ success: false, error: 'Referral code not found' }, { status: 404 });
@@ -54,6 +56,7 @@ export async function GET(req: NextRequest, _context?: any) {
 export async function POST(req: NextRequest, _context?: any) {
   const env = getRuntimeEnv(_context?.env || _context);
   try {
+    await ensureDatabaseHydrated(env);
     const authUser = await getAuthenticatedUserFromRequest(req);
     const body = (await req.json()) as { communityId?: string; targetType?: 'passport' | 'community' | 'request' | 'task'; targetId?: string };
     const { communityId, targetId } = body;

@@ -10,13 +10,14 @@ export async function GET(req: NextRequest, _context?: any) {
   const env = getRuntimeEnv(_context?.env || _context);
   try {
     const url = new URL(req.url);
-    const mode = url.searchParams.get('mode') || 'bot'; // 'bot' (server install) or 'user' (user OAuth login/link)
+    const mode = url.searchParams.get('mode') || 'bot'; // 'bot' (server install) or 'user'/'user_oauth' (user OAuth login/link)
+    const isUserMode = mode === 'user' || mode === 'user_oauth';
     const communityId = url.searchParams.get('communityId') || 'comm_devforge';
     await ensureDatabaseHydrated(env);
     const authUser = await getAuthenticatedUserFromRequest(req);
 
     // If installing bot for a community, verify owner or allow if initializing
-    if (mode === 'bot') {
+    if (!isUserMode) {
       const actorId = authUser?.id || 'usr_sarah';
       const role = getUserRoleInCommunity(actorId, communityId);
       if (!['platform_admin', 'community_owner', 'admin'].includes(role) && authUser) {
@@ -41,7 +42,7 @@ export async function GET(req: NextRequest, _context?: any) {
     const encodedRedirectUri = encodeURIComponent(verifiedRedirectUri);
 
     // Bot + slash command install URL vs User Identity OAuth URL
-    const installUrl = mode === 'user'
+    const installUrl = isUserMode
       ? `https://discord.com/api/oauth2/authorize?client_id=${appId}&response_type=code&scope=identify%20email&state=${state}&redirect_uri=${encodedRedirectUri}`
       : `https://discord.com/api/oauth2/authorize?client_id=${appId}&permissions=${permissions}&scope=bot%20applications.commands&state=${state}&response_type=code&redirect_uri=${encodedRedirectUri}`;
 
@@ -59,7 +60,7 @@ export async function GET(req: NextRequest, _context?: any) {
       redirectUri: verifiedRedirectUri,
       appUrl: getVerifiedAppUrl(env),
       permissionsInteger: permissions,
-      requiredScopes: mode === 'user' ? ['identify', 'email'] : ['bot', 'applications.commands'],
+      requiredScopes: isUserMode ? ['identify', 'email'] : ['bot', 'applications.commands'],
       requiredPermissions: [
         'View Channels (VIEW_CHANNEL)',
         'Send Messages & Threads',
