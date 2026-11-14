@@ -1,9 +1,9 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ShieldCheck, LogIn, ArrowRight, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { ShieldCheck, LogIn, AlertCircle, Bot, Send } from 'lucide-react';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -11,6 +11,22 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const oauthErr = params.get('auth_error') || params.get('discord_error');
+      if (oauthErr) {
+        params.delete('auth_error');
+        params.delete('discord_error');
+        const cleanUrl = window.location.pathname + (params.toString() ? `?${params.toString()}` : '');
+        window.history.replaceState({}, document.title, cleanUrl);
+        const timer = setTimeout(() => setError(oauthErr), 0);
+        return () => clearTimeout(timer);
+      }
+    } catch {}
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -21,6 +37,7 @@ export default function LoginPage() {
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ email, password })
       });
       const data = (await res.json()) as any;
@@ -65,6 +82,36 @@ export default function LoginPage() {
               <span>{error}</span>
             </div>
           )}
+
+          {/* Direct Discord & Telegram Login + Automatic Account Linking */}
+          <div className="space-y-2.5 mb-6">
+            <div className="text-center text-[11px] font-medium text-slate-300">
+              Sign in &amp; link directly with Discord or Telegram · سجل واربط حسابك مباشرة
+            </div>
+            <a
+              href="/api/discord/connect?mode=user&redirect=true"
+              className="w-full flex items-center justify-center gap-2 rounded-lg border border-[#5865F2]/50 bg-[#5865F2]/15 hover:bg-[#5865F2]/25 py-2.5 text-xs font-semibold text-[#9aa8ff] transition-all"
+            >
+              <Bot className="h-4 w-4" />
+              <span>Continue &amp; Link Discord</span>
+            </a>
+            <a
+              href="/api/auth/telegram/authorize?redirect=true"
+              className="w-full flex items-center justify-center gap-2 rounded-lg border border-[#229ED9]/50 bg-[#229ED9]/15 hover:bg-[#229ED9]/25 py-2.5 text-xs font-semibold text-[#5dc5f7] transition-all"
+            >
+              <Send className="h-4 w-4" />
+              <span>Continue &amp; Link Telegram</span>
+            </a>
+          </div>
+
+          <div className="relative my-5">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-slate-800" />
+            </div>
+            <div className="relative flex justify-center text-[10px] uppercase">
+              <span className="bg-slate-900 px-2 text-slate-500 font-mono">Or sign in with email</span>
+            </div>
+          </div>
 
           <form className="space-y-4" onSubmit={handleSubmit}>
             <div>

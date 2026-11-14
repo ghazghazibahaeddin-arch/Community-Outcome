@@ -119,10 +119,11 @@ export async function GET(req: NextRequest, _context?: any) {
       if (!userToUpdate.identities) userToUpdate.identities = {};
       userToUpdate.identities.telegramId = telegramSub;
       if (username) userToUpdate.identities.telegramUsername = username;
+      userToUpdate.identities.linkedAt = new Date().toISOString();
       saveDatabase(db);
 
       const redirectRes = NextResponse.redirect(
-        `${appUrl}/?tab=member&connected=telegram`
+        `${appUrl}/?tab=member&subtab=identity&connected=telegram`
       );
       // Clear OIDC state cookie
       redirectRes.cookies.set({
@@ -152,7 +153,8 @@ export async function GET(req: NextRequest, _context?: any) {
       createdAt: now,
       identities: {
         telegramId: telegramSub,
-        telegramUsername: username
+        telegramUsername: username,
+        linkedAt: now
       },
       passport: {
         displayName,
@@ -182,6 +184,7 @@ export async function GET(req: NextRequest, _context?: any) {
     if (!user.identities) user.identities = {};
     user.identities.telegramId = telegramSub;
     if (username) user.identities.telegramUsername = username;
+    user.identities.linkedAt = new Date().toISOString();
     saveDatabase(db);
   }
 

@@ -20,7 +20,9 @@ import {
   Building2,
   Lock,
   ChevronDown,
-  Settings
+  Settings,
+  Bot,
+  Send
 } from 'lucide-react';
 
 interface HeaderProps {
@@ -178,16 +180,58 @@ export const Header: React.FC<HeaderProps> = ({
               </span>
             </button>
 
-            {/* Authenticated Account or Sign In */}
+            {/* Authenticated Account, Direct Discord/Telegram Linking & Sign Out */}
             {authUser ? (
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5 sm:gap-2">
+                {authUser.identities?.discordId ? (
+                  <button
+                    type="button"
+                    onClick={onOpenAccountSettings}
+                    title={`Discord linked: @${authUser.identities.discordUsername || authUser.identities.discordId}`}
+                    className="hidden md:flex items-center gap-1 rounded-md border border-[#5865F2]/40 bg-[#5865F2]/15 px-2 py-0.5 text-[11px] font-medium text-[#a5b2ff] hover:bg-[#5865F2]/25 transition-colors"
+                  >
+                    <Bot className="h-3 w-3" />
+                    <span className="max-w-[90px] truncate">@{authUser.identities.discordUsername || 'Discord'}</span>
+                  </button>
+                ) : (
+                  <a
+                    href="/api/discord/connect?mode=user&redirect=true"
+                    title={lang === 'ar' ? 'ربط حساب Discord الشخصي' : 'Link your Discord account'}
+                    className="flex items-center gap-1 rounded-md border border-[#5865F2]/50 bg-[#5865F2]/15 hover:bg-[#5865F2]/25 px-2 py-0.5 text-[11px] font-semibold text-[#9aa8ff] transition-colors whitespace-nowrap"
+                  >
+                    <Bot className="h-3 w-3" />
+                    <span>{lang === 'ar' ? 'ربط Discord' : 'Link Discord'}</span>
+                  </a>
+                )}
+
+                {authUser.identities?.telegramId ? (
+                  <button
+                    type="button"
+                    onClick={onOpenAccountSettings}
+                    title={`Telegram linked: @${authUser.identities.telegramUsername || authUser.identities.telegramId}`}
+                    className="hidden md:flex items-center gap-1 rounded-md border border-[#229ED9]/40 bg-[#229ED9]/15 px-2 py-0.5 text-[11px] font-medium text-[#6ecdf9] hover:bg-[#229ED9]/25 transition-colors"
+                  >
+                    <Send className="h-3 w-3" />
+                    <span className="max-w-[90px] truncate">@{authUser.identities.telegramUsername || 'Telegram'}</span>
+                  </button>
+                ) : (
+                  <a
+                    href="/api/auth/telegram/authorize?redirect=true"
+                    title={lang === 'ar' ? 'ربط حساب Telegram الشخصي' : 'Link your Telegram account'}
+                    className="flex items-center gap-1 rounded-md border border-[#229ED9]/50 bg-[#229ED9]/15 hover:bg-[#229ED9]/25 px-2 py-0.5 text-[11px] font-semibold text-[#5dc5f7] transition-colors whitespace-nowrap"
+                  >
+                    <Send className="h-3 w-3" />
+                    <span>{lang === 'ar' ? 'ربط Telegram' : 'Link Telegram'}</span>
+                  </a>
+                )}
+
                 <button
                   onClick={onOpenAccountSettings}
-                  title="Account & Identity Settings"
+                  title="Account & Linked Profiles Settings"
                   className="flex items-center gap-1.5 bg-slate-900/90 hover:bg-slate-800/90 border border-slate-700/80 rounded-md px-2 py-0.5 transition-colors cursor-pointer"
                 >
                   <span className="h-2 w-2 rounded-full bg-emerald-400" />
-                  <span className="font-medium text-slate-200 max-w-[120px] truncate">{authUser.name}</span>
+                  <span className="font-medium text-slate-200 max-w-[110px] truncate">{authUser.name}</span>
                   <span className="text-[10px] font-mono uppercase bg-indigo-950/60 text-indigo-300 border border-indigo-700/50 px-1 rounded">
                     {currentUserRole}
                   </span>

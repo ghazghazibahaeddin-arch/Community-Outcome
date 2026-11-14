@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import Link from 'next/link';
 import Image from 'next/image';
 import { translations } from '@/lib/i18n';
 import {
@@ -33,7 +34,9 @@ import {
   Eye,
   EyeOff,
   UserCheck,
-  Bot
+  Bot,
+  LogIn,
+  Settings
 } from 'lucide-react';
 
 interface MemberWorkspaceProps {
@@ -52,6 +55,8 @@ interface MemberWorkspaceProps {
   onRefresh: () => void;
   onSelectUser: (user: User) => void;
   onSelectTab: (tab: string) => void;
+  initialSubTab?: 'inbox' | 'feed' | 'tasks' | 'commitments' | 'passport' | 'identity';
+  onOpenAccountSettings?: () => void;
 }
 
 export const MemberWorkspace: React.FC<MemberWorkspaceProps> = ({
@@ -69,11 +74,21 @@ export const MemberWorkspace: React.FC<MemberWorkspaceProps> = ({
   lang,
   onRefresh,
   onSelectUser,
-  onSelectTab
+  onSelectTab,
+  initialSubTab,
+  onOpenAccountSettings
 }) => {
   const t = translations[lang];
 
-  const [activeSubTab, setActiveSubTab] = useState<'inbox' | 'feed' | 'tasks' | 'commitments' | 'passport' | 'identity'>('inbox');
+  const [activeSubTab, setActiveSubTab] = useState<'inbox' | 'feed' | 'tasks' | 'commitments' | 'passport' | 'identity'>(
+    initialSubTab || 'inbox'
+  );
+
+  useEffect(() => {
+    if (!initialSubTab) return;
+    const timer = setTimeout(() => setActiveSubTab(initialSubTab), 0);
+    return () => clearTimeout(timer);
+  }, [initialSubTab]);
 
   // One-time challenge state
   const [isGeneratingChallenge, setIsGeneratingChallenge] = useState<boolean>(false);
@@ -247,6 +262,92 @@ export const MemberWorkspace: React.FC<MemberWorkspaceProps> = ({
         </div>
       </div>
 
+      {/* Clear Member Sign-In & Direct Discord/Telegram Account Linking Strip */}
+      <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-3.5 sm:p-4 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+        <div className="space-y-0.5">
+          <div className="text-xs font-semibold text-white flex items-center gap-2">
+            <UserCheck className="h-4 w-4 text-indigo-400" />
+            <span>
+              {lang === 'ar'
+                ? 'حساب العضو وربط Discord و Telegram مباشرة'
+                : 'Member Account & Direct Discord / Telegram Linking'}
+            </span>
+          </div>
+          <p className="text-[11px] text-slate-400">
+            {lang === 'ar'
+              ? 'اربط حسابك في Discord أو Telegram مباشرة بملفك لاستلام المهام والإشعارات وتوثيق النتائج.'
+              : 'Link your Discord and Telegram accounts directly to your profile for instant task sync, bot commands, and verified outcomes.'}
+          </p>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          {currentUser.identities?.discordId ? (
+            <div className="inline-flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1.5 text-xs">
+              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
+              <span className="text-emerald-300 font-medium">
+                Discord: @{currentUser.identities.discordUsername || 'Connected'}
+              </span>
+              <a
+                href="/api/discord/connect?mode=user&redirect=true"
+                className="text-[10px] font-mono text-[#9aa8ff] hover:underline ml-1"
+              >
+                {lang === 'ar' ? 'تحديث' : 'Re-link'}
+              </a>
+            </div>
+          ) : (
+            <a
+              href="/api/discord/connect?mode=user&redirect=true"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-[#5865F2]/50 bg-[#5865F2]/20 hover:bg-[#5865F2]/30 px-3 py-1.5 text-xs font-semibold text-[#9aa8ff] transition-all"
+            >
+              <Bot className="h-3.5 w-3.5" />
+              <span>{lang === 'ar' ? 'ربط Discord الآن' : 'Link Discord Now'}</span>
+            </a>
+          )}
+
+          {currentUser.identities?.telegramId ? (
+            <div className="inline-flex items-center gap-2 rounded-lg border border-sky-500/30 bg-sky-500/10 px-2.5 py-1.5 text-xs">
+              <CheckCircle2 className="h-3.5 w-3.5 text-sky-400" />
+              <span className="text-sky-300 font-medium">
+                Telegram: @{currentUser.identities.telegramUsername || 'Connected'}
+              </span>
+              <a
+                href="/api/auth/telegram/authorize?redirect=true"
+                className="text-[10px] font-mono text-[#5dc5f7] hover:underline ml-1"
+              >
+                {lang === 'ar' ? 'تحديث' : 'Re-link'}
+              </a>
+            </div>
+          ) : (
+            <a
+              href="/api/auth/telegram/authorize?redirect=true"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-[#229ED9]/50 bg-[#229ED9]/20 hover:bg-[#229ED9]/30 px-3 py-1.5 text-xs font-semibold text-[#5dc5f7] transition-all"
+            >
+              <Send className="h-3.5 w-3.5" />
+              <span>{lang === 'ar' ? 'ربط Telegram الآن' : 'Link Telegram Now'}</span>
+            </a>
+          )}
+
+          {onOpenAccountSettings && (
+            <button
+              type="button"
+              onClick={onOpenAccountSettings}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800/80 hover:bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-200 transition-colors"
+            >
+              <Settings className="h-3.5 w-3.5 text-slate-400" />
+              <span>{lang === 'ar' ? 'إعدادات الحساب' : 'Account'}</span>
+            </button>
+          )}
+
+          <Link
+            href="/auth/login"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-500/40 bg-indigo-500/10 hover:bg-indigo-500/20 px-3 py-1.5 text-xs font-semibold text-indigo-300 transition-colors"
+          >
+            <LogIn className="h-3.5 w-3.5" />
+            <span>{lang === 'ar' ? 'تسجيل / تبديل الحساب' : 'Sign In / Switch'}</span>
+          </Link>
+        </div>
+      </div>
+
       {/* Member Navigation Tabs */}
       <div className="flex overflow-x-auto gap-2 border-b border-slate-800/80 pb-2 text-xs font-medium text-slate-400 no-scrollbar">
         <button
@@ -295,7 +396,7 @@ export const MemberWorkspace: React.FC<MemberWorkspaceProps> = ({
             activeSubTab === 'identity' ? 'bg-indigo-600/20 text-indigo-400 font-bold' : 'hover:text-slate-200'
           }`}
         >
-          Platform Linking Challenges
+          {lang === 'ar' ? 'ربط الحسابات (Discord & Telegram)' : 'Connected Accounts (Discord & Telegram)'}
         </button>
       </div>
 
@@ -662,9 +763,18 @@ export const MemberWorkspace: React.FC<MemberWorkspaceProps> = ({
               </div>
 
               {currentUser.identities?.discordId ? (
-                <div className="rounded-lg bg-slate-950 p-3 space-y-1 text-xs font-mono">
-                  <div className="text-slate-300">@{currentUser.identities.discordUsername || 'discord_user'}</div>
-                  <div className="text-[10px] text-slate-500">ID: {currentUser.identities.discordId}</div>
+                <div className="space-y-2">
+                  <div className="rounded-lg bg-slate-950 p-3 space-y-1 text-xs font-mono">
+                    <div className="text-slate-300">@{currentUser.identities.discordUsername || 'discord_user'}</div>
+                    <div className="text-[10px] text-slate-500">ID: {currentUser.identities.discordId}</div>
+                  </div>
+                  <a
+                    href="/api/discord/connect?mode=user&redirect=true"
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-[#5865F2]/40 bg-[#5865F2]/10 hover:bg-[#5865F2]/20 px-3 py-1 text-[11px] font-semibold text-[#8ea1ff] transition-all"
+                  >
+                    <Bot className="h-3 w-3" />
+                    <span>{lang === 'ar' ? 'إعادة ربط / تبديل Discord' : 'Re-link / Switch Discord'}</span>
+                  </a>
                 </div>
               ) : (
                 <div className="space-y-2">
@@ -707,9 +817,18 @@ export const MemberWorkspace: React.FC<MemberWorkspaceProps> = ({
               </div>
 
               {currentUser.identities?.telegramId ? (
-                <div className="rounded-lg bg-slate-950 p-3 space-y-1 text-xs font-mono">
-                  <div className="text-slate-300">@{currentUser.identities.telegramUsername || 'telegram_user'}</div>
-                  <div className="text-[10px] text-slate-500">ID: {currentUser.identities.telegramId}</div>
+                <div className="space-y-2">
+                  <div className="rounded-lg bg-slate-950 p-3 space-y-1 text-xs font-mono">
+                    <div className="text-slate-300">@{currentUser.identities.telegramUsername || 'telegram_user'}</div>
+                    <div className="text-[10px] text-slate-500">ID: {currentUser.identities.telegramId}</div>
+                  </div>
+                  <a
+                    href="/api/auth/telegram/authorize?redirect=true"
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-[#229ED9]/40 bg-[#229ED9]/10 hover:bg-[#229ED9]/20 px-3 py-1 text-[11px] font-semibold text-[#54bbf0] transition-all"
+                  >
+                    <Send className="h-3 w-3" />
+                    <span>{lang === 'ar' ? 'إعادة ربط / تبديل Telegram' : 'Re-link / Switch Telegram'}</span>
+                  </a>
                 </div>
               ) : (
                 <div className="space-y-2">

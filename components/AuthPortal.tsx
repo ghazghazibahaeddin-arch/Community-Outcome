@@ -506,14 +506,14 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({
                   )}
                 </button>
 
-                {/* Continue with Discord Button */}
+                {/* Direct Discord & Telegram Login + Automatic Account Linking */}
                 <div className="relative my-4">
                   <div className="absolute inset-0 flex items-center">
                     <div className="w-full border-t border-slate-800"></div>
                   </div>
                   <div className="relative flex justify-center text-[10px] uppercase">
-                    <span className="bg-slate-900 px-2 text-slate-500 font-mono">
-                      {isRtl ? 'أو عبر' : 'Or continue with'}
+                    <span className="bg-slate-900 px-2 text-slate-400 font-mono">
+                      {isRtl ? 'أو سجّل دخولك واربط حسابك مباشرة' : 'Or sign in & link account directly'}
                     </span>
                   </div>
                 </div>
@@ -521,19 +521,19 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({
                 <div className="space-y-2">
                   <a
                     href="/api/discord/connect?mode=user&redirect=true"
-                    className="w-full flex items-center justify-center gap-2 rounded-lg border border-[#5865F2]/40 bg-[#5865F2]/10 hover:bg-[#5865F2]/20 py-2.5 text-xs font-semibold text-[#8ea1ff] transition-all"
+                    className="w-full flex items-center justify-center gap-2 rounded-lg border border-[#5865F2]/50 bg-[#5865F2]/15 hover:bg-[#5865F2]/25 py-2.5 text-xs font-semibold text-[#9aa8ff] transition-all"
                   >
                     <Bot className="h-4 w-4" />
-                    <span>{isRtl ? 'المتابعة بحساب Discord' : 'Continue with Discord'}</span>
+                    <span>{isRtl ? 'تسجيل الدخول والربط عبر Discord' : 'Continue & Link with Discord'}</span>
                   </a>
 
                   <div className="flex items-center gap-1.5">
                     <a
                       href="/api/auth/telegram/authorize?redirect=true"
-                      className="flex-1 flex items-center justify-center gap-2 rounded-lg border border-[#229ED9]/40 bg-[#229ED9]/10 hover:bg-[#229ED9]/20 py-2.5 text-xs font-semibold text-[#54bbf0] transition-all"
+                      className="flex-1 flex items-center justify-center gap-2 rounded-lg border border-[#229ED9]/50 bg-[#229ED9]/15 hover:bg-[#229ED9]/25 py-2.5 text-xs font-semibold text-[#5dc5f7] transition-all"
                     >
                       <Send className="h-4 w-4" />
-                      <span>{isRtl ? 'المتابعة بـ Telegram OIDC' : 'Continue with Telegram'}</span>
+                      <span>{isRtl ? 'تسجيل الدخول والربط عبر Telegram' : 'Continue & Link with Telegram'}</span>
                     </a>
                     <button
                       type="button"
@@ -646,8 +646,8 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({
                     <div className="w-full border-t border-slate-800"></div>
                   </div>
                   <div className="relative flex justify-center text-[10px] uppercase">
-                    <span className="bg-slate-900 px-2 text-slate-500 font-mono">
-                      {isRtl ? 'أو التسجيل عبر' : 'Or register with'}
+                    <span className="bg-slate-900 px-2 text-slate-400 font-mono">
+                      {isRtl ? 'أو التسجيل والربط المباشر عبر' : 'Or register & link directly with'}
                     </span>
                   </div>
                 </div>
@@ -655,19 +655,19 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({
                 <div className="space-y-2">
                   <a
                     href="/api/discord/connect?mode=user&redirect=true"
-                    className="w-full flex items-center justify-center gap-2 rounded-lg border border-[#5865F2]/40 bg-[#5865F2]/10 hover:bg-[#5865F2]/20 py-2.5 text-xs font-semibold text-[#8ea1ff] transition-all"
+                    className="w-full flex items-center justify-center gap-2 rounded-lg border border-[#5865F2]/50 bg-[#5865F2]/15 hover:bg-[#5865F2]/25 py-2.5 text-xs font-semibold text-[#9aa8ff] transition-all"
                   >
                     <Bot className="h-4 w-4" />
-                    <span>{isRtl ? 'المتابعة بحساب Discord' : 'Continue with Discord'}</span>
+                    <span>{isRtl ? 'التسجيل والربط بحساب Discord' : 'Continue & Link with Discord'}</span>
                   </a>
 
                   <div className="flex items-center gap-1.5">
                     <a
                       href="/api/auth/telegram/authorize?redirect=true"
-                      className="flex-1 flex items-center justify-center gap-2 rounded-lg border border-[#229ED9]/40 bg-[#229ED9]/10 hover:bg-[#229ED9]/20 py-2.5 text-xs font-semibold text-[#54bbf0] transition-all"
+                      className="flex-1 flex items-center justify-center gap-2 rounded-lg border border-[#229ED9]/50 bg-[#229ED9]/15 hover:bg-[#229ED9]/25 py-2.5 text-xs font-semibold text-[#5dc5f7] transition-all"
                     >
                       <Send className="h-4 w-4" />
-                      <span>{isRtl ? 'المتابعة بـ Telegram OIDC' : 'Continue with Telegram'}</span>
+                      <span>{isRtl ? 'التسجيل والربط بحساب Telegram' : 'Continue & Link with Telegram'}</span>
                     </a>
                     <button
                       type="button"

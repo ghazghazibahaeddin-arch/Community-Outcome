@@ -15,7 +15,8 @@ import {
   MessageSquare,
   Globe,
   Compass,
-  AlertCircle
+  AlertCircle,
+  Send
 } from 'lucide-react';
 
 interface OnboardingChoiceModalProps {
@@ -239,6 +240,47 @@ export const OnboardingChoiceModal: React.FC<OnboardingChoiceModalProps> = ({
             </p>
           </div>
         )}
+
+        {/* Direct Personal Account Linking (Discord & Telegram) */}
+        <div className="mb-6 rounded-xl border border-slate-800 bg-slate-950/90 p-4 space-y-2.5">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-xs font-semibold text-white">
+              {isRtl ? 'ربط حساباتك الشخصية مباشرة (Discord & Telegram)' : 'Link Your Personal Discord & Telegram Accounts'}
+            </span>
+            <span className="text-[10px] font-mono text-slate-400">OAuth / OIDC</span>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {user?.identities?.discordId ? (
+              <span className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-xs font-medium text-emerald-300">
+                <CheckCircle2 className="h-3.5 w-3.5" />
+                <span>Discord: @{user.identities.discordUsername || 'Connected'}</span>
+              </span>
+            ) : (
+              <a
+                href="/api/discord/connect?mode=user&redirect=true"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-[#5865F2]/50 bg-[#5865F2]/15 hover:bg-[#5865F2]/25 px-3 py-1.5 text-xs font-semibold text-[#9aa8ff] transition-all"
+              >
+                <Bot className="h-3.5 w-3.5" />
+                <span>{isRtl ? 'ربط Discord الآن' : 'Link Discord Account'}</span>
+              </a>
+            )}
+
+            {user?.identities?.telegramId ? (
+              <span className="inline-flex items-center gap-1.5 rounded-lg border border-sky-500/30 bg-sky-500/10 px-3 py-1.5 text-xs font-medium text-sky-300">
+                <CheckCircle2 className="h-3.5 w-3.5" />
+                <span>Telegram: @{user.identities.telegramUsername || 'Connected'}</span>
+              </span>
+            ) : (
+              <a
+                href="/api/auth/telegram/authorize?redirect=true"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-[#229ED9]/50 bg-[#229ED9]/15 hover:bg-[#229ED9]/25 px-3 py-1.5 text-xs font-semibold text-[#5dc5f7] transition-all"
+              >
+                <Send className="h-3.5 w-3.5" />
+                <span>{isRtl ? 'ربط Telegram الآن' : 'Link Telegram Account'}</span>
+              </a>
+            )}
+          </div>
+        </div>
 
         {/* Action Buttons */}
         <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-800">

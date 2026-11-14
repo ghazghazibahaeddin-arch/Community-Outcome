@@ -109,9 +109,10 @@ export async function GET(req: NextRequest, _context?: any) {
         if (!u.identities) u.identities = {};
         u.identities.discordId = discordUser.id;
         u.identities.discordUsername = discordUser.username;
+        u.identities.linkedAt = new Date().toISOString();
         saveDatabase(db);
       }
-      return NextResponse.redirect(`${appUrl}/?account_updated=discord_linked&tab=member`);
+      return NextResponse.redirect(`${appUrl}/?account_updated=discord_linked&tab=member&subtab=identity`);
     }
 
     // Check if user already exists with this Discord ID
@@ -135,7 +136,8 @@ export async function GET(req: NextRequest, _context?: any) {
         createdAt: now,
         identities: {
           discordId: discordUser.id,
-          discordUsername: discordUser.username
+          discordUsername: discordUser.username,
+          linkedAt: now
         },
         passport: {
           displayName: discordUser.username,
@@ -164,6 +166,7 @@ export async function GET(req: NextRequest, _context?: any) {
       if (!user.identities) user.identities = {};
       user.identities.discordId = discordUser.id;
       user.identities.discordUsername = discordUser.username;
+      user.identities.linkedAt = new Date().toISOString();
       saveDatabase(db);
     }
 

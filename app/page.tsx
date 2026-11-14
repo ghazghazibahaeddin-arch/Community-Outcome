@@ -59,6 +59,9 @@ export default function HomePage() {
   const [darkMode, setDarkMode] = useState<boolean>(true);
   const [activeTab, setActiveTab] = useState<string>('hub');
   const [workspaceMode, setWorkspaceMode] = useState<'owner' | 'member' | 'modules'>('owner');
+  const [memberSubTab, setMemberSubTab] = useState<'inbox' | 'feed' | 'tasks' | 'commitments' | 'passport' | 'identity'>('inbox');
+  const explicitTabRef = React.useRef<boolean>(false);
+  const hasAppliedInitialRoleRef = React.useRef<boolean>(false);
   const [dataMode, setDataMode] = useState<DataMode>('demo');
   const [currentCommunityId, setCurrentCommunityId] = useState<string>('comm_devforge');
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -126,6 +129,7 @@ export default function HomePage() {
       localStorage.removeItem('community_os_session_token');
       const urlParams = new URLSearchParams(window.location.search);
       const tab = urlParams.get('tab');
+      const subtab = urlParams.get('subtab');
       const connectedPlatform = urlParams.get('connected_platform');
       const guildId = urlParams.get('guild_id');
       const guildName = urlParams.get('guild_name');
@@ -136,10 +140,17 @@ export default function HomePage() {
       const oauthError = urlParams.get('discord_error') || urlParams.get('auth_error');
 
       const isDiscordGuildConnected = connectedPlatform === 'discord' && Boolean(guildId);
+      const isIdentityLinkedRedirect =
+        subtab === 'identity' || accountUpdated === 'discord_linked' || connected === 'telegram';
+
+      if (tab === 'member' || tab === 'owner' || isDiscordGuildConnected || isIdentityLinkedRedirect) {
+        explicitTabRef.current = true;
+      }
 
       // Clean transient callback params from address bar without reload
       const transientKeys = [
         'session_token',
+        'subtab',
         'connected_platform',
         'guild_id',
         'guild_name',
@@ -162,12 +173,15 @@ export default function HomePage() {
         window.history.replaceState({}, document.title, cleanUrl);
       }
 
-      if (tab === 'member' || tab === 'owner' || isDiscordGuildConnected || oauthError || loginSuccess || accountUpdated || connected) {
+      if (tab === 'member' || tab === 'owner' || isDiscordGuildConnected || oauthError || loginSuccess || accountUpdated || connected || subtab === 'identity') {
         const timer = setTimeout(() => {
-          if (tab === 'member') {
+          if (tab === 'member' || isIdentityLinkedRedirect) {
             setWorkspaceMode('member');
           } else if (tab === 'owner') {
             setWorkspaceMode('owner');
+          }
+          if (isIdentityLinkedRedirect) {
+            setMemberSubTab('identity');
           }
           if (isDiscordGuildConnected) {
             setWorkspaceMode('modules');
@@ -188,8 +202,8 @@ export default function HomePage() {
             setStatusBanner({
               type: 'success',
               text: provider === 'telegram'
-                ? 'Signed in cleanly with Telegram OpenID Connect.'
-                : 'Signed in cleanly with Discord.'
+                ? 'Signed in and linked cleanly with Telegram OpenID Connect.'
+                : 'Signed in and linked cleanly with Discord.'
             });
           }
         }, 0);
@@ -243,8 +257,15 @@ export default function HomePage() {
 
         // Authenticated user resolution via server session cookie
         if (d.authUser) {
+          const resolvedRole: UserRole = d.currentUserRole || 'member';
           setAuthUser(d.authUser);
-          setCurrentUserRole(d.currentUserRole || 'member');
+          setCurrentUserRole(resolvedRole);
+          if (!hasAppliedInitialRoleRef.current) {
+            hasAppliedInitialRoleRef.current = true;
+            if (!explicitTabRef.current && !['platform_admin', 'community_owner', 'admin'].includes(resolvedRole)) {
+              setWorkspaceMode('member');
+            }
+          }
         } else {
           try {
             const meRes = await fetch('/api/auth/me', { credentials: 'include' });
@@ -252,6 +273,12 @@ export default function HomePage() {
             if (meJson.authenticated && meJson.user) {
               setAuthUser(meJson.user);
               setCurrentUserRole('member');
+              if (!hasAppliedInitialRoleRef.current) {
+                hasAppliedInitialRoleRef.current = true;
+                if (!explicitTabRef.current) {
+                  setWorkspaceMode('member');
+                }
+              }
             } else {
               setAuthUser(null);
               setCurrentUserRole('guest');
@@ -368,6 +395,8 @@ export default function HomePage() {
       } catch {}
       setAuthUser(null);
       setCurrentUserRole('guest');
+      hasAppliedInitialRoleRef.current = false;
+      explicitTabRef.current = false;
       setWorkspaceMode('member');
       await fetchData(currentCommunityId);
     } catch (err: any) {
@@ -612,6 +641,8 @@ export default function HomePage() {
                 notifications={notifications}
                 identityChallenges={identityChallenges}
                 lang={lang}
+                initialSubTab={memberSubTab}
+                onOpenAccountSettings={() => setIsAccountSettingsOpen(true)}
                 onRefresh={() => fetchData(currentCommunityId)}
                 onSelectUser={() => {}}
                 onSelectTab={(tab) => {
