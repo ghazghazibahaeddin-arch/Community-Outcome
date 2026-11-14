@@ -144,6 +144,12 @@ export interface Community {
     description: string;
     requiresReview: boolean;
   }[];
+  welcomeMessage?: string;
+  settings?: {
+    autoAnnounceVerifiedOutcomes?: boolean;
+    requireInviteCode?: boolean;
+    minPeerReviews?: number;
+  };
 }
 
 export interface CommunityMembership {
@@ -154,6 +160,9 @@ export interface CommunityMembership {
   joinedAt: string;
   firstMeaningfulActionAt?: string;
   onboardingStatus: 'started' | 'interests_selected' | 'first_action_completed';
+  moderationStatus?: 'active' | 'warned' | 'suspended';
+  warningsCount?: number;
+  moderationNote?: string;
 }
 
 export type RequestStatus =
@@ -672,4 +681,53 @@ export interface ReferralRecord {
   createdAt: string;
   lastClickedAt?: string;
 }
+
+export type AnnouncementDeliveryState = 'sent' | 'skipped_not_configured' | 'error';
+
+export interface CommunityAnnouncement {
+  id: string;
+  communityId: string;
+  authorId: string;
+  title: string;
+  message: string;
+  category: 'update' | 'urgent' | 'bounty' | 'event';
+  pinned: boolean;
+  channels: {
+    inApp: boolean;
+    discord: boolean;
+    telegram: boolean;
+  };
+  deliveryStatus: {
+    inApp: AnnouncementDeliveryState;
+    discord: AnnouncementDeliveryState;
+    telegram: AnnouncementDeliveryState;
+    discordError?: string;
+    telegramError?: string;
+  };
+  createdAt: string;
+}
+
+export interface CommunityInviteCode {
+  id: string;
+  communityId: string;
+  code: string;
+  createdBy: string;
+  roleAssigned: UserRole;
+  maxUses: number;
+  usesCount: number;
+  expiresAt?: string;
+  isRevoked: boolean;
+  createdAt: string;
+}
+
+export interface ModerationAction {
+  id: string;
+  communityId: string;
+  targetUserId: string;
+  actorId: string;
+  action: 'warn' | 'suspend' | 'reinstate' | 'remove';
+  reason: string;
+  createdAt: string;
+}
+
 

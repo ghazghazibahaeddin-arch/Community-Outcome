@@ -41,7 +41,11 @@ import {
   DevEmail,
   CommunitySubscription,
   PaymentWebhookEvent,
-  ReferralRecord
+  ReferralRecord,
+  CommunityAnnouncement,
+  CommunityInviteCode,
+  ModerationAction,
+  AnnouncementDeliveryState
 } from '../types';
 
 export interface DatabaseSchema {
@@ -75,6 +79,9 @@ export interface DatabaseSchema {
   discordTests: DiscordCommandTest[];
   notifications: NotificationItem[];
   auditLogs: AuditLogItem[];
+  announcements?: CommunityAnnouncement[];
+  inviteCodes?: CommunityInviteCode[];
+  moderationActions?: ModerationAction[];
   identityChallenges?: IdentityChallenge[];
   groupConnectionChallenges?: GroupConnectionChallenge[];
   subscriptions?: CommunitySubscription[];
@@ -623,6 +630,24 @@ function getInitialSeedData(): DatabaseSchema {
       evidenceIds: ['cnt_03'],
       rewardRecognition: 'AI Safety Auditor Attestation',
       createdAt: '2026-10-12T11:00:00Z'
+    },
+    {
+      id: 'tsk_03',
+      communityId: 'comm_devforge',
+      title: 'Publish Multilingual Onboarding Quickstart Guide',
+      description: 'Create an interactive Discord & Telegram quickstart guide helping new contributors link accounts and pick up their first bounty.',
+      expectedOutput: 'Published Markdown guide with annotated screenshots and bot command examples.',
+      outputExpected: 'Published Markdown guide with annotated screenshots and bot command examples.',
+      acceptanceCriteria: 'Reviewed by community maintainer and merged into Knowledge Hub.',
+      deadline: '2026-12-05T23:59:59Z',
+      status: 'todo',
+      checklist: [
+        { id: 'chk_07', item: 'Document /connect flow for Discord & Telegram', completed: false },
+        { id: 'chk_08', item: 'Include example of submitting deliverable evidence', completed: false }
+      ],
+      evidenceIds: [],
+      rewardRecognition: 'Community Educator Outcome Badge',
+      createdAt: '2026-11-01T10:00:00Z'
     }
   ];
 
@@ -1084,6 +1109,19 @@ function getInitialSeedData(): DatabaseSchema {
       confirmedAttendees: [
         { userId: 'usr_maya', confirmedAt: '2026-10-26T14:30:00Z', evidenceNote: 'Onsite coordinator badge logged.' }
       ]
+    },
+    {
+      id: 'evt_02',
+      communityId: 'comm_devforge',
+      title: 'DevForge Weekly Architecture & Bounty Triage',
+      description: 'Live engineering sync reviewing open NeedSignal bounties, webhook latency targets, and peer verification backlog.',
+      date: '2026-12-02T17:00:00Z',
+      location: 'Discord Stage #architecture-sync',
+      rsvps: [
+        { userId: 'usr_sarah', timestamp: '2026-11-02T09:00:00Z' },
+        { userId: 'usr_alex', timestamp: '2026-11-02T10:15:00Z' }
+      ],
+      confirmedAttendees: []
     }
   ];
 
@@ -1302,6 +1340,34 @@ function getInitialSeedData(): DatabaseSchema {
     discordTests,
     notifications,
     auditLogs,
+    announcements: [
+      {
+        id: 'ann_01',
+        communityId: 'comm_devforge',
+        authorId: 'usr_sarah',
+        title: 'Q4 Webhook Reliability Sprint & Open Bounties',
+        message: 'We have opened new claimable bounties in Member Space covering multilingual onboarding and Ed25519 bot relay hardening. Link Discord or Telegram to sync deliverables automatically.',
+        category: 'bounty',
+        pinned: true,
+        channels: { inApp: true, discord: true, telegram: true },
+        deliveryStatus: { inApp: 'sent', discord: 'sent', telegram: 'skipped_not_configured' },
+        createdAt: '2026-11-01T12:00:00Z'
+      }
+    ],
+    inviteCodes: [
+      {
+        id: 'inv_01',
+        communityId: 'comm_devforge',
+        code: 'DEVFORGE-2026',
+        createdBy: 'usr_sarah',
+        roleAssigned: 'member',
+        maxUses: 50,
+        usesCount: 3,
+        isRevoked: false,
+        createdAt: '2026-10-15T10:00:00Z'
+      }
+    ],
+    moderationActions: [],
     identityChallenges: [],
     dataMode: 'demo'
   };
@@ -1393,41 +1459,56 @@ function ensureDataFile(): void {
 }
 
 export function getDatabase(): DatabaseSchema {
+  const normalizeDb = (db: DatabaseSchema): DatabaseSchema => {
+    if (!db.authAccounts) db.authAccounts = [];
+    if (!db.sessions) db.sessions = [];
+    if (!db.devEmails) db.devEmails = [];
+    if (!db.announcements) db.announcements = [];
+    if (!db.inviteCodes) db.inviteCodes = [];
+    if (!db.moderationActions) db.moderationActions = [];
+    if (!db.notifications) db.notifications = [];
+    if (!db.events) db.events = [];
+    if (!db.auditLogs) db.auditLogs = [];
+    if ((db.dataMode || 'demo') === 'demo') {
+      if (db.announcements.length === 0 || db.inviteCodes.length === 0 || db.events.length === 0) {
+        const seed = getInitialSeedData();
+        if (db.announcements.length === 0 && seed.announcements) db.announcements = seed.announcements;
+        if (db.inviteCodes.length === 0 && seed.inviteCodes) db.inviteCodes = seed.inviteCodes;
+        if (db.events.length === 0 && seed.events) db.events = seed.events;
+      }
+    }
+    return db;
+  };
+
   if (cachedDb) {
-    if (!cachedDb.authAccounts) cachedDb.authAccounts = [];
-    if (!cachedDb.sessions) cachedDb.sessions = [];
-    if (!cachedDb.devEmails) cachedDb.devEmails = [];
-    return cachedDb;
+    return normalizeDb(cachedDb);
   }
   ensureDataFile();
   try {
     if (fs.existsSync(DB_FILE)) {
       const raw = fs.readFileSync(DB_FILE, 'utf-8');
-      cachedDb = JSON.parse(raw);
-      if (!cachedDb!.authAccounts) cachedDb!.authAccounts = [];
-      if (!cachedDb!.sessions) cachedDb!.sessions = [];
-      if (!cachedDb!.devEmails) cachedDb!.devEmails = [];
+      cachedDb = normalizeDb(JSON.parse(raw));
       // If authAccounts is empty in existing file, seed it
-      if (cachedDb!.authAccounts.length === 0) {
+      if (cachedDb.authAccounts!.length === 0) {
         const seed = getInitialSeedData();
-        cachedDb!.authAccounts = seed.authAccounts;
-        saveDatabase(cachedDb!);
+        cachedDb.authAccounts = seed.authAccounts;
+        saveDatabase(cachedDb);
       }
-      if (cachedDb!.links && cachedDb!.links.length < 17) {
+      if (cachedDb.links && cachedDb.links.length < 17) {
         const seed = getInitialSeedData();
         for (const seedLink of seed.links) {
-          if (!cachedDb!.links.some(l => l.slug === seedLink.slug)) {
-            cachedDb!.links.push(seedLink);
+          if (!cachedDb.links.some(l => l.slug === seedLink.slug)) {
+            cachedDb.links.push(seedLink);
           }
         }
-        saveDatabase(cachedDb!);
+        saveDatabase(cachedDb);
       }
-      return cachedDb!;
+      return cachedDb;
     }
   } catch {
     // Ephemeral Workers runtime: initialize seed state in memory
   }
-  cachedDb = getInitialSeedData();
+  cachedDb = normalizeDb(getInitialSeedData());
   return cachedDb;
 }
 
@@ -2271,6 +2352,10 @@ export const dbOperations = {
       db.disputes = db.disputes.filter(d => d.communityId !== communityId);
       db.outcomes = db.outcomes.filter(o => o.communityId !== communityId);
       db.polls = db.polls.filter(p => p.communityId !== communityId);
+      db.events = db.events.filter(e => e.communityId !== communityId);
+      db.announcements = (db.announcements || []).filter(a => a.communityId !== communityId);
+      db.inviteCodes = (db.inviteCodes || []).filter(i => i.communityId !== communityId);
+      db.moderationActions = (db.moderationActions || []).filter(m => m.communityId !== communityId);
     } else {
       db.requests = [];
       db.offers = [];
@@ -2281,6 +2366,10 @@ export const dbOperations = {
       db.disputes = [];
       db.outcomes = [];
       db.polls = [];
+      db.events = [];
+      db.announcements = [];
+      db.inviteCodes = [];
+      db.moderationActions = [];
     }
     saveDatabase(db);
     return db;
@@ -2642,6 +2731,646 @@ export const dbOperations = {
     }
     saveDatabase(db);
     return { success: true, community: comm };
+  },
+
+  // --- Announcements & Cross-Platform Broadcasts ---
+  getAnnouncements: (communityId?: string) => {
+    const db = getDatabase();
+    const list = db.announcements || [];
+    if (!communityId || communityId === 'all') return list;
+    return list.filter(a => a.communityId === communityId);
+  },
+
+  createAnnouncement: async (
+    input: {
+      communityId: string;
+      authorId: string;
+      title: string;
+      message: string;
+      category?: CommunityAnnouncement['category'];
+      pinned?: boolean;
+      channels?: { inApp?: boolean; discord?: boolean; telegram?: boolean };
+    },
+    explicitEnv?: CloudflareEnv
+  ) => {
+    const db = getDatabase();
+    if (!db.announcements) db.announcements = [];
+    const comm = db.communities.find(c => c.id === input.communityId);
+    const env = getRuntimeEnv(explicitEnv);
+
+    const channels = {
+      inApp: input.channels?.inApp ?? true,
+      discord: Boolean(input.channels?.discord),
+      telegram: Boolean(input.channels?.telegram)
+    };
+
+    const deliveryStatus: CommunityAnnouncement['deliveryStatus'] = {
+      inApp: channels.inApp ? 'sent' : 'skipped_not_configured',
+      discord: 'skipped_not_configured',
+      telegram: 'skipped_not_configured'
+    };
+
+    // Real Discord broadcast when enabled and community + token configured
+    if (channels.discord) {
+      const dcToken = env.DISCORD_BOT_TOKEN?.trim();
+      const dcChannelId = comm?.discordConfig?.channelId?.trim();
+      if (dcToken && dcChannelId && /^\d{17,20}$/.test(dcChannelId)) {
+        try {
+          const dcRes = await fetch(`https://discord.com/api/v10/channels/${dcChannelId}/messages`, {
+            method: 'POST',
+            headers: {
+              Authorization: `Bot ${dcToken}`,
+              'Content-Type': 'application/json',
+              'User-Agent': 'CommunityOS/1.0'
+            },
+            body: JSON.stringify({
+              embeds: [
+                {
+                  title: `📢 ${input.title}`,
+                  description: input.message,
+                  color: input.category === 'urgent' ? 0xef4444 : 0x6366f1,
+                  footer: { text: `${comm?.name || 'Community OS'} · Announcement` },
+                  timestamp: new Date().toISOString()
+                }
+              ]
+            })
+          });
+          if (dcRes.ok) {
+            deliveryStatus.discord = 'sent';
+          } else {
+            const errJson = ((await dcRes.json().catch(() => ({}))) || {}) as any;
+            deliveryStatus.discord = 'error';
+            deliveryStatus.discordError = errJson.message || `HTTP ${dcRes.status}`;
+          }
+        } catch (err: any) {
+          deliveryStatus.discord = 'error';
+          deliveryStatus.discordError = err?.message || 'Discord network error';
+        }
+      }
+    }
+
+    // Real Telegram broadcast when enabled and community + token configured
+    if (channels.telegram) {
+      const tgToken = env.TELEGRAM_BOT_TOKEN?.trim();
+      const tgGroupId = comm?.telegramConfig?.groupId?.trim();
+      if (tgToken && tgGroupId && /^-?\d+$/.test(tgGroupId)) {
+        try {
+          const tgRes = await fetch(`https://api.telegram.org/bot${tgToken}/sendMessage`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              chat_id: tgGroupId,
+              text: `📢 *${input.title}*\n\n${input.message}`,
+              parse_mode: 'Markdown'
+            })
+          });
+          const tgJson = (await tgRes.json().catch(() => ({}))) as any;
+          if (tgRes.ok && tgJson.ok) {
+            deliveryStatus.telegram = 'sent';
+          } else {
+            deliveryStatus.telegram = 'error';
+            deliveryStatus.telegramError = tgJson.description || `HTTP ${tgRes.status}`;
+          }
+        } catch (err: any) {
+          deliveryStatus.telegram = 'error';
+          deliveryStatus.telegramError = err?.message || 'Telegram network error';
+        }
+      }
+    }
+
+    const announcement: CommunityAnnouncement = {
+      id: `ann_${Date.now()}`,
+      communityId: input.communityId,
+      authorId: input.authorId,
+      title: input.title.trim(),
+      message: input.message.trim(),
+      category: input.category || 'update',
+      pinned: Boolean(input.pinned),
+      channels,
+      deliveryStatus,
+      createdAt: new Date().toISOString()
+    };
+
+    db.announcements.unshift(announcement);
+
+    // Push in-app notification to all community members
+    if (channels.inApp) {
+      const memberIds = Array.from(
+        new Set(
+          db.memberships
+            .filter(m => m.communityId === input.communityId)
+            .map(m => m.userId)
+        )
+      );
+      if (comm?.ownerId && !memberIds.includes(comm.ownerId)) {
+        memberIds.push(comm.ownerId);
+      }
+      memberIds.forEach((uid, idx) => {
+        db.notifications.unshift({
+          id: `ntf_ann_${Date.now()}_${idx}`,
+          userId: uid,
+          communityId: input.communityId,
+          title: `Announcement: ${announcement.title}`,
+          message: announcement.message,
+          linkUrl: '/hub',
+          type: 'event',
+          read: uid === input.authorId,
+          channelAttempts: {
+            inApp: true,
+            discord: deliveryStatus.discord === 'sent',
+            telegram: deliveryStatus.telegram === 'sent'
+          },
+          createdAt: announcement.createdAt
+        });
+      });
+    }
+
+    db.auditLogs.unshift({
+      id: `aud_${Date.now()}`,
+      communityId: input.communityId,
+      actorId: input.authorId,
+      action: 'announcement_published',
+      details: `Published announcement "${announcement.title}" (Discord: ${deliveryStatus.discord}, Telegram: ${deliveryStatus.telegram})`,
+      timestamp: announcement.createdAt
+    });
+
+    saveDatabase(db);
+    return announcement;
+  },
+
+  toggleAnnouncementPin: (announcementId: string) => {
+    const db = getDatabase();
+    const ann = (db.announcements || []).find(a => a.id === announcementId);
+    if (!ann) return null;
+    ann.pinned = !ann.pinned;
+    saveDatabase(db);
+    return ann;
+  },
+
+  // --- Invite Codes ---
+  getInviteCodes: (communityId?: string) => {
+    const db = getDatabase();
+    const codes = db.inviteCodes || [];
+    if (!communityId || communityId === 'all') return codes;
+    return codes.filter(c => c.communityId === communityId);
+  },
+
+  createInviteCode: (input: {
+    communityId: string;
+    createdBy: string;
+    roleAssigned?: UserRole;
+    maxUses?: number;
+    expiresInDays?: number;
+  }) => {
+    const db = getDatabase();
+    if (!db.inviteCodes) db.inviteCodes = [];
+    const comm = db.communities.find(c => c.id === input.communityId);
+    const prefix = (comm?.slug || 'COMM').replace(/[^a-zA-Z0-9]/g, '').slice(0, 6).toUpperCase();
+    const rand = Math.random().toString(36).substring(2, 6).toUpperCase();
+    const code = `${prefix}-${rand}`;
+    const now = Date.now();
+    const invite: CommunityInviteCode = {
+      id: `inv_${now}`,
+      communityId: input.communityId,
+      code,
+      createdBy: input.createdBy,
+      roleAssigned: input.roleAssigned || 'member',
+      maxUses: Math.max(1, Number(input.maxUses || 25)),
+      usesCount: 0,
+      expiresAt: input.expiresInDays ? new Date(now + input.expiresInDays * 86400000).toISOString() : undefined,
+      isRevoked: false,
+      createdAt: new Date(now).toISOString()
+    };
+    db.inviteCodes.unshift(invite);
+    db.auditLogs.unshift({
+      id: `aud_${now}`,
+      communityId: input.communityId,
+      actorId: input.createdBy,
+      action: 'invite_code_created',
+      details: `Generated invite code ${code} (${invite.roleAssigned}, max ${invite.maxUses} uses)`,
+      timestamp: invite.createdAt
+    });
+    saveDatabase(db);
+    return invite;
+  },
+
+  revokeInviteCode: (inviteId: string) => {
+    const db = getDatabase();
+    const invite = (db.inviteCodes || []).find(i => i.id === inviteId);
+    if (!invite) return null;
+    invite.isRevoked = true;
+    saveDatabase(db);
+    return invite;
+  },
+
+  redeemInviteCode: (code: string, userId: string) => {
+    const db = getDatabase();
+    const normalized = code.trim().toUpperCase();
+    const invite = (db.inviteCodes || []).find(i => i.code.toUpperCase() === normalized);
+    if (!invite) return { success: false, error: 'Invite code not found.' };
+    if (invite.isRevoked) return { success: false, error: 'Invite code has been revoked.' };
+    if (invite.expiresAt && invite.expiresAt < new Date().toISOString()) {
+      return { success: false, error: 'Invite code has expired.' };
+    }
+    if (invite.usesCount >= invite.maxUses) {
+      return { success: false, error: 'Invite code has reached its maximum uses.' };
+    }
+
+    let mem = db.memberships.find(m => m.communityId === invite.communityId && m.userId === userId);
+    if (!mem) {
+      mem = {
+        id: `mem_${Date.now()}_${userId}`,
+        userId,
+        communityId: invite.communityId,
+        role: invite.roleAssigned || 'member',
+        joinedAt: new Date().toISOString(),
+        onboardingStatus: 'first_action_completed',
+        moderationStatus: 'active'
+      };
+      db.memberships.push(mem);
+    } else if (invite.roleAssigned && invite.roleAssigned !== 'member') {
+      mem.role = invite.roleAssigned;
+    }
+
+    invite.usesCount += 1;
+    const comm = db.communities.find(c => c.id === invite.communityId);
+
+    db.notifications.unshift({
+      id: `ntf_inv_${Date.now()}`,
+      userId,
+      communityId: invite.communityId,
+      title: `Joined ${comm?.name || 'Community'} via Invite`,
+      message: comm?.welcomeMessage || `Welcome! Your membership role is ${mem.role}.`,
+      linkUrl: '/hub',
+      type: 'event',
+      read: false,
+      channelAttempts: { inApp: true, discord: false, telegram: false },
+      createdAt: new Date().toISOString()
+    });
+
+    db.auditLogs.unshift({
+      id: `aud_${Date.now()}`,
+      communityId: invite.communityId,
+      actorId: userId,
+      action: 'invite_redeemed',
+      details: `User ${userId} redeemed invite code ${invite.code} (role: ${mem.role})`,
+      timestamp: new Date().toISOString()
+    });
+
+    saveDatabase(db);
+    return { success: true, membership: mem, community: comm };
+  },
+
+  // --- Member Moderation ---
+  moderateMember: (input: {
+    communityId: string;
+    targetUserId: string;
+    actorId: string;
+    action: ModerationAction['action'];
+    reason: string;
+  }) => {
+    const db = getDatabase();
+    if (!db.moderationActions) db.moderationActions = [];
+    let mem = db.memberships.find(m => m.communityId === input.communityId && m.userId === input.targetUserId);
+
+    if (input.action === 'remove') {
+      db.memberships = db.memberships.filter(
+        m => !(m.communityId === input.communityId && m.userId === input.targetUserId)
+      );
+    } else {
+      if (!mem) {
+        mem = {
+          id: `mem_${Date.now()}_${input.targetUserId}`,
+          userId: input.targetUserId,
+          communityId: input.communityId,
+          role: 'member',
+          joinedAt: new Date().toISOString(),
+          onboardingStatus: 'first_action_completed',
+          moderationStatus: 'active',
+          warningsCount: 0
+        };
+        db.memberships.push(mem);
+      }
+      if (input.action === 'warn') {
+        mem.moderationStatus = 'warned';
+        mem.warningsCount = (mem.warningsCount || 0) + 1;
+        mem.moderationNote = input.reason;
+      } else if (input.action === 'suspend') {
+        mem.moderationStatus = 'suspended';
+        mem.moderationNote = input.reason;
+      } else if (input.action === 'reinstate') {
+        mem.moderationStatus = 'active';
+        mem.moderationNote = input.reason || 'Reinstated by administrator';
+      }
+    }
+
+    const record: ModerationAction = {
+      id: `mod_${Date.now()}`,
+      communityId: input.communityId,
+      targetUserId: input.targetUserId,
+      actorId: input.actorId,
+      action: input.action,
+      reason: input.reason,
+      createdAt: new Date().toISOString()
+    };
+    db.moderationActions.unshift(record);
+
+    db.notifications.unshift({
+      id: `ntf_mod_${Date.now()}`,
+      userId: input.targetUserId,
+      communityId: input.communityId,
+      title: `Moderation Notice: ${input.action.toUpperCase()}`,
+      message: input.reason || `Your membership status was updated (${input.action}).`,
+      linkUrl: '/member',
+      type: 'dispute',
+      read: false,
+      channelAttempts: { inApp: true, discord: false, telegram: false },
+      createdAt: record.createdAt
+    });
+
+    db.auditLogs.unshift({
+      id: `aud_${Date.now()}`,
+      communityId: input.communityId,
+      actorId: input.actorId,
+      action: `member_${input.action}`,
+      details: `Moderation (${input.action}) applied to ${input.targetUserId}: ${input.reason}`,
+      timestamp: record.createdAt
+    });
+
+    saveDatabase(db);
+    return { actionRecord: record, membership: mem || null };
+  },
+
+  // --- Direct Task / Bounty Publisher, Claiming & Offer Decline ---
+  createDirectTask: (input: {
+    communityId: string;
+    creatorId: string;
+    title: string;
+    description: string;
+    expectedOutput?: string;
+    acceptanceCriteria?: string;
+    assigneeId?: string;
+    deadline?: string;
+    checklistItems?: string[];
+    rewardRecognition?: string;
+  }) => {
+    const db = getDatabase();
+    const now = Date.now();
+    const checklist = (input.checklistItems || ['Complete main deliverable', 'Attach verifiable evidence URL'])
+      .filter(s => s.trim().length > 0)
+      .map((item, idx) => ({
+        id: `chk_${now}_${idx}`,
+        item: item.trim(),
+        completed: false
+      }));
+
+    const task: PlanTask = {
+      id: `tsk_${now}`,
+      communityId: input.communityId,
+      title: input.title.trim(),
+      description: input.description.trim(),
+      expectedOutput: input.expectedOutput?.trim() || 'Deliverable link & completion summary.',
+      outputExpected: input.expectedOutput?.trim() || 'Deliverable link & completion summary.',
+      acceptanceCriteria: input.acceptanceCriteria?.trim() || 'Verified by community reviewer.',
+      assigneeId: input.assigneeId?.trim() || undefined,
+      deadline: input.deadline || new Date(now + 7 * 86400000).toISOString(),
+      status: input.assigneeId ? 'in_progress' : 'todo',
+      checklist,
+      evidenceIds: [],
+      rewardRecognition: input.rewardRecognition?.trim() || 'Verified Outcome Badge',
+      createdAt: new Date(now).toISOString()
+    };
+    db.tasks.unshift(task);
+
+    if (task.assigneeId) {
+      db.notifications.unshift({
+        id: `ntf_tsk_${now}`,
+        userId: task.assigneeId,
+        communityId: input.communityId,
+        title: `New Task Assigned: ${task.title}`,
+        message: `You were assigned a deliverable due ${new Date(task.deadline).toLocaleDateString()}.`,
+        linkUrl: '/tasks',
+        type: 'task',
+        read: false,
+        channelAttempts: { inApp: true, discord: false, telegram: false },
+        createdAt: task.createdAt
+      });
+    }
+
+    db.auditLogs.unshift({
+      id: `aud_${now}`,
+      communityId: input.communityId,
+      actorId: input.creatorId,
+      action: 'task_created',
+      details: `Created ${task.assigneeId ? 'assigned task' : 'open bounty'} "${task.title}"`,
+      timestamp: task.createdAt
+    });
+
+    saveDatabase(db);
+    return task;
+  },
+
+  claimTask: (taskId: string, userId: string) => {
+    const db = getDatabase();
+    const task = db.tasks.find(t => t.id === taskId);
+    if (!task) return null;
+    if (task.assigneeId && task.assigneeId !== userId) {
+      return { error: 'Task is already assigned to another contributor.' };
+    }
+    task.assigneeId = userId;
+    if (task.status === 'todo') task.status = 'in_progress';
+
+    const existingCommitment = db.commitments.find(
+      c => c.committedById === userId && c.agreedWhat.includes(task.title) && c.status === 'active'
+    );
+    if (!existingCommitment) {
+      db.commitments.unshift({
+        id: `com_${Date.now()}`,
+        communityId: task.communityId,
+        agreedWhat: `Deliver claimed bounty: "${task.title}"`,
+        committedById: userId,
+        expectingDeliveryId: db.communities.find(c => c.id === task.communityId)?.ownerId || 'usr_sarah',
+        deadline: task.deadline,
+        status: 'active',
+        history: [{ timestamp: new Date().toISOString(), note: 'Member claimed open task bounty.', authorId: userId }],
+        createdAt: new Date().toISOString()
+      });
+    }
+
+    db.auditLogs.unshift({
+      id: `aud_${Date.now()}`,
+      communityId: task.communityId,
+      actorId: userId,
+      action: 'task_claimed',
+      details: `User ${userId} claimed open task "${task.title}"`,
+      timestamp: new Date().toISOString()
+    });
+
+    saveDatabase(db);
+    return task;
+  },
+
+  declineOffer: (offerId: string, actorId: string, reason?: string) => {
+    const db = getDatabase();
+    const offer = db.offers.find(o => o.id === offerId);
+    if (!offer) return null;
+    offer.status = 'declined';
+
+    db.notifications.unshift({
+      id: `ntf_off_${Date.now()}`,
+      userId: offer.memberId,
+      communityId: offer.communityId,
+      title: 'Offer Update',
+      message: reason ? `Your assistance offer was declined: ${reason}` : 'Your assistance offer was declined by the community admin.',
+      linkUrl: '/requests',
+      type: 'offer',
+      read: false,
+      channelAttempts: { inApp: true, discord: false, telegram: false },
+      createdAt: new Date().toISOString()
+    });
+
+    db.auditLogs.unshift({
+      id: `aud_${Date.now()}`,
+      communityId: offer.communityId,
+      actorId,
+      action: 'offer_declined',
+      details: `Declined offer ${offer.id} from ${offer.memberId}${reason ? `: ${reason}` : ''}`,
+      timestamp: new Date().toISOString()
+    });
+
+    saveDatabase(db);
+    return offer;
+  },
+
+  // --- Community Events & Attendance ---
+  createEvent: (input: {
+    communityId: string;
+    title: string;
+    description: string;
+    date: string;
+    location: string;
+    creatorId: string;
+  }) => {
+    const db = getDatabase();
+    const evt: CommunityEvent = {
+      id: `evt_${Date.now()}`,
+      communityId: input.communityId,
+      title: input.title.trim(),
+      description: input.description.trim(),
+      date: input.date,
+      location: input.location.trim(),
+      rsvps: [{ userId: input.creatorId, timestamp: new Date().toISOString() }],
+      confirmedAttendees: []
+    };
+    db.events.unshift(evt);
+
+    db.auditLogs.unshift({
+      id: `aud_${Date.now()}`,
+      communityId: input.communityId,
+      actorId: input.creatorId,
+      action: 'event_created',
+      details: `Scheduled event "${evt.title}" at ${evt.location}`,
+      timestamp: new Date().toISOString()
+    });
+
+    saveDatabase(db);
+    return evt;
+  },
+
+  rsvpEvent: (eventId: string, userId: string) => {
+    const db = getDatabase();
+    const evt = db.events.find(e => e.id === eventId);
+    if (!evt) return null;
+    const exists = evt.rsvps.some(r => r.userId === userId);
+    if (exists) {
+      evt.rsvps = evt.rsvps.filter(r => r.userId !== userId);
+    } else {
+      evt.rsvps.push({ userId, timestamp: new Date().toISOString() });
+    }
+    saveDatabase(db);
+    return evt;
+  },
+
+  confirmEventAttendance: (eventId: string, userId: string, actorId: string, evidenceNote?: string) => {
+    const db = getDatabase();
+    const evt = db.events.find(e => e.id === eventId);
+    if (!evt) return null;
+    if (!evt.rsvps.some(r => r.userId === userId)) {
+      evt.rsvps.push({ userId, timestamp: new Date().toISOString() });
+    }
+    if (!evt.confirmedAttendees.some(a => a.userId === userId)) {
+      evt.confirmedAttendees.push({
+        userId,
+        confirmedAt: new Date().toISOString(),
+        evidenceNote: evidenceNote || 'Checked in by organizer'
+      });
+    }
+    db.auditLogs.unshift({
+      id: `aud_${Date.now()}`,
+      communityId: evt.communityId,
+      actorId,
+      action: 'event_attendance_confirmed',
+      details: `Confirmed attendance for ${userId} at "${evt.title}"`,
+      timestamp: new Date().toISOString()
+    });
+    saveDatabase(db);
+    return evt;
+  },
+
+  // --- Peer Kudos & Skill Endorsements ---
+  endorseMemberSkill: (targetUserId: string, skillName: string, endorserId: string, communityId?: string) => {
+    const db = getDatabase();
+    const targetUser = db.users.find(u => u.id === targetUserId);
+    if (!targetUser) return null;
+    const endorser = db.users.find(u => u.id === endorserId);
+    let skill = targetUser.passport.skills.find(
+      s => s.name.toLowerCase() === skillName.trim().toLowerCase()
+    );
+    if (!skill) {
+      skill = { name: skillName.trim(), verified: false, endorsementsCount: 1 };
+      targetUser.passport.skills.push(skill);
+    } else {
+      skill.endorsementsCount = (skill.endorsementsCount || 0) + 1;
+    }
+
+    db.notifications.unshift({
+      id: `ntf_end_${Date.now()}`,
+      userId: targetUserId,
+      communityId: communityId || 'comm_devforge',
+      title: `Skill Endorsed: ${skill.name}`,
+      message: `${endorser?.name || endorserId} endorsed your skill "${skill.name}".`,
+      linkUrl: '/member',
+      type: 'review',
+      read: false,
+      channelAttempts: { inApp: true, discord: false, telegram: false },
+      createdAt: new Date().toISOString()
+    });
+
+    db.auditLogs.unshift({
+      id: `aud_${Date.now()}`,
+      communityId: communityId || 'all',
+      actorId: endorserId,
+      action: 'skill_endorsed',
+      details: `Endorsed ${targetUser.name}'s skill "${skill.name}"`,
+      timestamp: new Date().toISOString()
+    });
+
+    saveDatabase(db);
+    return targetUser;
+  },
+
+  markAllNotificationsRead: (userId: string) => {
+    const db = getDatabase();
+    let updated = 0;
+    db.notifications.forEach(n => {
+      if (n.userId === userId && !n.read) {
+        n.read = true;
+        updated += 1;
+      }
+    });
+    saveDatabase(db);
+    return { updated };
   }
 };
+
 

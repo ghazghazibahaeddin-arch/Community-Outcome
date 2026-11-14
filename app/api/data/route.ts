@@ -76,6 +76,10 @@ export async function GET(req: NextRequest, _context?: any) {
         outcomes: db.outcomes.filter(o => communityId === 'all' || o.communityId === communityId),
         portfolioItems: db.portfolioItems,
         events: db.events.filter(e => communityId === 'all' || e.communityId === communityId),
+        announcements: dbOperations.getAnnouncements(communityId),
+        inviteCodes: dbOperations.getInviteCodes(communityId),
+        moderationActions: (db.moderationActions || []).filter(m => communityId === 'all' || m.communityId === communityId),
+        notifications: authUser ? dbOperations.getNotifications(authUser.id) : (db.notifications || []),
         ownerActionItems: dbOperations.getOwnerActionItems(communityId),
         dataMode: dbOperations.getDataMode(),
         identityChallenges: db.identityChallenges || [],
@@ -430,6 +434,222 @@ export async function POST(req: NextRequest, _context?: any) {
         }
         saveDatabase(db);
         result = { success: true, user: targetUser };
+        break;
+      }
+
+      case 'create_announcement': {
+        const actorId = authUser?.id || payload.authorId || 'usr_sarah';
+        const commId = payload.communityId || 'comm_devforge';
+        const role = getUserRoleInCommunity(actorId, commId);
+        if (!['platform_admin', 'community_owner', 'admin', 'moderator'].includes(role)) {
+          return NextResponse.json({ success: false, error: 'Unauthorized: only community staff can publish announcements' }, { status: 403 });
+        }
+        if (!String(payload.title || '').trim() || !String(payload.message || '').trim()) {
+          return NextResponse.json({ success: false, error: 'Announcement title and message are required' }, { status: 400 });
+        }
+        result = await dbOperations.createAnnouncement(
+          {
+            communityId: commId,
+            authorId: actorId,
+            title: payload.title,
+            message: payload.message,
+            category: payload.category || 'update',
+            pinned: Boolean(payload.pinned),
+            channels: payload.channels || { inApp: true, discord: false, telegram: false }
+          },
+          env
+        );
+        break;
+      }
+
+      case 'toggle_announcement_pin': {
+        const actorId = authUser?.id || payload.actorId || 'usr_sarah';
+        const ann = (db.announcements || []).find(a => a.id === payload.announcementId);
+        const role = getUserRoleInCommunity(actorId, ann?.communityId || payload.communityId || 'comm_devforge');
+        if (!['platform_admin', 'community_owner', 'admin', 'moderator'].includes(role)) {
+          return NextResponse.json({ success: false, error: 'Unauthorized: only community staff can pin announcements' }, { status: 403 });
+        }
+        result = dbOperations.toggleAnnouncementPin(payload.announcementId);
+        break;
+      }
+
+      case 'create_invite_code': {
+        const actorId = authUser?.id || payload.actorId || 'usr_sarah';
+        const commId = payload.communityId || 'comm_devforge';
+        const role = getUserRoleInCommunity(actorId, commId);
+        if (!['platform_admin', 'community_owner', 'admin'].includes(role)) {
+          return NextResponse.json({ success: false, error: 'Unauthorized: only community owners or admins can create invite codes' }, { status: 403 });
+        }
+        result = dbOperations.createInviteCode({
+          communityId: commId,
+          createdBy: actorId,
+          roleAssigned: payload.roleAssigned || 'member',
+          maxUses: Number(payload.maxUses || 25),
+          expiresInDays: payload.expiresInDays ? Number(payload.expiresInDays) : undefined
+        });
+        break;
+      }
+
+      case 'revoke_invite_code': {
+        const actorId = authUser?.id || payload.actorId || 'usr_sarah';
+        const inv = (db.inviteCodes || []).find(i => i.id === payload.inviteId);
+        const role = getUserRoleInCommunity(actorId, inv?.communityId || payload.communityId || 'comm_devforge');
+        if (!['platform_admin', 'community_owner', 'admin'].includes(role)) {
+          return NextResponse.json({ success: false, error: 'Unauthorized: only community owners or admins can revoke invite codes' }, { status: 403 });
+        }
+        result = dbOperations.revokeInviteCode(payload.inviteId);
+        break;
+      }
+
+      case 'redeem_invite_code': {
+        const userId = authUser?.id || payload.userId;
+        if (!userId) {
+          return NextResponse.json({ success: false, error: 'Authentication required to redeem invite code' }, { status: 401 });
+        }
+        const redeemed = dbOperations.redeemInviteCode(String(payload.code || ''), userId);
+        if (!redeemed.success) {
+          return NextResponse.json({ success: false, error: redeemed.error || 'Failed to redeem invite code' }, { status: 400 });
+        }
+        result = redeemed;
+        break;
+      }
+
+      case 'moderate_member': {
+        const actorId = authUser?.id || payload.actorId || 'usr_sarah';
+        const commId = payload.communityId || 'comm_devforge';
+        const role = getUserRoleInCommunity(actorId, commId);
+        if (!['platform_admin', 'community_owner', 'admin', 'moderator'].includes(role)) {
+          return NextResponse.json({ success: false, error: 'Unauthorized: moderation requires admin or moderator role' }, { status: 403 });
+        }
+        const modAction = payload.modAction || payload.moderationAction || payload.actionType || payload.decision;
+        if (!payload.targetUserId || !['warn', 'suspend', 'reinstate', 'remove'].includes(modAction)) {
+          return NextResponse.json({ success: false, error: 'Valid targetUserId and moderation action (warn|suspend|reinstate|remove) are required' }, { status: 400 });
+        }
+        result = dbOperations.moderateMember({
+          communityId: commId,
+          targetUserId: payload.targetUserId,
+          actorId,
+          action: modAction,
+          reason: String(payload.reason || 'Moderated by community staff')
+        });
+        break;
+      }
+
+      case 'create_task': {
+        const actorId = authUser?.id || payload.creatorId || 'usr_sarah';
+        const commId = payload.communityId || 'comm_devforge';
+        const role = getUserRoleInCommunity(actorId, commId);
+        if (!['platform_admin', 'community_owner', 'admin', 'task_manager', 'moderator'].includes(role)) {
+          return NextResponse.json({ success: false, error: 'Unauthorized: only community staff or task managers can create direct tasks' }, { status: 403 });
+        }
+        if (!String(payload.title || '').trim()) {
+          return NextResponse.json({ success: false, error: 'Task title is required' }, { status: 400 });
+        }
+        result = dbOperations.createDirectTask({
+          communityId: commId,
+          creatorId: actorId,
+          title: payload.title,
+          description: payload.description || payload.title,
+          expectedOutput: payload.expectedOutput,
+          acceptanceCriteria: payload.acceptanceCriteria,
+          assigneeId: payload.assigneeId || undefined,
+          deadline: payload.deadline,
+          checklistItems: Array.isArray(payload.checklistItems) ? payload.checklistItems : undefined,
+          rewardRecognition: payload.rewardRecognition
+        });
+        break;
+      }
+
+      case 'claim_task': {
+        const userId = authUser?.id || payload.userId;
+        if (!userId) {
+          return NextResponse.json({ success: false, error: 'Authentication required to claim tasks' }, { status: 401 });
+        }
+        const claimed = dbOperations.claimTask(payload.taskId, userId);
+        if (!claimed) {
+          return NextResponse.json({ success: false, error: 'Task not found' }, { status: 404 });
+        }
+        if ((claimed as any).error) {
+          return NextResponse.json({ success: false, error: (claimed as any).error }, { status: 409 });
+        }
+        result = claimed;
+        break;
+      }
+
+      case 'decline_offer': {
+        const actorId = authUser?.id || payload.actorId || 'usr_sarah';
+        const offer = db.offers.find(o => o.id === payload.offerId);
+        const role = getUserRoleInCommunity(actorId, offer?.communityId || 'comm_devforge');
+        if (!['platform_admin', 'community_owner', 'admin', 'task_manager'].includes(role)) {
+          return NextResponse.json({ success: false, error: 'Unauthorized: only community owners or managers can decline offers' }, { status: 403 });
+        }
+        result = dbOperations.declineOffer(payload.offerId, actorId, payload.reason);
+        break;
+      }
+
+      case 'create_event': {
+        const actorId = authUser?.id || payload.creatorId || 'usr_sarah';
+        const commId = payload.communityId || 'comm_devforge';
+        const role = getUserRoleInCommunity(actorId, commId);
+        if (!['platform_admin', 'community_owner', 'admin', 'event_organizer', 'moderator'].includes(role)) {
+          return NextResponse.json({ success: false, error: 'Unauthorized: only organizers or admins can create events' }, { status: 403 });
+        }
+        if (!String(payload.title || '').trim() || !String(payload.date || '').trim()) {
+          return NextResponse.json({ success: false, error: 'Event title and date are required' }, { status: 400 });
+        }
+        result = dbOperations.createEvent({
+          communityId: commId,
+          title: payload.title,
+          description: payload.description || '',
+          date: payload.date,
+          location: payload.location || 'Community Hub',
+          creatorId: actorId
+        });
+        break;
+      }
+
+      case 'rsvp_event': {
+        const userId = authUser?.id || payload.userId;
+        if (!userId) {
+          return NextResponse.json({ success: false, error: 'Authentication required to RSVP' }, { status: 401 });
+        }
+        result = dbOperations.rsvpEvent(payload.eventId, userId);
+        break;
+      }
+
+      case 'confirm_event_attendance': {
+        const actorId = authUser?.id || payload.actorId || 'usr_sarah';
+        const evt = db.events.find(e => e.id === payload.eventId);
+        const role = getUserRoleInCommunity(actorId, evt?.communityId || payload.communityId || 'comm_devforge');
+        if (!['platform_admin', 'community_owner', 'admin', 'event_organizer', 'moderator'].includes(role)) {
+          return NextResponse.json({ success: false, error: 'Unauthorized: only event organizers or admins can confirm attendance' }, { status: 403 });
+        }
+        result = dbOperations.confirmEventAttendance(payload.eventId, payload.userId, actorId, payload.evidenceNote);
+        break;
+      }
+
+      case 'endorse_member_skill': {
+        const actorId = authUser?.id || payload.endorserId;
+        if (!actorId) {
+          return NextResponse.json({ success: false, error: 'Authentication required to endorse peers' }, { status: 401 });
+        }
+        if (actorId === payload.targetUserId) {
+          return NextResponse.json({ success: false, error: 'You cannot endorse your own skill' }, { status: 400 });
+        }
+        result = dbOperations.endorseMemberSkill(payload.targetUserId, payload.skillName, actorId, payload.communityId);
+        break;
+      }
+
+      case 'mark_notification_read':
+        result = dbOperations.markNotificationRead(payload.notificationId || payload.notifId);
+        break;
+
+      case 'mark_all_notifications_read': {
+        const targetUserId = authUser?.id || payload.userId;
+        if (!targetUserId) {
+          return NextResponse.json({ success: false, error: 'Authentication required' }, { status: 401 });
+        }
+        result = dbOperations.markAllNotificationsRead(targetUserId);
         break;
       }
 

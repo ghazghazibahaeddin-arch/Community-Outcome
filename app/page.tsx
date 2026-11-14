@@ -49,17 +49,24 @@ import {
   NotificationItem,
   UserRole,
   CommunitySubscription,
-  PlanEntitlements
+  CommunityMembership,
+  CommunityAnnouncement,
+  CommunityInviteCode,
+  ModerationAction,
+  CommunityEvent,
+  AuditLogItem
 } from '@/lib/types';
 import { CommunityOutcomeAnalytics } from '@/lib/services/analytics';
-import { ArrowRight, ShieldCheck, CheckCircle2, MessageSquare, ListTodo, ExternalLink, Shield, UserCheck, Sparkles } from 'lucide-react';
+import { ArrowRight, ShieldCheck, CheckCircle2, MessageSquare } from 'lucide-react';
 
 export default function HomePage() {
   const [lang, setLang] = useState<Language>('en');
   const [darkMode, setDarkMode] = useState<boolean>(true);
   const [activeTab, setActiveTab] = useState<string>('hub');
   const [workspaceMode, setWorkspaceMode] = useState<'owner' | 'member' | 'modules'>('owner');
-  const [memberSubTab, setMemberSubTab] = useState<'inbox' | 'feed' | 'tasks' | 'commitments' | 'passport' | 'identity'>('inbox');
+  const [memberSubTab, setMemberSubTab] = useState<
+    'inbox' | 'feed' | 'communities' | 'events' | 'tasks' | 'commitments' | 'passport' | 'identity'
+  >('inbox');
   const explicitTabRef = React.useRef<boolean>(false);
   const hasAppliedInitialRoleRef = React.useRef<boolean>(false);
   const [dataMode, setDataMode] = useState<DataMode>('demo');
@@ -102,6 +109,12 @@ export default function HomePage() {
   const [ownerActionItems, setOwnerActionItems] = useState<OwnerActionItem[]>([]);
   const [identityChallenges, setIdentityChallenges] = useState<IdentityChallenge[]>([]);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const [memberships, setMemberships] = useState<CommunityMembership[]>([]);
+  const [announcements, setAnnouncements] = useState<CommunityAnnouncement[]>([]);
+  const [inviteCodes, setInviteCodes] = useState<CommunityInviteCode[]>([]);
+  const [moderationActions, setModerationActions] = useState<ModerationAction[]>([]);
+  const [events, setEvents] = useState<CommunityEvent[]>([]);
+  const [auditLogs, setAuditLogs] = useState<AuditLogItem[]>([]);
   const [subscription, setSubscription] = useState<CommunitySubscription | undefined>(undefined);
   const [entitlements, setEntitlements] = useState<any>(undefined);
   const [analytics, setAnalytics] = useState<CommunityOutcomeAnalytics>({
@@ -250,6 +263,12 @@ export default function HomePage() {
         setMiniAppTests(d.miniAppTests || []);
         setOwnerActionItems(d.ownerActionItems || []);
         setIdentityChallenges(d.identityChallenges || []);
+        setMemberships(d.memberships || []);
+        setAnnouncements(d.announcements || []);
+        setInviteCodes(d.inviteCodes || []);
+        setModerationActions(d.moderationActions || []);
+        setEvents(d.events || []);
+        setAuditLogs(d.auditLogs || []);
         if (d.subscription) setSubscription(d.subscription);
         if (d.entitlements) setEntitlements(d.entitlements);
         if (d.dataMode) setDataMode(d.dataMode);
@@ -289,35 +308,40 @@ export default function HomePage() {
           }
         }
 
-        // Derive valid NotificationItem objects
+        // Use real persisted notifications first; supplement with fallback derived alerts if empty
         const activeUserId = d.authUser?.id || d.users?.[0]?.id || 'usr_sarah';
-        const notifs: NotificationItem[] = [
-          ...((d.requests || []).slice(0, 2).map((r: NeedSignalRequest): NotificationItem => ({
-            id: `ntf_req_${r.id}`,
-            userId: activeUserId,
-            communityId: r.communityId || commId,
-            title: `New NeedSignal Request: ${r.title}`,
-            message: `Priority: ${r.priority}. Match category: ${r.category}`,
-            type: 'request',
-            linkUrl: '/requests',
-            read: false,
-            channelAttempts: { inApp: true, discord: false, telegram: false },
-            createdAt: r.createdAt
-          }))),
-          ...((d.contributions || []).filter((c: Contribution) => c.reviewStatus === 'verified').slice(0, 2).map((c: Contribution): NotificationItem => ({
-            id: `ntf_cnt_${c.id}`,
-            userId: activeUserId,
-            communityId: c.communityId || commId,
-            title: `Outcome Verified: ${c.title}`,
-            message: `Verified and minted to the Trust Ledger`,
-            type: 'review',
-            linkUrl: '/trust',
-            read: true,
-            channelAttempts: { inApp: true, discord: false, telegram: false },
-            createdAt: c.createdAt || c.submissionDate
-          })))
-        ];
-        setNotifications(notifs);
+        const persistedNotifs: NotificationItem[] = Array.isArray(d.notifications) ? d.notifications : [];
+        if (persistedNotifs.length > 0) {
+          setNotifications(persistedNotifs);
+        } else {
+          const fallbackNotifs: NotificationItem[] = [
+            ...((d.requests || []).slice(0, 2).map((r: NeedSignalRequest): NotificationItem => ({
+              id: `ntf_req_${r.id}`,
+              userId: activeUserId,
+              communityId: r.communityId || commId,
+              title: `New NeedSignal Request: ${r.title}`,
+              message: `Priority: ${r.priority}. Match category: ${r.category}`,
+              type: 'request',
+              linkUrl: '/requests',
+              read: false,
+              channelAttempts: { inApp: true, discord: false, telegram: false },
+              createdAt: r.createdAt
+            }))),
+            ...((d.contributions || []).filter((c: Contribution) => c.reviewStatus === 'verified').slice(0, 2).map((c: Contribution): NotificationItem => ({
+              id: `ntf_cnt_${c.id}`,
+              userId: activeUserId,
+              communityId: c.communityId || commId,
+              title: `Outcome Verified: ${c.title}`,
+              message: `Verified and minted to the Trust Ledger`,
+              type: 'review',
+              linkUrl: '/trust',
+              read: true,
+              channelAttempts: { inApp: true, discord: false, telegram: false },
+              createdAt: c.createdAt || c.submissionDate
+            })))
+          ];
+          setNotifications(fallbackNotifs);
+        }
       }
     } catch (err: any) {
       setStatusBanner({ type: 'error', text: err?.message || 'Failed to load Community OS state.' });
@@ -605,6 +629,7 @@ export default function HomePage() {
                 currentUser={currentUser}
                 currentUserRole={currentUserRole}
                 users={users}
+                memberships={memberships}
                 requests={requests}
                 offers={offers}
                 tasks={tasks}
@@ -612,6 +637,11 @@ export default function HomePage() {
                 disputes={disputes}
                 knowledge={knowledge}
                 links={links}
+                events={events}
+                announcements={announcements}
+                inviteCodes={inviteCodes}
+                auditLogs={auditLogs}
+                moderationActions={moderationActions}
                 ownerActionItems={ownerActionItems}
                 dataMode={dataMode}
                 lang={lang}
@@ -632,6 +662,12 @@ export default function HomePage() {
                 currentUser={currentUser}
                 users={users}
                 communities={communities}
+                memberships={memberships}
+                announcements={announcements}
+                events={events}
+                polls={polls}
+                handoffs={handoffs}
+                outcomes={outcomes}
                 requests={requests}
                 offers={offers}
                 tasks={tasks}
