@@ -17,7 +17,7 @@ export async function POST(req: NextRequest, _context?: any) {
     }
 
     const res = NextResponse.json({ success: true, message: 'Logged out successfully' });
-    clearSessionCookie(res);
+    clearSessionCookie(res, { req });
     return res;
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);

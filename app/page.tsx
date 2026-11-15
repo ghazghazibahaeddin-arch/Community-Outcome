@@ -64,10 +64,12 @@ export default function HomePage() {
   const [darkMode, setDarkMode] = useState<boolean>(true);
   const [activeTab, setActiveTab] = useState<string>('hub');
   const [workspaceMode, setWorkspaceMode] = useState<'owner' | 'member' | 'modules'>('owner');
+  const [ownerSection, setOwnerSection] = useState<'operations' | 'connect' | 'pricing'>('operations');
   const [memberSubTab, setMemberSubTab] = useState<
     'inbox' | 'feed' | 'communities' | 'events' | 'tasks' | 'commitments' | 'passport' | 'identity'
   >('inbox');
   const explicitTabRef = React.useRef<boolean>(false);
+  const explicitWorkspaceIntentRef = React.useRef<'owner' | 'member' | null>(null);
   const hasAppliedInitialRoleRef = React.useRef<boolean>(false);
   const [dataMode, setDataMode] = useState<DataMode>('demo');
   const [currentCommunityId, setCurrentCommunityId] = useState<string>('comm_devforge');
@@ -80,7 +82,7 @@ export default function HomePage() {
   const [currentUserRole, setCurrentUserRole] = useState<UserRole>('guest');
   const [isAccountSettingsOpen, setIsAccountSettingsOpen] = useState<boolean>(false);
   const [isOnboardingOpen, setIsOnboardingOpen] = useState<boolean>(false);
-  const [discordInstallUrl, setDiscordInstallUrl] = useState<string | null>(null);
+  const [onboardingInitialPath, setOnboardingInitialPath] = useState<'owner' | 'member' | undefined>(undefined);
   const [statusBanner, setStatusBanner] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
 
   // App Data States
@@ -142,6 +144,8 @@ export default function HomePage() {
       localStorage.removeItem('community_os_session_token');
       const urlParams = new URLSearchParams(window.location.search);
       const tab = urlParams.get('tab');
+      const section = urlParams.get('section');
+      const onboarding = urlParams.get('onboarding');
       const subtab = urlParams.get('subtab');
       const connectedPlatform = urlParams.get('connected_platform');
       const guildId = urlParams.get('guild_id');
@@ -158,11 +162,19 @@ export default function HomePage() {
 
       if (tab === 'member' || tab === 'owner' || isDiscordGuildConnected || isIdentityLinkedRedirect) {
         explicitTabRef.current = true;
+        if (tab === 'owner' || isDiscordGuildConnected) {
+          explicitWorkspaceIntentRef.current = 'owner';
+        } else if (tab === 'member') {
+          explicitWorkspaceIntentRef.current = 'member';
+        }
       }
 
       // Clean transient callback params from address bar without reload
       const transientKeys = [
         'session_token',
+        'tab',
+        'section',
+        'onboarding',
         'subtab',
         'connected_platform',
         'guild_id',
@@ -186,19 +198,41 @@ export default function HomePage() {
         window.history.replaceState({}, document.title, cleanUrl);
       }
 
-      if (tab === 'member' || tab === 'owner' || isDiscordGuildConnected || oauthError || loginSuccess || accountUpdated || connected || subtab === 'identity') {
+      if (
+        tab === 'member' ||
+        tab === 'owner' ||
+        section ||
+        onboarding ||
+        isDiscordGuildConnected ||
+        oauthError ||
+        loginSuccess ||
+        accountUpdated ||
+        connected ||
+        subtab === 'identity'
+      ) {
         const timer = setTimeout(() => {
-          if (tab === 'member' || isIdentityLinkedRedirect) {
-            setWorkspaceMode('member');
-          } else if (tab === 'owner') {
+          if (tab === 'owner' || isDiscordGuildConnected) {
             setWorkspaceMode('owner');
+          } else if (tab === 'member' || isIdentityLinkedRedirect) {
+            setWorkspaceMode('member');
           }
+
+          if (section === 'connect' || isDiscordGuildConnected) {
+            setOwnerSection('connect');
+          } else if (section === 'pricing') {
+            setOwnerSection('pricing');
+          }
+
           if (isIdentityLinkedRedirect) {
             setMemberSubTab('identity');
           }
+
+          if (onboarding === 'owner') {
+            setOnboardingInitialPath('owner');
+            setIsOnboardingOpen(true);
+          }
+
           if (isDiscordGuildConnected) {
-            setWorkspaceMode('modules');
-            setActiveTab('integrations');
             setStatusBanner({
               type: 'success',
               text: guildName
@@ -215,8 +249,8 @@ export default function HomePage() {
             setStatusBanner({
               type: 'success',
               text: provider === 'telegram'
-                ? 'Signed in and linked cleanly with Telegram OpenID Connect.'
-                : 'Signed in and linked cleanly with Discord.'
+                ? 'Signed in cleanly with Telegram OpenID Connect.'
+                : 'Signed in cleanly with Discord.'
             });
           }
         }, 0);
@@ -281,7 +315,18 @@ export default function HomePage() {
           setCurrentUserRole(resolvedRole);
           if (!hasAppliedInitialRoleRef.current) {
             hasAppliedInitialRoleRef.current = true;
-            if (!explicitTabRef.current && !['platform_admin', 'community_owner', 'admin'].includes(resolvedRole)) {
+            const firstOwned = (d.communities || []).find((c: Community) => c.ownerId === d.authUser.id);
+            const wantsOwner = explicitWorkspaceIntentRef.current === 'owner';
+
+            if (
+              (wantsOwner || (!explicitTabRef.current && d.authUser.platformRole === 'community_owner')) &&
+              firstOwned &&
+              !['platform_admin', 'community_owner', 'admin'].includes(resolvedRole)
+            ) {
+              setCurrentCommunityId(firstOwned.id);
+              setCurrentUserRole('community_owner');
+              setWorkspaceMode('owner');
+            } else if (!explicitTabRef.current && !['platform_admin', 'community_owner', 'admin'].includes(resolvedRole)) {
               setWorkspaceMode('member');
             }
           }
@@ -468,6 +513,32 @@ export default function HomePage() {
     } else {
       setWorkspaceMode('member');
       setCurrentUserRole('member');
+      if (details?.inviteCode && authUser) {
+        try {
+          const res = await fetch('/api/data', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({
+              action: 'redeem_invite_code',
+              payload: { code: details.inviteCode, userId: authUser.id }
+            })
+          });
+          const json = (await res.json()) as any;
+          if (!res.ok || !json.success) {
+            setStatusBanner({ type: 'error', text: json.error || 'Could not redeem invite code.' });
+          } else {
+            const joinedComm = json.result?.community;
+            if (joinedComm) setCurrentCommunityId(joinedComm.id);
+            setStatusBanner({
+              type: 'success',
+              text: `Joined ${joinedComm?.name || 'community'} cleanly!`
+            });
+          }
+        } catch (e: any) {
+          setStatusBanner({ type: 'error', text: e?.message || 'Failed to redeem invite code.' });
+        }
+      }
     }
     await fetchData(currentCommunityId);
   };
@@ -529,13 +600,25 @@ export default function HomePage() {
       <AuthPortal
         lang={lang}
         onToggleLang={handleToggleLang}
-        onAuthenticated={(user, defaultWorkspace) => {
+        onAuthenticated={(user, defaultWorkspace, isNewSignup) => {
           setAuthUser(user);
           setWorkspaceMode(defaultWorkspace);
-          setIsOnboardingOpen(true);
-          fetchData(currentCommunityId);
+          const ownedByUser = communities.filter((c) => c.ownerId === user.id);
+          const memberOf = memberships.filter((m) => m.userId === user.id);
+
+          if (defaultWorkspace === 'owner' && ownedByUser.length > 0) {
+            setCurrentCommunityId(ownedByUser[0].id);
+            setCurrentUserRole('community_owner');
+            setOnboardingInitialPath(undefined);
+            setIsOnboardingOpen(Boolean(isNewSignup));
+          } else if (isNewSignup || (defaultWorkspace === 'owner' && ownedByUser.length === 0) || (ownedByUser.length === 0 && memberOf.length === 0)) {
+            setOnboardingInitialPath(defaultWorkspace);
+            setIsOnboardingOpen(true);
+          } else {
+            setIsOnboardingOpen(false);
+          }
+          fetchData(ownedByUser[0]?.id && defaultWorkspace === 'owner' ? ownedByUser[0].id : currentCommunityId);
         }}
-        discordInstallUrl={discordInstallUrl || undefined}
       />
     );
   }
@@ -561,6 +644,7 @@ export default function HomePage() {
         isRefreshing={isRefreshing}
         workspaceMode={workspaceMode}
         onSelectWorkspaceMode={setWorkspaceMode}
+        onSelectOwnerSection={(sec) => setOwnerSection(sec)}
         authUser={authUser}
         currentUserRole={currentUserRole}
         onSignOut={handleSignOut}
@@ -653,6 +737,7 @@ export default function HomePage() {
                   setActiveTab(tab);
                 }}
                 onSwitchToMemberSpace={() => setWorkspaceMode('member')}
+                initialSection={ownerSection}
               />
             )}
 
@@ -662,6 +747,12 @@ export default function HomePage() {
                 currentUser={currentUser}
                 users={users}
                 communities={communities}
+                ownedCommunities={communities.filter((c) => authUser && c.ownerId === authUser.id)}
+                onSwitchToOwnedCommunity={(commId) => {
+                  handleSelectCommunity(commId);
+                  setOwnerSection('operations');
+                  setWorkspaceMode('owner');
+                }}
                 memberships={memberships}
                 announcements={announcements}
                 events={events}
@@ -981,6 +1072,7 @@ export default function HomePage() {
         isOpen={isOnboardingOpen}
         user={authUser}
         lang={lang}
+        initialPath={onboardingInitialPath}
         onSelectRole={handleOnboardingSelect}
         onClose={() => setIsOnboardingOpen(false)}
       />

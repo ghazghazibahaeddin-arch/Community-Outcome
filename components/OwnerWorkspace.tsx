@@ -89,6 +89,18 @@ interface OwnerWorkspaceProps {
   onRefresh: () => void;
   onSelectTab: (tab: string) => void;
   onSwitchToMemberSpace?: () => void;
+  initialSection?:
+    | 'operations'
+    | 'announcements'
+    | 'requests'
+    | 'reviews'
+    | 'disputes'
+    | 'events'
+    | 'roles'
+    | 'config'
+    | 'audit'
+    | 'connect'
+    | 'pricing';
 }
 
 export const OwnerWorkspace: React.FC<OwnerWorkspaceProps> = ({
@@ -115,7 +127,8 @@ export const OwnerWorkspace: React.FC<OwnerWorkspaceProps> = ({
   entitlements,
   onRefresh,
   onSelectTab,
-  onSwitchToMemberSpace
+  onSwitchToMemberSpace,
+  initialSection
 }) => {
   const _t = translations[lang];
 
@@ -131,8 +144,13 @@ export const OwnerWorkspace: React.FC<OwnerWorkspaceProps> = ({
     | 'audit'
     | 'connect'
     | 'pricing'
-    | 'integrations'
-  >('operations');
+  >(initialSection || 'operations');
+
+  useEffect(() => {
+    if (!initialSection) return;
+    const timer = setTimeout(() => setActiveSection(initialSection), 0);
+    return () => clearTimeout(timer);
+  }, [initialSection]);
 
   // General Action Feedback
   const [isResettingData, setIsResettingData] = useState<boolean>(false);
@@ -707,26 +725,38 @@ export const OwnerWorkspace: React.FC<OwnerWorkspaceProps> = ({
           </h2>
         </div>
 
-        {/* Zero-Fabrication Mode Switcher */}
-        <div className="flex items-center gap-2 bg-slate-900 border border-slate-800 p-1 rounded-lg text-xs font-mono shrink-0">
-          <button
-            onClick={() => handleToggleDataMode('demo')}
-            disabled={isResettingData || dataMode === 'demo'}
-            className={`px-3 py-1 rounded whitespace-nowrap transition-colors ${
-              dataMode === 'demo' ? 'bg-amber-950/60 text-amber-300 font-bold border border-amber-800/40' : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            Demo Sandbox
-          </button>
-          <button
-            onClick={() => handleToggleDataMode('production')}
-            disabled={isResettingData || dataMode === 'production'}
-            className={`px-3 py-1 rounded whitespace-nowrap transition-colors ${
-              dataMode === 'production' ? 'bg-emerald-950/60 text-emerald-300 font-bold border border-emerald-800/40' : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            Clean Production
-          </button>
+        {/* Quick Role Switch + Zero-Fabrication Mode Switcher */}
+        <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+          {onSwitchToMemberSpace && (
+            <button
+              type="button"
+              onClick={onSwitchToMemberSpace}
+              className="flex items-center gap-1.5 rounded-lg border border-indigo-500/40 bg-indigo-500/10 hover:bg-indigo-500/20 px-3 py-1.5 text-xs font-semibold text-indigo-300 transition-colors whitespace-nowrap"
+            >
+              <UserCheck className="h-3.5 w-3.5" />
+              <span>{lang === 'ar' ? 'الانتقال لمساحة العضو' : 'Switch to Member Space'}</span>
+            </button>
+          )}
+          <div className="flex items-center gap-2 bg-slate-900 border border-slate-800 p-1 rounded-lg text-xs font-mono shrink-0">
+            <button
+              onClick={() => handleToggleDataMode('demo')}
+              disabled={isResettingData || dataMode === 'demo'}
+              className={`px-3 py-1 rounded whitespace-nowrap transition-colors ${
+                dataMode === 'demo' ? 'bg-amber-950/60 text-amber-300 font-bold border border-amber-800/40' : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              Demo Sandbox
+            </button>
+            <button
+              onClick={() => handleToggleDataMode('production')}
+              disabled={isResettingData || dataMode === 'production'}
+              className={`px-3 py-1 rounded whitespace-nowrap transition-colors ${
+                dataMode === 'production' ? 'bg-emerald-950/60 text-emerald-300 font-bold border border-emerald-800/40' : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              Clean Production
+            </button>
+          </div>
         </div>
       </div>
 
@@ -734,6 +764,7 @@ export const OwnerWorkspace: React.FC<OwnerWorkspaceProps> = ({
       <div className="flex overflow-x-auto gap-1.5 border-b border-slate-800/80 pb-2.5 text-xs font-medium text-slate-400 no-scrollbar">
         {[
           { id: 'operations', label: `Priority Queue (${ownerActionItems.length})` },
+          { id: 'connect', label: lang === 'ar' ? 'بوتات Discord و Telegram' : 'Discord & Telegram Bots', icon: Bot, highlight: 'indigo' },
           { id: 'announcements', label: `Broadcasts (${announcements.length})`, icon: Megaphone },
           { id: 'requests', label: `Requests & Bounties (${requests.length}/${openBountiesCount})` },
           { id: 'reviews', label: `Reviews (${pendingContributions.length})` },
@@ -742,9 +773,7 @@ export const OwnerWorkspace: React.FC<OwnerWorkspaceProps> = ({
           { id: 'roles', label: `Members & Invites (${users.length})` },
           { id: 'config', label: 'Rules & Taxonomy' },
           { id: 'audit', label: 'Audit & Export' },
-          { id: 'connect', label: 'Connect Discord/TG', icon: Bot, highlight: 'indigo' },
-          { id: 'pricing', label: subscription?.tier === 'pro' ? 'Plans (PRO)' : 'Plans ($15/mo)', icon: Sparkles, highlight: 'amber' },
-          { id: 'integrations', label: 'Bot Health' }
+          { id: 'pricing', label: subscription?.tier === 'pro' ? 'Plans (PRO)' : 'Plans ($15/mo)', icon: Sparkles, highlight: 'amber' }
         ].map((tab) => {
           const Icon = tab.icon;
           const active = activeSection === tab.id;
@@ -2203,40 +2232,6 @@ export const OwnerWorkspace: React.FC<OwnerWorkspaceProps> = ({
         </div>
       )}
 
-      {/* SECTION 7: BOT GATEWAYS HEALTH */}
-      {activeSection === 'integrations' && (
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-5 space-y-3">
-              <span className="text-xs font-bold text-white block">Discord Server Status</span>
-              <div className="text-xs space-y-1 text-slate-300">
-                <div>Server: <span className="font-mono text-white">{community.discordConfig.serverName || 'Unlinked'}</span></div>
-                <div>Status: <span className="font-mono text-emerald-400">{community.discordConfig.status}</span></div>
-              </div>
-              <button
-                onClick={() => onSelectTab('integrations')}
-                className="text-xs text-indigo-400 hover:text-indigo-300 font-semibold"
-              >
-                Open Discord Diagnostic Center →
-              </button>
-            </div>
-
-            <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-5 space-y-3">
-              <span className="text-xs font-bold text-white block">Telegram Group Status</span>
-              <div className="text-xs space-y-1 text-slate-300">
-                <div>Group: <span className="font-mono text-white">{community.telegramConfig.groupTitle || 'Unlinked'}</span></div>
-                <div>Status: <span className="font-mono text-sky-400">{community.telegramConfig.status}</span></div>
-              </div>
-              <button
-                onClick={() => onSelectTab('integrations')}
-                className="text-xs text-sky-400 hover:text-sky-300 font-semibold"
-              >
-                Open Telegram Diagnostic Center →
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

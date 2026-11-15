@@ -1640,6 +1640,7 @@ export const dbOperations = {
     const db = getDatabase();
     const user = db.users.find(u => u.id === userId);
     if (!user) return null;
+    if (!user.identities) user.identities = {};
     if (platform === 'discord') {
       user.identities.discordId = id;
       user.identities.discordUsername = username;
@@ -1648,6 +1649,29 @@ export const dbOperations = {
       user.identities.telegramUsername = username;
     }
     user.identities.linkedAt = new Date().toISOString();
+    saveDatabase(db);
+    return user;
+  },
+  unlinkPlatformIdentity: (userId: string, platform: 'discord' | 'telegram') => {
+    const db = getDatabase();
+    const user = db.users.find(u => u.id === userId);
+    if (!user) return null;
+    if (!user.identities) user.identities = {};
+    if (platform === 'discord') {
+      delete user.identities.discordId;
+      delete user.identities.discordUsername;
+    } else {
+      delete user.identities.telegramId;
+      delete user.identities.telegramUsername;
+    }
+    db.auditLogs.unshift({
+      id: `aud_${Date.now()}`,
+      communityId: 'all',
+      actorId: user.id,
+      action: `${platform}_identity_unlinked`,
+      details: `Unlinked personal ${platform} account from user profile`,
+      timestamp: new Date().toISOString()
+    });
     saveDatabase(db);
     return user;
   },
@@ -2815,13 +2839,18 @@ export const dbOperations = {
       const tgGroupId = comm?.telegramConfig?.groupId?.trim();
       if (tgToken && tgGroupId && /^-?\d+$/.test(tgGroupId)) {
         try {
+          const escapeTgHtml = (val: string) =>
+            String(val)
+              .replace(/&/g, '&amp;')
+              .replace(/</g, '&lt;')
+              .replace(/>/g, '&gt;');
           const tgRes = await fetch(`https://api.telegram.org/bot${tgToken}/sendMessage`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               chat_id: tgGroupId,
-              text: `📢 *${input.title}*\n\n${input.message}`,
-              parse_mode: 'Markdown'
+              text: `📢 <b>${escapeTgHtml(input.title)}</b>\n\n${escapeTgHtml(input.message)}`,
+              parse_mode: 'HTML'
             })
           });
           const tgJson = (await tgRes.json().catch(() => ({}))) as any;

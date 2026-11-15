@@ -29,6 +29,7 @@ export async function GET(req: NextRequest, _context?: any) {
   }
 
   const isUserAuthMode = state.startsWith('os_discord_user_');
+  const intent: 'owner' | 'member' = state.includes('_owner_') ? 'owner' : 'member';
   await ensureDatabaseHydrated(env);
   const existingUser = await getAuthenticatedUserFromRequest(req);
   const db = getDatabase();
@@ -112,7 +113,11 @@ export async function GET(req: NextRequest, _context?: any) {
         u.identities.linkedAt = new Date().toISOString();
         saveDatabase(db);
       }
-      return NextResponse.redirect(`${appUrl}/?account_updated=discord_linked&tab=member&subtab=identity`);
+      const targetQuery =
+        intent === 'owner'
+          ? 'account_updated=discord_linked&tab=owner&section=connect'
+          : 'account_updated=discord_linked&tab=member&subtab=identity';
+      return NextResponse.redirect(`${appUrl}/?${targetQuery}`);
     }
 
     // Check if user already exists with this Discord ID
@@ -131,8 +136,8 @@ export async function GET(req: NextRequest, _context?: any) {
         avatar: discordUser.avatar
           ? `https://cdn.discordapp.com/avatars/${discordUser.id}/${discordUser.avatar}.png`
           : `https://picsum.photos/seed/${newUserId}/200/200`,
-        bio: 'Discord verified community member.',
-        platformRole: 'user',
+        bio: intent === 'owner' ? 'Discord verified community owner.' : 'Discord verified community member.',
+        platformRole: intent === 'owner' ? 'community_owner' : 'user',
         createdAt: now,
         identities: {
           discordId: discordUser.id,
@@ -166,6 +171,9 @@ export async function GET(req: NextRequest, _context?: any) {
       if (!user.identities) user.identities = {};
       user.identities.discordId = discordUser.id;
       user.identities.discordUsername = discordUser.username;
+      if (intent === 'owner' && user.platformRole === 'user') {
+        user.platformRole = 'community_owner';
+      }
       user.identities.linkedAt = new Date().toISOString();
       saveDatabase(db);
     }
@@ -173,10 +181,13 @@ export async function GET(req: NextRequest, _context?: any) {
     // Create session and set cookie with SameSite=Lax
     // Note: No session token is placed into the URL query parameters
     const session = createSession(user.id, req.headers.get('user-agent') || undefined);
+    const ownsAnyCommunity = (db.communities || []).some((c) => c.ownerId === user!.id);
+    const targetTab = intent === 'owner' ? 'owner' : 'member';
+    const onboardingParam = intent === 'owner' && !ownsAnyCommunity ? '&onboarding=owner' : '';
     const res = NextResponse.redirect(
-      `${appUrl}/?tab=member&connected_platform=discord&login_success=true`
+      `${appUrl}/?tab=${targetTab}&connected_platform=discord&login_success=true${onboardingParam}`
     );
-    setSessionCookie(res, session.token, { isCrossSite: false });
+    setSessionCookie(res, session.token, { isCrossSite: false, req });
     return res;
   }
 

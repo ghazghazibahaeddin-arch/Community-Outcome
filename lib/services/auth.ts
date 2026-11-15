@@ -12,6 +12,23 @@ export const SESSION_DURATION_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 export const RESET_TOKEN_DURATION_MS = 60 * 60 * 1000; // 1 hour
 
 /**
+ * Determine whether the request / verified app URL uses HTTPS so cookies work on both
+ * plain HTTP localhost:3000 and production HTTPS Cloudflare Workers.
+ */
+export function isHttpsRequest(req?: NextRequest): boolean {
+  if (!req) return true;
+  const forwardedProto = req.headers.get('x-forwarded-proto');
+  if (forwardedProto) {
+    return forwardedProto.split(',')[0].trim().toLowerCase() === 'https';
+  }
+  try {
+    return new URL(req.url).protocol === 'https:';
+  } catch {
+    return !req.url.startsWith('http://');
+  }
+}
+
+/**
  * Set session cookie on a NextResponse with secure server-managed settings.
  * Defaults to SameSite=Lax for normal top-level production web app security.
  * SameSite=None is only used when explicitly requested for cross-site / iframe deployments.
@@ -19,14 +36,15 @@ export const RESET_TOKEN_DURATION_MS = 60 * 60 * 1000; // 1 hour
 export function setSessionCookie(
   res: NextResponse,
   token: string,
-  options?: { isCrossSite?: boolean }
+  options?: { isCrossSite?: boolean; secure?: boolean; req?: NextRequest }
 ) {
   const isCrossSite = options?.isCrossSite ?? false;
+  const secure = options?.secure ?? (options?.req ? isHttpsRequest(options.req) : true);
   res.cookies.set({
     name: SESSION_COOKIE_NAME,
     value: token,
     httpOnly: true,
-    secure: true,
+    secure: isCrossSite ? true : secure,
     sameSite: isCrossSite ? 'none' : 'lax',
     path: '/',
     maxAge: Math.floor(SESSION_DURATION_MS / 1000)
@@ -38,14 +56,15 @@ export function setSessionCookie(
  */
 export function clearSessionCookie(
   res: NextResponse,
-  options?: { isCrossSite?: boolean }
+  options?: { isCrossSite?: boolean; secure?: boolean; req?: NextRequest }
 ) {
   const isCrossSite = options?.isCrossSite ?? false;
+  const secure = options?.secure ?? (options?.req ? isHttpsRequest(options.req) : true);
   res.cookies.set({
     name: SESSION_COOKIE_NAME,
     value: '',
     httpOnly: true,
-    secure: true,
+    secure: isCrossSite ? true : secure,
     sameSite: isCrossSite ? 'none' : 'lax',
     path: '/',
     maxAge: 0

@@ -42,8 +42,13 @@ export async function POST(req: NextRequest, _context?: any) {
     const hubLink = `${appUrl}/l/${community.slug || community.id}-hub`;
     const token = env.TELEGRAM_BOT_TOKEN;
 
+    const safeCommunityName = String(community.name || 'Community')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+
     const menuText =
-      `🌟 *${community.name} — Community OS Action Menu*\n\n` +
+      `🌟 <b>${safeCommunityName} — Community OS Action Menu</b>\n\n` +
       `Welcome to our decentralized community hub! Turn group messages into verified deliverables, collaborative tasks, and portable peer recognition.\n\n` +
       `Tap any interactive button below to access features directly:`;
 
@@ -75,7 +80,7 @@ export async function POST(req: NextRequest, _context?: any) {
           body: JSON.stringify({
             chat_id: targetGroupId,
             text: menuText,
-            parse_mode: 'Markdown',
+            parse_mode: 'HTML',
             reply_markup: inlineKeyboard
           })
         });

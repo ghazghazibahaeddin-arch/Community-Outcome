@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React from 'react';
 import Link from 'next/link';
 import { translations } from '@/lib/i18n';
 import { Community, Language, User, DataMode, UserRole } from '@/lib/types';
@@ -18,8 +18,6 @@ import {
   LogIn,
   LogOut,
   Building2,
-  Lock,
-  ChevronDown,
   Settings,
   Bot,
   Send
@@ -41,6 +39,7 @@ interface HeaderProps {
   // Workspace integration
   workspaceMode: 'owner' | 'member' | 'modules';
   onSelectWorkspaceMode: (mode: 'owner' | 'member' | 'modules') => void;
+  onSelectOwnerSection?: (section: 'operations' | 'connect' | 'pricing') => void;
   // Real authenticated user
   authUser: User | null;
   currentUserRole: UserRole;
@@ -67,6 +66,7 @@ export const Header: React.FC<HeaderProps> = ({
   isRefreshing = false,
   workspaceMode,
   onSelectWorkspaceMode,
+  onSelectOwnerSection,
   authUser,
   currentUserRole,
   onSignOut,
@@ -76,17 +76,31 @@ export const Header: React.FC<HeaderProps> = ({
   onToggleDataMode
 }) => {
   const t = translations[lang];
-  const [showRoleDeniedTip, setShowRoleDeniedTip] = useState(false);
+  const isRtl = lang === 'ar';
 
   const isOwnerOrAdmin = ['platform_admin', 'community_owner', 'admin'].includes(currentUserRole);
+  const ownedCommunities = authUser
+    ? communities.filter((c) => c.ownerId === authUser.id)
+    : [];
+  const joinedCommunities = authUser
+    ? communities.filter((c) => c.ownerId !== authUser.id)
+    : communities;
+  const hasAnyOwnedCommunity = ownedCommunities.length > 0;
+  const canOpenOwnerWorkspace = isOwnerOrAdmin || hasAnyOwnedCommunity;
 
-  const handleOwnerWorkspaceClick = () => {
+  const handleOwnerWorkspaceClick = (targetSection?: 'operations' | 'connect' | 'pricing') => {
     if (isOwnerOrAdmin) {
+      if (targetSection) onSelectOwnerSection?.(targetSection);
       onSelectWorkspaceMode('owner');
-    } else {
-      setShowRoleDeniedTip(true);
-      setTimeout(() => setShowRoleDeniedTip(false), 4000);
+      return;
     }
+    if (ownedCommunities.length > 0) {
+      onSelectCommunity(ownedCommunities[0].id);
+      if (targetSection) onSelectOwnerSection?.(targetSection);
+      onSelectWorkspaceMode('owner');
+      return;
+    }
+    onOpenCreateCommunity();
   };
 
   return (
@@ -94,78 +108,86 @@ export const Header: React.FC<HeaderProps> = ({
       {/* Top Bar: Workspace Switcher & Auth Status Strip */}
       <div className="border-b border-slate-800/80 bg-slate-950/80 px-4 py-1.5 text-xs text-slate-400">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-3">
-          {/* Workspace Mode Switcher with Real Role Check */}
+          {/* Workspace Mode Switcher with Smart Multi-Community Role Switch */}
           <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar relative">
-            <span className="text-[11px] font-mono text-slate-500 uppercase tracking-wider hidden sm:inline">Workspace:</span>
+            <span className="text-[11px] font-mono text-slate-500 uppercase tracking-wider hidden sm:inline">
+              {isRtl ? 'المساحة:' : 'Workspace:'}
+            </span>
 
-            {/* Owner Workspace Button (Enforces Role) */}
-            <div className="relative">
-              <button
-                onClick={handleOwnerWorkspaceClick}
-                className={`flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-semibold transition-all ${
-                  workspaceMode === 'owner'
-                    ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm'
-                    : isOwnerOrAdmin
-                    ? 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
-                    : 'text-slate-500 cursor-not-allowed hover:bg-slate-900/60'
-                }`}
-              >
-                {isOwnerOrAdmin ? (
-                  <Shield className="h-3.5 w-3.5 text-amber-400" />
-                ) : (
-                  <Lock className="h-3.5 w-3.5 text-slate-500" />
-                )}
-                <span>👑 Owner Workspace</span>
-              </button>
-
-              {/* Permission Denied Tooltip */}
-              {showRoleDeniedTip && (
-                <div className="absolute left-0 top-full mt-1.5 z-50 w-64 rounded-lg border border-amber-800/80 bg-amber-950/95 p-2.5 text-[11px] text-amber-200 shadow-xl backdrop-blur-md">
-                  <div className="font-bold flex items-center gap-1 mb-1 text-amber-300">
-                    <Lock className="h-3.5 w-3.5" />
-                    <span>Owner Access Restricted</span>
-                  </div>
-                  <p>
-                    Your role in this community is <span className="font-mono uppercase font-bold text-white">{currentUserRole}</span>. Only community owners and admins can access the Owner Workspace.
-                  </p>
-                </div>
+            {/* Owner Workspace Button (Auto-switches to owned group or offers creation) */}
+            <button
+              type="button"
+              onClick={() => handleOwnerWorkspaceClick('operations')}
+              title={
+                canOpenOwnerWorkspace
+                  ? isRtl
+                    ? 'إدارة مجموعتك أو خادمك'
+                    : 'Manage your owned group or server'
+                  : isRtl
+                  ? 'إنشاء مجتمعك الخاص لتصبح مالكاً'
+                  : 'Create your own group or server to become an owner'
+              }
+              className={`flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-semibold transition-all whitespace-nowrap shrink-0 ${
+                workspaceMode === 'owner'
+                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm'
+                  : canOpenOwnerWorkspace
+                  ? 'text-slate-300 hover:text-white hover:bg-slate-800/60'
+                  : 'text-amber-300/90 border border-amber-500/25 bg-amber-500/5 hover:bg-amber-500/15'
+              }`}
+            >
+              {canOpenOwnerWorkspace ? (
+                <Shield className="h-3.5 w-3.5 text-amber-400" />
+              ) : (
+                <Plus className="h-3.5 w-3.5 text-amber-400" />
               )}
-            </div>
+              <span>
+                {canOpenOwnerWorkspace
+                  ? isRtl
+                    ? 'مساحة صاحب الجروب'
+                    : 'Owner Workspace'
+                  : isRtl
+                  ? '+ أنشئ مجموعتك'
+                  : '+ Create Owner Group'}
+              </span>
+            </button>
 
             {/* Member Workspace Button */}
             <button
+              type="button"
               onClick={() => onSelectWorkspaceMode('member')}
-              className={`flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-semibold transition-all ${
+              className={`flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-semibold transition-all whitespace-nowrap shrink-0 ${
                 workspaceMode === 'member'
                   ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 shadow-sm'
                   : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
               }`}
             >
               <UserCheck className="h-3.5 w-3.5 text-indigo-400" />
-              <span>👤 Member Space</span>
+              <span>{isRtl ? 'مساحة العضو' : 'Member Space'}</span>
             </button>
 
             {/* All Modules Hub */}
             <button
+              type="button"
               onClick={() => onSelectWorkspaceMode('modules')}
-              className={`flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-semibold transition-all ${
+              className={`flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-semibold transition-all whitespace-nowrap shrink-0 ${
                 workspaceMode === 'modules'
                   ? 'bg-slate-700/50 text-slate-200 border border-slate-600'
                   : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
               }`}
             >
               <Sparkles className="h-3.5 w-3.5 text-slate-400" />
-              <span>⚡ All Modules</span>
+              <span>{isRtl ? 'كل الوحدات' : 'All Modules'}</span>
             </button>
           </div>
 
           {/* Right Strip: Data Mode & Real User Identity */}
-          <div className="flex items-center gap-3 shrink-0">
+          <div className="flex items-center gap-2.5 shrink-0">
             {/* Zero-Fabrication Mode Badge / Switch */}
             <button
+              type="button"
               onClick={onToggleDataMode}
               title="Click to toggle between Demo Fixtures and Zero-Data Clean Production"
-              className={`flex items-center gap-1.5 rounded px-2 py-0.5 text-[11px] font-mono border transition-colors ${
+              className={`flex items-center gap-1.5 rounded px-2 py-0.5 text-[11px] font-mono border transition-colors whitespace-nowrap shrink-0 ${
                 dataMode === 'production'
                   ? 'bg-emerald-950/40 text-emerald-300 border-emerald-500/50 hover:bg-emerald-900/40'
                   : 'bg-amber-950/30 text-amber-300 border-amber-500/40 hover:bg-amber-900/40'
@@ -188,19 +210,19 @@ export const Header: React.FC<HeaderProps> = ({
                     type="button"
                     onClick={onOpenAccountSettings}
                     title={`Discord linked: @${authUser.identities.discordUsername || authUser.identities.discordId}`}
-                    className="hidden md:flex items-center gap-1 rounded-md border border-[#5865F2]/40 bg-[#5865F2]/15 px-2 py-0.5 text-[11px] font-medium text-[#a5b2ff] hover:bg-[#5865F2]/25 transition-colors"
+                    className="hidden md:flex items-center gap-1 rounded-md border border-[#5865F2]/40 bg-[#5865F2]/15 px-2 py-0.5 text-[11px] font-medium text-[#a5b2ff] hover:bg-[#5865F2]/25 transition-colors whitespace-nowrap"
                   >
                     <Bot className="h-3 w-3" />
                     <span className="max-w-[90px] truncate">@{authUser.identities.discordUsername || 'Discord'}</span>
                   </button>
                 ) : (
                   <a
-                    href="/api/discord/connect?mode=user&redirect=true"
-                    title={lang === 'ar' ? 'ربط حساب Discord الشخصي' : 'Link your Discord account'}
+                    href={`/api/discord/connect?mode=user&redirect=true&intent=${workspaceMode === 'owner' ? 'owner' : 'member'}`}
+                    title={isRtl ? 'إضافة وربط حساب Discord' : 'Add & Link your Discord account'}
                     className="flex items-center gap-1 rounded-md border border-[#5865F2]/50 bg-[#5865F2]/15 hover:bg-[#5865F2]/25 px-2 py-0.5 text-[11px] font-semibold text-[#9aa8ff] transition-colors whitespace-nowrap"
                   >
                     <Bot className="h-3 w-3" />
-                    <span>{lang === 'ar' ? 'ربط Discord' : 'Link Discord'}</span>
+                    <span>{isRtl ? '+ ربط Discord' : '+ Discord'}</span>
                   </a>
                 )}
 
@@ -209,19 +231,19 @@ export const Header: React.FC<HeaderProps> = ({
                     type="button"
                     onClick={onOpenAccountSettings}
                     title={`Telegram linked: @${authUser.identities.telegramUsername || authUser.identities.telegramId}`}
-                    className="hidden md:flex items-center gap-1 rounded-md border border-[#229ED9]/40 bg-[#229ED9]/15 px-2 py-0.5 text-[11px] font-medium text-[#6ecdf9] hover:bg-[#229ED9]/25 transition-colors"
+                    className="hidden md:flex items-center gap-1 rounded-md border border-[#229ED9]/40 bg-[#229ED9]/15 px-2 py-0.5 text-[11px] font-medium text-[#6ecdf9] hover:bg-[#229ED9]/25 transition-colors whitespace-nowrap"
                   >
                     <Send className="h-3 w-3" />
                     <span className="max-w-[90px] truncate">@{authUser.identities.telegramUsername || 'Telegram'}</span>
                   </button>
                 ) : (
                   <a
-                    href="/api/auth/telegram/authorize?redirect=true"
-                    title={lang === 'ar' ? 'ربط حساب Telegram الشخصي' : 'Link your Telegram account'}
+                    href={`/api/auth/telegram/authorize?redirect=true&intent=${workspaceMode === 'owner' ? 'owner' : 'member'}`}
+                    title={isRtl ? 'إضافة وربط حساب Telegram' : 'Add & Link your Telegram account'}
                     className="flex items-center gap-1 rounded-md border border-[#229ED9]/50 bg-[#229ED9]/15 hover:bg-[#229ED9]/25 px-2 py-0.5 text-[11px] font-semibold text-[#5dc5f7] transition-colors whitespace-nowrap"
                   >
                     <Send className="h-3 w-3" />
-                    <span>{lang === 'ar' ? 'ربط Telegram' : 'Link Telegram'}</span>
+                    <span>{isRtl ? '+ ربط Telegram' : '+ Telegram'}</span>
                   </a>
                 )}
 
@@ -344,7 +366,8 @@ export const Header: React.FC<HeaderProps> = ({
             {t.navigation.testSuite}
           </button>
           <button
-            onClick={() => { onSelectWorkspaceMode('owner'); }}
+            type="button"
+            onClick={() => handleOwnerWorkspaceClick('pricing')}
             className="whitespace-nowrap transition-all py-1 px-2 rounded-md bg-amber-500/10 text-amber-300 border border-amber-500/30 hover:bg-amber-500/20 text-xs font-semibold flex items-center gap-1"
           >
             <Sparkles className="h-3 w-3 text-amber-400" />
@@ -354,17 +377,31 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* Zone 3: Community Selector, Create Community, Lang Toggle, Refresh & Primary CTA */}
         <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-          {/* Community Switcher */}
+          {/* Grouped Community Switcher (Owned vs Joined) */}
           <select
+            aria-label={isRtl ? 'تبديل المجتمع' : 'Switch community'}
             value={currentCommunityId}
             onChange={(e) => onSelectCommunity(e.target.value)}
-            className="h-8 rounded-md border border-slate-700 bg-slate-900/90 px-2 text-xs font-medium text-slate-200 focus:outline-none focus:border-indigo-500 max-w-[150px] truncate"
+            className="h-8 rounded-md border border-slate-700 bg-slate-900/90 px-2 text-xs font-medium text-slate-200 focus:outline-none focus:border-indigo-500 max-w-[175px] truncate"
           >
-            {communities.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
+            {ownedCommunities.length > 0 && (
+              <optgroup label={isRtl ? 'المجموعات والخوادم التي أملكها' : 'My Owned Groups & Servers'}>
+                {ownedCommunities.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    [Owner] {c.name}
+                  </option>
+                ))}
+              </optgroup>
+            )}
+            {joinedCommunities.length > 0 && (
+              <optgroup label={isRtl ? 'مجتمعات منضم إليها كعضو' : 'Joined Communities (Member)'}>
+                {joinedCommunities.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </optgroup>
+            )}
           </select>
 
           {/* Create Community Button */}

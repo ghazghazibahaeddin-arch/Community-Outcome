@@ -123,20 +123,27 @@ export async function POST(req: NextRequest, _context?: any) {
       const guildId = interaction.guild_id || interaction.guild?.id || '';
       const discordUser = interaction.member?.user || interaction.user || {};
       const discordUserId = discordUser.id || '';
-      const discordUsername = discordUser.username ? `${discordUser.username}#${discordUser.discriminator || '0'}` : 'discord_user';
+      const discordUsername =
+        discordUser.username && discordUser.discriminator && discordUser.discriminator !== '0'
+          ? `${discordUser.username}#${discordUser.discriminator}`
+          : discordUser.username || 'discord_user';
 
       await ensureDatabaseHydrated(env);
       const db = getDatabase();
       const appUrl = getVerifiedAppUrl(env);
 
-      // Resolve community by guild ID or fallback to default community
+      // Resolve community by guild ID (primary or secondary servers) or fallback
       const community =
-        db.communities.find((c) => c.discordConfig?.serverId === guildId) ||
+        db.communities.find(
+          (c) =>
+            c.discordConfig?.serverId === guildId ||
+            c.connectedDiscordServers?.some((s) => s.serverId === guildId)
+        ) ||
         db.communities.find((c) => c.id === 'comm_devforge') ||
         db.communities[0];
 
       // Resolve linked user
-      const linkedUser = db.users.find((u) => u.identities.discordId === discordUserId);
+      const linkedUser = db.users.find((u) => u.identities?.discordId === discordUserId);
       const activeCreatorId = linkedUser ? linkedUser.id : 'usr_alex';
 
       // COMMAND: /help
@@ -286,8 +293,19 @@ export async function POST(req: NextRequest, _context?: any) {
 
       // COMMAND: /passport
       if (commandName === 'passport') {
-        const targetUser = linkedUser || db.users[0];
-        const verifiedSkills = targetUser.passport.skills
+        if (!linkedUser) {
+          return NextResponse.json({
+            type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+            data: {
+              content:
+                `Your Discord account (@${discordUsername}) is not yet linked to a Community OS Passport.\n` +
+                `Run \`/connect\` or sign in via Discord OAuth at ${appUrl}/api/discord/connect?mode=user&redirect=true.`,
+              flags: 64 // ephemeral
+            }
+          });
+        }
+
+        const verifiedSkills = linkedUser.passport.skills
           .filter((s) => s.verified)
           .map((s) => s.name)
           .join(', ');
@@ -296,10 +314,10 @@ export async function POST(req: NextRequest, _context?: any) {
           type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
           data: {
             content:
-              `**Member Passport — ${targetUser.passport.displayName}**\n` +
+              `**Member Passport — ${linkedUser.passport.displayName}**\n` +
               `• **Verified Competencies**: ${verifiedSkills || 'Self-declared only'}\n` +
-              `• **Collaboration Bio**: ${targetUser.passport.biography}\n` +
-              `• **Portfolio**: ${targetUser.passport.portfolioLinks.join(', ') || 'None attached'}\n\n` +
+              `• **Collaboration Bio**: ${linkedUser.passport.biography}\n` +
+              `• **Portfolio**: ${linkedUser.passport.portfolioLinks.join(', ') || 'None attached'}\n\n` +
               `*Decentralized verified outcomes managed by Community OS.*`
           }
         });
@@ -318,19 +336,59 @@ export async function POST(req: NextRequest, _context?: any) {
         });
       }
 
-      // COMMAND: /connect
+      // COMMAND: /connect [code]
       if (commandName === 'connect') {
-        // Create an identity challenge code
-        const challenge = dbOperations.createIdentityChallenge(linkedUser?.id || 'usr_sarah', 'discord');
+        const codeOption = interaction.data?.options?.find((o: any) => o.name === 'code')?.value?.trim();
+
+        if (codeOption) {
+          const verifyRes = dbOperations.verifyIdentityChallenge(codeOption, discordUserId, discordUsername);
+          if (!verifyRes.success || !verifyRes.user) {
+            return NextResponse.json({
+              type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+              data: {
+                content:
+                  `❌ **Account Linking Failed**: ${verifyRes.message || 'Invalid or expired code.'}\n` +
+                  `Open **Member Space > Connected Accounts > Discord** at ${appUrl} to generate a fresh \`OS-XXXX\` code.`,
+                flags: 64 // ephemeral
+              }
+            });
+          }
+
+          return NextResponse.json({
+            type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+            data: {
+              content:
+                `✅ **Discord Account Linked Successfully!**\n` +
+                `• **Profile**: ${verifyRes.user.name}\n` +
+                `• **Discord Handle**: @${discordUsername}\n` +
+                `• **Discord ID**: \`${discordUserId}\`\n` +
+                `You can now use \`/mytasks\`, \`/passport\`, and \`/contribution\` in Discord.`,
+              flags: 64 // ephemeral
+            }
+          });
+        }
+
+        if (linkedUser) {
+          return NextResponse.json({
+            type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+            data: {
+              content:
+                `✅ Your Discord account (@${discordUsername}) is already linked to **${linkedUser.name}**.\n` +
+                `Manage or switch accounts at ${appUrl}`,
+              flags: 64 // ephemeral
+            }
+          });
+        }
+
         return NextResponse.json({
           type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
           data: {
             content:
-              `**Account Linking Challenge Code**: \`${challenge.code}\`\n\n` +
-              `1. Open your Community OS Member Space: ${appUrl}\n` +
-              `2. Go to **Member Space > Identity Linking**\n` +
-              `3. Enter code \`${challenge.code}\` to link your Discord account (@${discordUsername}).\n` +
-              `*Code expires in 15 minutes.*`
+              `**Link Your Discord Account to Community OS**\n\n` +
+              `1. **Instant Discord OAuth Sign-In / Link**:\n${appUrl}/api/discord/connect?mode=user&redirect=true\n\n` +
+              `2. **Or Link to an Existing Account via Code**:\n` +
+              `Open **Member Space > Connected Accounts > Discord** at ${appUrl}, generate a 15-minute \`OS-XXXX\` code, then run \`/connect code:OS-XXXX\`.`,
+            flags: 64 // ephemeral
           }
         });
       }
@@ -370,11 +428,15 @@ export async function POST(req: NextRequest, _context?: any) {
       const db = getDatabase();
       const appUrl = getVerifiedAppUrl(env);
       const community =
-        db.communities.find((c) => c.discordConfig?.serverId === guildId) ||
+        db.communities.find(
+          (c) =>
+            c.discordConfig?.serverId === guildId ||
+            c.connectedDiscordServers?.some((s) => s.serverId === guildId)
+        ) ||
         db.communities.find((c) => c.id === 'comm_devforge') ||
         db.communities[0];
 
-      const linkedUser = db.users.find((u) => u.identities.discordId === discordUserId);
+      const linkedUser = db.users.find((u) => u.identities?.discordId === discordUserId);
 
       if (customId === 'btn_hub') {
         const hubLink = `${appUrl}/l/${community.slug || community.id}-hub`;
@@ -396,7 +458,7 @@ export async function POST(req: NextRequest, _context?: any) {
         return NextResponse.json({
           type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
           data: {
-            content: `**Active NeedSignal Requests (${openReqs.length})**:\n${list}\n\nSubmit assistance offers at: ${appUrl}/l/devforge-request-help`,
+            content: `**Active NeedSignal Requests (${openReqs.length})**:\n${list}\n\nSubmit assistance offers at: ${appUrl}/l/${community.slug || community.id}-hub`,
             flags: 64
           }
         });
@@ -422,7 +484,7 @@ export async function POST(req: NextRequest, _context?: any) {
           return NextResponse.json({
             type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
             data: {
-              content: `Your Discord account (@${discordUsername}) is not yet linked.\nUse \`/connect\` to link your Community OS profile and view your verified skills.`,
+              content: `Your Discord account (@${discordUsername}) is not yet linked.\nUse \`/connect\` or link via OAuth at ${appUrl}/api/discord/connect?mode=user&redirect=true`,
               flags: 64
             }
           });
@@ -439,11 +501,22 @@ export async function POST(req: NextRequest, _context?: any) {
       }
 
       if (customId === 'btn_connect') {
-        const challenge = dbOperations.createIdentityChallenge('usr_sarah', 'discord');
+        if (linkedUser) {
+          return NextResponse.json({
+            type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+            data: {
+              content: `✅ Your Discord account (@${discordUsername}) is already linked to **${linkedUser.name}**.\nManage at ${appUrl}`,
+              flags: 64
+            }
+          });
+        }
         return NextResponse.json({
           type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
           data: {
-            content: `**Identity Linking**: Enter verification code \`${challenge.code}\` in your Community OS Member Space: ${appUrl}`,
+            content:
+              `**Link Your Community OS Profile**\n` +
+              `• Instant OAuth: ${appUrl}/api/discord/connect?mode=user&redirect=true\n` +
+              `• Or generate an \`OS-XXXX\` code in Member Space > Connected Accounts and run \`/connect code:OS-XXXX\`.`,
             flags: 64
           }
         });

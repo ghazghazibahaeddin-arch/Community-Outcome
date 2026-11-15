@@ -35,7 +35,7 @@ export async function POST(req: NextRequest, _context?: any) {
       sessionToken: session.token
     });
 
-    setSessionCookie(res, session.token);
+    setSessionCookie(res, session.token, { req });
 
     return res;
   } catch (err: unknown) {

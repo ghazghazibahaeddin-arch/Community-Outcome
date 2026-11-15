@@ -69,7 +69,15 @@ export async function POST(req: NextRequest, _context?: any) {
       },
       {
         name: 'connect',
-        description: 'Link your Discord account to your Community OS identity'
+        description: 'Link your Discord account to your Community OS identity',
+        options: [
+          {
+            name: 'code',
+            description: 'Optional one-time OS-XXXX code generated in Member Space',
+            type: 3, // STRING
+            required: false
+          }
+        ]
       },
       {
         name: 'status',

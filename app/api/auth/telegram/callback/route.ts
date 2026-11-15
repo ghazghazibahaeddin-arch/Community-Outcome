@@ -111,6 +111,8 @@ export async function GET(req: NextRequest, _context?: any) {
   const db = getDatabase();
   if (!db.users) db.users = [];
 
+  const intent: 'owner' | 'member' = sessionState.intent === 'owner' ? 'owner' : 'member';
+
   // Check if an existing logged-in user is linking their Telegram account
   const existingSessionUser = await getAuthenticatedUserFromRequest(req);
   if (existingSessionUser) {
@@ -122,9 +124,11 @@ export async function GET(req: NextRequest, _context?: any) {
       userToUpdate.identities.linkedAt = new Date().toISOString();
       saveDatabase(db);
 
-      const redirectRes = NextResponse.redirect(
-        `${appUrl}/?tab=member&subtab=identity&connected=telegram`
-      );
+      const targetQuery =
+        intent === 'owner'
+          ? 'tab=owner&section=connect&connected=telegram'
+          : 'tab=member&subtab=identity&connected=telegram';
+      const redirectRes = NextResponse.redirect(`${appUrl}/?${targetQuery}`);
       // Clear OIDC state cookie
       redirectRes.cookies.set({
         name: TELEGRAM_OIDC_COOKIE_NAME,
@@ -148,8 +152,8 @@ export async function GET(req: NextRequest, _context?: any) {
       name: displayName,
       email: username ? `${username.toLowerCase()}@telegram.user` : `tg_${telegramSub}@telegram.user`,
       avatar: payload.picture || `https://picsum.photos/seed/${newUserId}/200/200`,
-      bio: 'Verified Telegram community member.',
-      platformRole: 'user',
+      bio: intent === 'owner' ? 'Verified Telegram community owner.' : 'Verified Telegram community member.',
+      platformRole: intent === 'owner' ? 'community_owner' : 'user',
       createdAt: now,
       identities: {
         telegramId: telegramSub,
@@ -158,7 +162,7 @@ export async function GET(req: NextRequest, _context?: any) {
       },
       passport: {
         displayName,
-        biography: 'Verified Telegram community member.',
+        biography: 'Verified Telegram community contributor.',
         skills: [{ id: 'sk_tg', name: 'Telegram Operations', level: 'intermediate', verified: true, endorsementsCount: 1 }],
         interests: ['Decentralized Communities', 'Collaboration'],
         languages: ['English'],
@@ -184,19 +188,25 @@ export async function GET(req: NextRequest, _context?: any) {
     if (!user.identities) user.identities = {};
     user.identities.telegramId = telegramSub;
     if (username) user.identities.telegramUsername = username;
+    if (intent === 'owner' && user.platformRole === 'user') {
+      user.platformRole = 'community_owner';
+    }
     user.identities.linkedAt = new Date().toISOString();
     saveDatabase(db);
   }
 
   // Create persistent session
   const session = createSession(user.id, req.headers.get('user-agent') || undefined);
+  const ownsAnyCommunity = (db.communities || []).some((c) => c.ownerId === user!.id);
+  const targetTab = intent === 'owner' ? 'owner' : 'member';
+  const onboardingParam = intent === 'owner' && !ownsAnyCommunity ? '&onboarding=owner' : '';
 
   // Return redirect with secure HttpOnly SameSite=Lax cookie.
   // Note: Session token is NEVER exposed in the URL query parameters!
   const redirectRes = NextResponse.redirect(
-    `${appUrl}/?tab=member&login_success=true&provider=telegram`
+    `${appUrl}/?tab=${targetTab}&login_success=true&provider=telegram${onboardingParam}`
   );
-  setSessionCookie(redirectRes, session.token, { isCrossSite: false });
+  setSessionCookie(redirectRes, session.token, { isCrossSite: false, req });
 
   // Clear the OIDC transient state cookie
   redirectRes.cookies.set({

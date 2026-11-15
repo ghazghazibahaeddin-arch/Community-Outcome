@@ -39,7 +39,7 @@ export async function POST(req: NextRequest, _context?: any) {
       { status: 201 }
     );
 
-    setSessionCookie(res, session.token);
+    setSessionCookie(res, session.token, { req });
 
     return res;
   } catch (err: unknown) {

@@ -295,6 +295,18 @@ export async function POST(req: NextRequest, _context?: any) {
         break;
       }
 
+      case 'unlink_platform': {
+        const targetUserId = authUser?.id || payload.userId;
+        if (!targetUserId) {
+          return NextResponse.json({ success: false, error: 'Authentication required' }, { status: 401 });
+        }
+        if (payload.platform !== 'discord' && payload.platform !== 'telegram') {
+          return NextResponse.json({ success: false, error: 'Invalid platform specified' }, { status: 400 });
+        }
+        result = dbOperations.unlinkPlatformIdentity(targetUserId, payload.platform);
+        break;
+      }
+
       case 'create_handoff':
         result = dbOperations.createHandoff(payload);
         break;

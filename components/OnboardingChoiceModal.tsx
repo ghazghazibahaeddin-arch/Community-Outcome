@@ -23,6 +23,7 @@ interface OnboardingChoiceModalProps {
   isOpen: boolean;
   user: User | null;
   lang: Language;
+  initialPath?: 'owner' | 'member';
   onSelectRole: (role: 'owner' | 'member', details?: { communityName?: string; inviteCode?: string }) => void | Promise<void>;
   onClose: () => void;
 }
@@ -31,15 +32,22 @@ export const OnboardingChoiceModal: React.FC<OnboardingChoiceModalProps> = ({
   isOpen,
   user,
   lang,
+  initialPath,
   onSelectRole,
   onClose
 }) => {
   const isRtl = lang === 'ar';
-  const [selectedPath, setSelectedPath] = useState<'owner' | 'member' | null>(null);
+  const [selectedPath, setSelectedPath] = useState<'owner' | 'member' | null>(initialPath || null);
   const [communityName, setCommunityName] = useState('');
   const [inviteCode, setInviteCode] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (!isOpen || !initialPath) return;
+    const t = setTimeout(() => setSelectedPath(initialPath), 0);
+    return () => clearTimeout(t);
+  }, [isOpen, initialPath]);
 
   if (!isOpen) return null;
 

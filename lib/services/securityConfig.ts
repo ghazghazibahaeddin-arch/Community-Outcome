@@ -29,8 +29,12 @@ export function isAllowedOrigin(urlStr: string): boolean {
     if (ALLOWED_APP_ORIGINS.some((allowed) => allowed.toLowerCase() === origin)) {
       return true;
     }
-    // Allow any Cloudflare Workers or Pages domain (.workers.dev or .pages.dev)
-    if (parsed.hostname.endsWith('.workers.dev') || parsed.hostname.endsWith('.pages.dev')) {
+    // Allow Cloudflare Workers/Pages and Cloud Run / preview domains
+    if (
+      parsed.hostname.endsWith('.workers.dev') ||
+      parsed.hostname.endsWith('.pages.dev') ||
+      parsed.hostname.endsWith('.run.app')
+    ) {
       return true;
     }
     return false;
@@ -60,28 +64,44 @@ export function getVerifiedAppUrl(explicitEnv?: CloudflareEnv): string {
 
 /**
  * Retrieve and validate the fixed Discord OAuth redirect URI.
- * Reads env.DISCORD_REDIRECT_URI from Cloudflare Workers environment and validates against allowlist.
+ * If APP_URL is overridden to a non-default origin (such as localhost:3000) while DISCORD_REDIRECT_URI
+ * is only the default production URL, automatically derive from verifiedAppUrl.
  */
 export function getDiscordRedirectUri(explicitEnv?: CloudflareEnv): string {
   const env = getRuntimeEnv(explicitEnv);
+  const verifiedAppUrl = getVerifiedAppUrl(env);
   const customUri = env.DISCORD_REDIRECT_URI ? env.DISCORD_REDIRECT_URI.trim() : '';
-  if (customUri && isAllowedOrigin(customUri)) {
+  const defaultProdCallback = `${DEFAULT_PRODUCTION_APP_URL}/api/discord/callback`;
+
+  if (
+    customUri &&
+    isAllowedOrigin(customUri) &&
+    (customUri !== defaultProdCallback || verifiedAppUrl === DEFAULT_PRODUCTION_APP_URL)
+  ) {
     return customUri;
   }
-  return `${getVerifiedAppUrl(env)}/api/discord/callback`;
+  return `${verifiedAppUrl}/api/discord/callback`;
 }
 
 /**
  * Retrieve and validate the fixed Telegram OpenID Connect redirect URI.
- * Reads env.TELEGRAM_REDIRECT_URI from Cloudflare Workers environment and validates against allowlist.
+ * If APP_URL is overridden to a non-default origin (such as localhost:3000) while TELEGRAM_REDIRECT_URI
+ * is only the default production URL, automatically derive from verifiedAppUrl.
  */
 export function getTelegramRedirectUri(explicitEnv?: CloudflareEnv): string {
   const env = getRuntimeEnv(explicitEnv);
+  const verifiedAppUrl = getVerifiedAppUrl(env);
   const customUri = env.TELEGRAM_REDIRECT_URI ? env.TELEGRAM_REDIRECT_URI.trim() : '';
-  if (customUri && isAllowedOrigin(customUri)) {
+  const defaultProdCallback = `${DEFAULT_PRODUCTION_APP_URL}/api/auth/telegram/callback`;
+
+  if (
+    customUri &&
+    isAllowedOrigin(customUri) &&
+    (customUri !== defaultProdCallback || verifiedAppUrl === DEFAULT_PRODUCTION_APP_URL)
+  ) {
     return customUri;
   }
-  return `${getVerifiedAppUrl(env)}/api/auth/telegram/callback`;
+  return `${verifiedAppUrl}/api/auth/telegram/callback`;
 }
 
 /**

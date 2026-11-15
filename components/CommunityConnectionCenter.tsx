@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { translations } from '@/lib/i18n';
 import { Community, Language, User, UserRole, IntegrationCheckResult } from '@/lib/types';
 import {
   Bot,
@@ -9,19 +8,14 @@ import {
   AlertTriangle,
   ExternalLink,
   RefreshCw,
-  ShieldCheck,
   Send,
   Unlink,
-  MessageSquare,
-  Lock,
   Copy,
   Check,
   Pin,
   Sparkles,
-  Layers,
   Terminal,
-  Activity,
-  AlertCircle
+  Wrench
 } from 'lucide-react';
 
 interface CommunityConnectionCenterProps {
@@ -39,13 +33,15 @@ export const CommunityConnectionCenter: React.FC<CommunityConnectionCenterProps>
   lang,
   onRefresh
 }) => {
-  const t = translations[lang];
+  const isRtl = lang === 'ar';
 
-  // Active Connection Tab: 'discord' | 'telegram' | 'menu'
-  const [activeTab, setActiveTab] = useState<'discord' | 'telegram' | 'menu'>('discord');
+  // Two completely non-overlapping platform hubs: 'discord' | 'telegram'
+  const [activeHub, setActiveHub] = useState<'discord' | 'telegram'>('discord');
 
-  // Discord State
+  // Discord Hub State
   const [isVerifyingDiscord, setIsVerifyingDiscord] = useState(false);
+  const [isRegisteringDiscordCommands, setIsRegisteringDiscordCommands] = useState(false);
+  const [isPublishingDiscordMenu, setIsPublishingDiscordMenu] = useState(false);
   const [discordInstallUrl, setDiscordInstallUrl] = useState<string | null>(null);
   const [discordGuildInput, setDiscordGuildInput] = useState(community.discordConfig?.serverId || '');
   const [discordGuildNameInput, setDiscordGuildNameInput] = useState(community.discordConfig?.serverName || '');
@@ -53,8 +49,13 @@ export const CommunityConnectionCenter: React.FC<CommunityConnectionCenterProps>
   const [discordStatusMsg, setDiscordStatusMsg] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
   const [discordLiveCheck, setDiscordLiveCheck] = useState<IntegrationCheckResult | null>(null);
 
-  // Telegram State
+  // Telegram Hub State
   const [isVerifyingTelegram, setIsVerifyingTelegram] = useState(false);
+  const [isSyncingTelegramWebhook, setIsSyncingTelegramWebhook] = useState(false);
+  const [isPublishingTelegramMenu, setIsPublishingTelegramMenu] = useState(false);
+  const [pinTelegramMenu, setPinTelegramMenu] = useState(true);
+  const [telegramWebhookUrl, setTelegramWebhookUrl] = useState<string | null>(null);
+  const [telegramPendingUpdates, setTelegramPendingUpdates] = useState<number | null>(null);
   const [telegramChallenge, setTelegramChallenge] = useState<{
     code: string;
     command: string;
@@ -68,11 +69,7 @@ export const CommunityConnectionCenter: React.FC<CommunityConnectionCenterProps>
   const [telegramStatusMsg, setTelegramStatusMsg] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
   const [telegramLiveCheck, setTelegramLiveCheck] = useState<IntegrationCheckResult | null>(null);
 
-  // Persistent In-Group Menu State
-  const [publishingPlatform, setPublishingPlatform] = useState<'discord' | 'telegram'>('telegram');
-  const [isPublishingMenu, setIsPublishingMenu] = useState(false);
-  const [pinTelegramMenu, setPinTelegramMenu] = useState(true);
-  const [publishResult, setPublishResult] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  // Inline Disconnect State
   const [confirmDisconnect, setConfirmDisconnect] = useState<'discord' | 'telegram' | null>(null);
   const [isDisconnecting, setIsDisconnecting] = useState(false);
 
@@ -86,25 +83,40 @@ export const CommunityConnectionCenter: React.FC<CommunityConnectionCenterProps>
       setDiscordChannelInput(community.discordConfig?.channelId || '');
       setConfirmDisconnect(null);
       setTelegramChallenge(null);
-      setPublishResult(null);
+      setDiscordStatusMsg(null);
+      setTelegramStatusMsg(null);
     }, 0);
     return () => clearTimeout(timer);
   }, [community.id, community.discordConfig?.serverId, community.discordConfig?.serverName, community.discordConfig?.channelId]);
 
-  // Load Discord install URL on mount
+  // Load Discord install URL and Telegram webhook info on mount
   useEffect(() => {
-    const fetchDiscordInfo = async () => {
+    let active = true;
+    const fetchInitialInfo = async () => {
       try {
         const res = await fetch(`/api/discord/connect?communityId=${community.id}`);
         const data = await res.json();
-        if (data.success && data.installUrl) {
+        if (active && data.success && data.installUrl) {
           setDiscordInstallUrl(data.installUrl);
+        }
+      } catch {}
+      try {
+        const tgRes = await fetch('/api/telegram/register-webhook');
+        const tgData = await tgRes.json();
+        if (active && tgData.success && tgData.webhookInfo) {
+          setTelegramWebhookUrl(tgData.webhookInfo.url || null);
+          if (typeof tgData.webhookInfo.pending_update_count === 'number') {
+            setTelegramPendingUpdates(tgData.webhookInfo.pending_update_count);
+          }
         }
       } catch {}
     };
     if (isOwnerOrAdmin) {
-      fetchDiscordInfo();
+      fetchInitialInfo();
     }
+    return () => {
+      active = false;
+    };
   }, [community.id, isOwnerOrAdmin]);
 
   // Handle Discord Live Verification
@@ -121,22 +133,50 @@ export const CommunityConnectionCenter: React.FC<CommunityConnectionCenterProps>
       const data = await res.json();
       if (data.success && data.result) {
         setDiscordLiveCheck(data.result);
-        if (data.result.status === 'connected') {
-          setDiscordStatusMsg({
-            type: 'success',
-            text: `Discord Bot verified! ${data.result.botName} (@${data.result.botUsername}) is active with slash command capabilities.`
-          });
-        } else {
-          setDiscordStatusMsg({
-            type: 'info',
-            text: data.result.details || 'Discord bot status checked.'
-          });
-        }
+        setDiscordStatusMsg({
+          type: data.result.status === 'connected' ? 'success' : 'info',
+          text:
+            data.result.status === 'connected'
+              ? isRtl
+                ? `بوت Discord يعمل! ${data.result.botName} (@${data.result.botUsername}) متصل وجاهز للأوامر.`
+                : `Discord Bot verified! ${data.result.botName} (@${data.result.botUsername}) is online.`
+              : data.result.details || 'Discord bot status checked.'
+        });
       }
     } catch (err: any) {
       setDiscordStatusMsg({ type: 'error', text: `Verification failed: ${err.message}` });
     } finally {
       setIsVerifyingDiscord(false);
+    }
+  };
+
+  // Register Discord Slash Commands
+  const handleRegisterDiscordCommands = async () => {
+    setIsRegisteringDiscordCommands(true);
+    setDiscordStatusMsg(null);
+    try {
+      const res = await fetch('/api/discord/register-commands', {
+        method: 'POST',
+        credentials: 'include'
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        setDiscordStatusMsg({
+          type: 'error',
+          text: data.error || 'Failed to register Discord slash commands.'
+        });
+        return;
+      }
+      setDiscordStatusMsg({
+        type: 'success',
+        text: isRtl
+          ? `تم تسجيل وتحديث ${data.registeredCount || 10} أوامر Slash لبوت Discord بنجاح!`
+          : `Successfully registered & synced ${data.registeredCount || 10} Discord Slash Commands!`
+      });
+    } catch (err: any) {
+      setDiscordStatusMsg({ type: 'error', text: `Command registration failed: ${err.message}` });
+    } finally {
+      setIsRegisteringDiscordCommands(false);
     }
   };
 
@@ -164,7 +204,9 @@ export const CommunityConnectionCenter: React.FC<CommunityConnectionCenterProps>
       }
       setDiscordStatusMsg({
         type: 'success',
-        text: `Successfully linked Discord server "${data.server?.name || discordGuildInput}" to ${community.name}!`
+        text: isRtl
+          ? `تم ربط خادم Discord "${data.server?.name || discordGuildInput}" بالمجتمع بنجاح!`
+          : `Successfully linked Discord server "${data.server?.name || discordGuildInput}" to ${community.name}!`
       });
       onRefresh();
     } catch (err: any) {
@@ -172,36 +214,108 @@ export const CommunityConnectionCenter: React.FC<CommunityConnectionCenterProps>
     }
   };
 
-  // Handle Telegram Live Verification
+  // Publish Interactive Menu to Discord
+  const handlePublishDiscordMenu = async () => {
+    setIsPublishingDiscordMenu(true);
+    setDiscordStatusMsg(null);
+    try {
+      const res = await fetch('/api/discord/publish-menu', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ communityId: community.id })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setDiscordStatusMsg({
+          type: 'success',
+          text: data.details || 'Published interactive action hub menu to your Discord channel!'
+        });
+        onRefresh();
+      } else {
+        setDiscordStatusMsg({
+          type: 'error',
+          text: data.error || 'Failed to publish interactive menu to Discord.'
+        });
+      }
+    } catch (err: any) {
+      setDiscordStatusMsg({ type: 'error', text: `Publish error: ${err.message}` });
+    } finally {
+      setIsPublishingDiscordMenu(false);
+    }
+  };
+
+  // Handle Telegram Live Verification & Webhook Info
   const handleVerifyTelegram = async () => {
     setIsVerifyingTelegram(true);
     setTelegramStatusMsg(null);
     try {
-      const res = await fetch('/api/integrations/verify', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ platform: 'telegram' })
-      });
-      const data = await res.json();
+      const [verifyRes, whRes] = await Promise.all([
+        fetch('/api/integrations/verify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ platform: 'telegram' })
+        }),
+        fetch('/api/telegram/register-webhook')
+      ]);
+      const data = await verifyRes.json();
+      const whData = await whRes.json();
+      if (whData.success && whData.webhookInfo) {
+        setTelegramWebhookUrl(whData.webhookInfo.url || null);
+        if (typeof whData.webhookInfo.pending_update_count === 'number') {
+          setTelegramPendingUpdates(whData.webhookInfo.pending_update_count);
+        }
+      }
       if (data.success && data.result) {
         setTelegramLiveCheck(data.result);
-        if (data.result.status === 'connected') {
-          setTelegramStatusMsg({
-            type: 'success',
-            text: `Telegram Bot verified! @${data.result.botUsername} (${data.result.botName}) is online with webhook active.`
-          });
-        } else {
-          setTelegramStatusMsg({
-            type: 'info',
-            text: data.result.details || 'Telegram bot check completed.'
-          });
-        }
+        setTelegramStatusMsg({
+          type: data.result.status === 'connected' ? 'success' : 'info',
+          text:
+            data.result.status === 'connected'
+              ? isRtl
+                ? `بوت Telegram نشط! @${data.result.botUsername} (${data.result.botName}) متصل مع Webhook.`
+                : `Telegram Bot verified! @${data.result.botUsername} (${data.result.botName}) is online with webhook active.`
+              : data.result.details || 'Telegram bot check completed.'
+        });
       }
     } catch (err: any) {
       setTelegramStatusMsg({ type: 'error', text: `Verification failed: ${err.message}` });
     } finally {
       setIsVerifyingTelegram(false);
+    }
+  };
+
+  // Sync / Register Telegram Webhook
+  const handleSyncTelegramWebhook = async () => {
+    setIsSyncingTelegramWebhook(true);
+    setTelegramStatusMsg(null);
+    try {
+      const res = await fetch('/api/telegram/register-webhook', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({})
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        setTelegramStatusMsg({
+          type: 'error',
+          text: data.error || 'Failed to sync Telegram webhook.'
+        });
+        return;
+      }
+      setTelegramWebhookUrl(data.webhookUrl || null);
+      setTelegramStatusMsg({
+        type: 'success',
+        text: isRtl
+          ? `تم مزامنة Webhook الخاص ببوت تيلغرام بنجاح: ${data.webhookUrl}`
+          : `Telegram Webhook synced successfully: ${data.webhookUrl}`
+      });
+    } catch (err: any) {
+      setTelegramStatusMsg({ type: 'error', text: `Webhook sync failed: ${err.message}` });
+    } finally {
+      setIsSyncingTelegramWebhook(false);
     }
   };
 
@@ -229,7 +343,38 @@ export const CommunityConnectionCenter: React.FC<CommunityConnectionCenterProps>
     }
   };
 
-  // Handle Disconnect via inline confirmation (never use window.confirm)
+  // Publish Interactive Menu to Telegram
+  const handlePublishTelegramMenu = async () => {
+    setIsPublishingTelegramMenu(true);
+    setTelegramStatusMsg(null);
+    try {
+      const res = await fetch('/api/telegram/publish-menu', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ communityId: community.id, pinMessage: pinTelegramMenu })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setTelegramStatusMsg({
+          type: 'success',
+          text: data.details || 'Interactive hub menu published to your Telegram group!'
+        });
+        onRefresh();
+      } else {
+        setTelegramStatusMsg({
+          type: 'error',
+          text: data.error || 'Failed to publish interactive menu to Telegram.'
+        });
+      }
+    } catch (err: any) {
+      setTelegramStatusMsg({ type: 'error', text: `Publish error: ${err.message}` });
+    } finally {
+      setIsPublishingTelegramMenu(false);
+    }
+  };
+
+  // Handle Disconnect via inline confirmation
   const handleDisconnect = async (platform: 'discord' | 'telegram') => {
     setIsDisconnecting(true);
     try {
@@ -249,11 +394,8 @@ export const CommunityConnectionCenter: React.FC<CommunityConnectionCenterProps>
       const data = await res.json();
       if (!res.ok || !data.success) {
         const msg = data.error || `Failed to disconnect ${platform}`;
-        if (platform === 'discord') {
-          setDiscordStatusMsg({ type: 'error', text: msg });
-        } else {
-          setTelegramStatusMsg({ type: 'error', text: msg });
-        }
+        if (platform === 'discord') setDiscordStatusMsg({ type: 'error', text: msg });
+        else setTelegramStatusMsg({ type: 'error', text: msg });
         return;
       }
       setConfirmDisconnect(null);
@@ -265,50 +407,10 @@ export const CommunityConnectionCenter: React.FC<CommunityConnectionCenterProps>
       onRefresh();
     } catch (err: any) {
       const msg = err?.message || `Failed to disconnect ${platform}`;
-      if (platform === 'discord') {
-        setDiscordStatusMsg({ type: 'error', text: msg });
-      } else {
-        setTelegramStatusMsg({ type: 'error', text: msg });
-      }
+      if (platform === 'discord') setDiscordStatusMsg({ type: 'error', text: msg });
+      else setTelegramStatusMsg({ type: 'error', text: msg });
     } finally {
       setIsDisconnecting(false);
-    }
-  };
-
-  // Handle Publish In-Group Persistent Menu
-  const handlePublishMenu = async () => {
-    setIsPublishingMenu(true);
-    setPublishResult(null);
-    try {
-      const endpoint = publishingPlatform === 'discord' ? '/api/discord/publish-menu' : '/api/telegram/publish-menu';
-      const payload: any = { communityId: community.id };
-      if (publishingPlatform === 'telegram') {
-        payload.pinMessage = pinTelegramMenu;
-      }
-
-      const res = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify(payload)
-      });
-      const data = await res.json();
-      if (data.success) {
-        setPublishResult({
-          type: 'success',
-          message: data.details || `Successfully published interactive menu to ${publishingPlatform}!`
-        });
-        onRefresh();
-      } else {
-        setPublishResult({
-          type: 'error',
-          message: data.error || `Failed to publish menu to ${publishingPlatform}`
-        });
-      }
-    } catch (err: any) {
-      setPublishResult({ type: 'error', message: `Publish error: ${err.message}` });
-    } finally {
-      setIsPublishingMenu(false);
     }
   };
 
@@ -319,195 +421,218 @@ export const CommunityConnectionCenter: React.FC<CommunityConnectionCenterProps>
         setCopiedCode(true);
         setTimeout(() => setCopiedCode(false), 2500);
       }
-    } catch {
-      // Clipboard blocked in restricted browser context
-    }
+    } catch {}
   };
 
   const isDiscordConnected = community.discordConfig?.connected && community.discordConfig?.status !== 'disconnected';
   const isTelegramConnected = community.telegramConfig?.connected && community.telegramConfig?.status !== 'disconnected';
 
   return (
-    <div className="space-y-6">
+    <div dir={isRtl ? 'rtl' : 'ltr'} className="space-y-6">
       {/* Header Banner */}
-      <div className="rounded-2xl border border-indigo-500/30 bg-gradient-to-r from-indigo-950/40 via-slate-900/60 to-purple-950/30 p-6 sm:p-8 backdrop-blur-md">
+      <div className="rounded-2xl border border-indigo-500/30 bg-gradient-to-r from-indigo-950/40 via-slate-900/60 to-sky-950/30 p-6 backdrop-blur-md">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             <div className="flex items-center gap-2">
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-indigo-500/40 bg-indigo-500/20 px-3 py-1 text-xs font-semibold text-indigo-300">
+              <span className="inline-flex items-center gap-1.5 rounded-md border border-indigo-500/40 bg-indigo-500/20 px-2.5 py-0.5 text-xs font-semibold text-indigo-300">
                 <Sparkles className="h-3.5 w-3.5" />
-                <span>Connect Your Community</span>
+                <span>{isRtl ? 'مركز ربط البوتات للمالك' : 'Owner Bot & Platform Hubs'}</span>
               </span>
-              <span className="text-xs font-mono text-slate-400">
-                · {community.name}
-              </span>
+              <span className="text-xs font-mono text-slate-400">· {community.name}</span>
             </div>
-            <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white">
-              Direct Community Connection Center
+            <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-white">
+              {isRtl ? 'إدارة منفصلة ومنظمة لبوت ديسكورد وبوت تيلغرام' : 'Dedicated Discord Server & Telegram Group Hubs'}
             </h1>
             <p className="text-xs sm:text-sm text-slate-300 max-w-2xl leading-relaxed">
-              Connect your actual Discord server and Telegram group. Community members can create requests, claim deliverables, submit proof of work, and explore verified outcomes directly from chat.
+              {isRtl
+                ? 'كل منصة لها مساحتها المستقلة بالكامل: ربط الخادم أو المجموعة، فحص صحة البوت، تسجيل الأوامر والـ Webhook، ونشر القائمة التفاعلية.'
+                : 'Each platform has its own clean, non-overlapping control hub: connect your server or group, verify live bot health, sync commands/webhooks, and publish interactive menus.'}
             </p>
           </div>
 
-          {/* Quick Status Chips */}
+          {/* Crisp Non-Pulsing Status Chips */}
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 shrink-0">
-            {/* Discord Status Chip */}
-            <div className="flex items-center gap-2.5 rounded-xl border border-slate-800 bg-slate-900/80 px-3.5 py-2">
-              <div className={`h-2.5 w-2.5 rounded-full ${isDiscordConnected ? 'bg-emerald-400 animate-pulse' : 'bg-slate-600'}`} />
+            <button
+              type="button"
+              onClick={() => setActiveHub('discord')}
+              className={`flex items-center gap-2.5 rounded-xl border px-3.5 py-2 text-start transition-colors ${
+                activeHub === 'discord'
+                  ? 'border-[#5865F2] bg-[#5865F2]/15'
+                  : 'border-slate-800 bg-slate-900/80 hover:border-slate-700'
+              }`}
+            >
+              <Bot className="h-4 w-4 text-[#9aa8ff] shrink-0" />
               <div>
                 <span className="text-[10px] font-mono uppercase text-slate-400 block">Discord Server</span>
-                <span className="text-xs font-bold text-white">
-                  {isDiscordConnected ? (community.discordConfig.serverName || 'Connected') : 'Not Connected'}
+                <span className="text-xs font-bold text-white block max-w-[140px] truncate">
+                  {isDiscordConnected ? community.discordConfig.serverName || 'Connected' : isRtl ? 'غير مربوط' : 'Not Connected'}
                 </span>
               </div>
-            </div>
+            </button>
 
-            {/* Telegram Status Chip */}
-            <div className="flex items-center gap-2.5 rounded-xl border border-slate-800 bg-slate-900/80 px-3.5 py-2">
-              <div className={`h-2.5 w-2.5 rounded-full ${isTelegramConnected ? 'bg-sky-400 animate-pulse' : 'bg-slate-600'}`} />
+            <button
+              type="button"
+              onClick={() => setActiveHub('telegram')}
+              className={`flex items-center gap-2.5 rounded-xl border px-3.5 py-2 text-start transition-colors ${
+                activeHub === 'telegram'
+                  ? 'border-[#229ED9] bg-[#229ED9]/15'
+                  : 'border-slate-800 bg-slate-900/80 hover:border-slate-700'
+              }`}
+            >
+              <Send className="h-4 w-4 text-[#5dc5f7] shrink-0" />
               <div>
                 <span className="text-[10px] font-mono uppercase text-slate-400 block">Telegram Group</span>
-                <span className="text-xs font-bold text-white">
-                  {isTelegramConnected ? (community.telegramConfig.groupTitle || 'Connected') : 'Not Connected'}
+                <span className="text-xs font-bold text-white block max-w-[140px] truncate">
+                  {isTelegramConnected ? community.telegramConfig.groupTitle || 'Connected' : isRtl ? 'غير مربوط' : 'Not Connected'}
                 </span>
               </div>
-            </div>
+            </button>
           </div>
         </div>
       </div>
 
-      {/* Connection Navigation Tabs */}
-      <div className="flex border-b border-slate-800 gap-2 sm:gap-6 text-xs sm:text-sm font-semibold">
+      {/* Non-Overlapping Hub Switcher (Discord vs Telegram) */}
+      <div className="grid grid-cols-2 gap-3 p-1.5 rounded-xl bg-slate-950 border border-slate-800">
         <button
-          onClick={() => setActiveTab('discord')}
-          className={`flex items-center gap-2 pb-3 transition-colors ${
-            activeTab === 'discord'
-              ? 'border-b-2 border-indigo-500 text-indigo-400'
-              : 'text-slate-400 hover:text-white'
+          type="button"
+          onClick={() => setActiveHub('discord')}
+          className={`flex items-center justify-center gap-2 rounded-lg py-2.5 px-4 text-xs sm:text-sm font-bold transition-all whitespace-nowrap ${
+            activeHub === 'discord'
+              ? 'bg-[#5865F2]/25 text-[#a5b2ff] border border-[#5865F2]/50 shadow-sm'
+              : 'text-slate-400 hover:text-white hover:bg-slate-900/60'
           }`}
         >
-          <Bot className="h-4 w-4" />
-          <span>Discord Server Connection</span>
+          <Bot className="h-4 w-4 shrink-0" />
+          <span>{isRtl ? 'مركز ديسكورد (خادم & بوت)' : 'Discord Server Hub'}</span>
           {isDiscordConnected && (
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+            <span className="rounded bg-emerald-500/20 px-1.5 py-0.5 text-[10px] font-mono text-emerald-300">
+              ON
+            </span>
           )}
         </button>
 
         <button
-          onClick={() => setActiveTab('telegram')}
-          className={`flex items-center gap-2 pb-3 transition-colors ${
-            activeTab === 'telegram'
-              ? 'border-b-2 border-indigo-500 text-indigo-400'
-              : 'text-slate-400 hover:text-white'
+          type="button"
+          onClick={() => setActiveHub('telegram')}
+          className={`flex items-center justify-center gap-2 rounded-lg py-2.5 px-4 text-xs sm:text-sm font-bold transition-all whitespace-nowrap ${
+            activeHub === 'telegram'
+              ? 'bg-[#229ED9]/25 text-[#6ecdf9] border border-[#229ED9]/50 shadow-sm'
+              : 'text-slate-400 hover:text-white hover:bg-slate-900/60'
           }`}
         >
-          <Send className="h-4 w-4 text-sky-400" />
-          <span>Telegram Group Connection</span>
+          <Send className="h-4 w-4 shrink-0" />
+          <span>{isRtl ? 'مركز تيلغرام (مجموعة & بوت)' : 'Telegram Group Hub'}</span>
           {isTelegramConnected && (
-            <span className="h-1.5 w-1.5 rounded-full bg-sky-400" />
+            <span className="rounded bg-sky-500/20 px-1.5 py-0.5 text-[10px] font-mono text-sky-300">
+              ON
+            </span>
           )}
-        </button>
-
-        <button
-          onClick={() => setActiveTab('menu')}
-          className={`flex items-center gap-2 pb-3 transition-colors ${
-            activeTab === 'menu'
-              ? 'border-b-2 border-indigo-500 text-indigo-400'
-              : 'text-slate-400 hover:text-white'
-          }`}
-        >
-          <Pin className="h-4 w-4 text-amber-400" />
-          <span>Publish In-Group Interactive Menu</span>
         </button>
       </div>
 
       {/* ========================================================================= */}
-      {/* TAB 1: DISCORD SERVER CONNECTION                                          */}
+      {/* HUB 1: DISCORD SERVER & BOT (100% SELF-CONTAINED)                         */}
       {/* ========================================================================= */}
-      {activeTab === 'discord' && (
+      {activeHub === 'discord' && (
         <div className="space-y-6">
-          {/* Status Diagnostic Card */}
+          {/* Status Diagnostic Strip */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-4 space-y-1">
-              <span className="text-[11px] font-mono text-slate-500 uppercase block">Bot Identity</span>
-              <span className="text-sm font-bold text-white block">@Community Outcome</span>
-              <span className="text-[11px] text-indigo-400 font-mono block">
-                Slash Commands: 10 Registered
+              <span className="text-[11px] font-mono text-slate-500 uppercase block">Discord Bot Identity</span>
+              <span className="text-sm font-bold text-white block">
+                {discordLiveCheck?.botName || '@Community Outcome'}
+              </span>
+              <span className="text-[11px] text-[#9aa8ff] font-mono block">
+                {discordLiveCheck?.status === 'connected' ? 'Bot API Verified Online' : 'Ed25519 Slash Endpoint Ready'}
               </span>
             </div>
 
             <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-4 space-y-1">
-              <span className="text-[11px] font-mono text-slate-500 uppercase block">Connected Server</span>
+              <span className="text-[11px] font-mono text-slate-500 uppercase block">Connected Discord Server</span>
               <span className="text-sm font-bold text-white font-mono block truncate">
-                {community.discordConfig?.serverName || 'No Server Associated'}
+                {community.discordConfig?.serverName || 'No Server Linked'}
               </span>
               <span className="text-[11px] text-slate-400 font-mono block">
-                ID: {community.discordConfig?.serverId || 'None'}
+                Guild ID: {community.discordConfig?.serverId || 'None'}
               </span>
             </div>
 
             <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-4 space-y-1">
-              <span className="text-[11px] font-mono text-slate-500 uppercase block">Connection State</span>
+              <span className="text-[11px] font-mono text-slate-500 uppercase block">Connection & Channel</span>
               <span className={`text-sm font-bold font-mono block ${isDiscordConnected ? 'text-emerald-400' : 'text-amber-400'}`}>
                 {community.discordConfig?.status || 'not_connected'}
               </span>
               <span className="text-[11px] text-slate-400 font-mono block">
-                Presence: {isDiscordConnected ? 'Verified in Server' : 'Awaiting Installation'}
+                Channel ID: {community.discordConfig?.channelId || 'Default'}
               </span>
             </div>
           </div>
 
-          {/* Status Message Banner */}
           {discordStatusMsg && (
-            <div className={`p-4 rounded-xl border text-xs leading-relaxed flex items-center justify-between gap-3 ${
-              discordStatusMsg.type === 'success'
-                ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-300'
-                : discordStatusMsg.type === 'error'
-                ? 'bg-rose-950/40 border-rose-500/40 text-rose-300'
-                : 'bg-indigo-950/40 border-indigo-500/40 text-indigo-300'
-            }`}>
+            <div
+              className={`p-4 rounded-xl border text-xs leading-relaxed flex items-center justify-between gap-3 ${
+                discordStatusMsg.type === 'success'
+                  ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-300'
+                  : discordStatusMsg.type === 'error'
+                  ? 'bg-rose-950/40 border-rose-500/40 text-rose-300'
+                  : 'bg-indigo-950/40 border-indigo-500/40 text-indigo-300'
+              }`}
+            >
               <div className="flex items-center gap-2">
                 {discordStatusMsg.type === 'success' && <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" />}
                 {discordStatusMsg.type === 'error' && <AlertTriangle className="h-4 w-4 shrink-0 text-rose-400" />}
                 <span>{discordStatusMsg.text}</span>
               </div>
-              <button onClick={() => setDiscordStatusMsg(null)} className="text-slate-400 hover:text-white">✕</button>
+              <button type="button" onClick={() => setDiscordStatusMsg(null)} className="text-slate-400 hover:text-white">
+                ✕
+              </button>
             </div>
           )}
 
-          {/* Primary Connection Actions Block */}
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-6 space-y-6">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          {/* Discord Installation, Verification & Slash Commands Sync */}
+          <div className="rounded-2xl border border-[#5865F2]/30 bg-slate-900/40 p-6 space-y-6">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
               <div>
                 <h3 className="text-base font-bold text-white flex items-center gap-2">
-                  <Bot className="h-5 w-5 text-indigo-400" />
-                  <span>Discord Application Installation & Association</span>
+                  <Bot className="h-5 w-5 text-[#9aa8ff]" />
+                  <span>{isRtl ? 'تثبيت وتفعيل بوت ديسكورد في خادمك' : 'Discord Bot Installation & Live Sync'}</span>
                 </h3>
                 <p className="text-xs text-slate-400 mt-1">
-                  Authorize the official Community OS bot into your Discord server with required permissions.
+                  {isRtl
+                    ? 'أضف البوت إلى خادمك، ثم سجّل أوامر Slash العشرة وتحقق من اتصاله الفعلي بـ Discord API.'
+                    : 'Invite the bot into your server, register/update the 10 slash commands, and verify live Discord API connectivity.'}
                 </p>
               </div>
 
-              {/* Action Buttons */}
-              <div className="flex flex-wrap items-center gap-2.5">
+              <div className="flex flex-wrap items-center gap-2">
                 <a
                   href={discordInstallUrl || `/api/discord/connect?communityId=${community.id}&redirect=true`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-xs font-bold text-white shadow-lg hover:bg-indigo-500 transition-all"
+                  className="flex items-center gap-1.5 rounded-lg bg-[#5865F2] px-3.5 py-2 text-xs font-bold text-white shadow hover:bg-[#4956e0] transition-all whitespace-nowrap"
                 >
                   <ExternalLink className="h-3.5 w-3.5" />
-                  <span>Install Bot into Server</span>
+                  <span>{isRtl ? 'إضافة البوت للخادم' : 'Install Bot into Server'}</span>
                 </a>
 
                 <button
+                  type="button"
+                  onClick={handleRegisterDiscordCommands}
+                  disabled={isRegisteringDiscordCommands}
+                  className="flex items-center gap-1.5 rounded-lg border border-indigo-500/40 bg-indigo-500/15 px-3 py-2 text-xs font-semibold text-indigo-200 hover:bg-indigo-500/25 transition-colors whitespace-nowrap disabled:opacity-50"
+                >
+                  <Wrench className={`h-3.5 w-3.5 ${isRegisteringDiscordCommands ? 'animate-spin' : ''}`} />
+                  <span>{isRtl ? 'تحديث أوامر Slash (10)' : 'Sync 10 Slash Commands'}</span>
+                </button>
+
+                <button
+                  type="button"
                   onClick={handleVerifyDiscord}
                   disabled={isVerifyingDiscord}
-                  className="flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-800 px-3.5 py-2 text-xs font-semibold text-slate-200 hover:bg-slate-700 hover:text-white transition-colors"
+                  className="flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-xs font-semibold text-slate-200 hover:bg-slate-700 hover:text-white transition-colors whitespace-nowrap disabled:opacity-50"
                 >
                   <RefreshCw className={`h-3.5 w-3.5 ${isVerifyingDiscord ? 'animate-spin' : ''}`} />
-                  <span>Verify Connection</span>
+                  <span>{isRtl ? 'فحص البوت' : 'Verify Bot API'}</span>
                 </button>
 
                 {isDiscordConnected && (
@@ -517,10 +642,10 @@ export const CommunityConnectionCenter: React.FC<CommunityConnectionCenterProps>
                         href={`https://discord.com/channels/${community.discordConfig.serverId}`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-xs font-semibold text-slate-300 hover:text-white"
+                        className="flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-xs font-semibold text-slate-300 hover:text-white whitespace-nowrap"
                       >
                         <ExternalLink className="h-3.5 w-3.5" />
-                        <span>Open Server</span>
+                        <span>{isRtl ? 'فتح الخادم' : 'Open Server'}</span>
                       </a>
                     )}
                     {confirmDisconnect === 'discord' ? (
@@ -546,10 +671,10 @@ export const CommunityConnectionCenter: React.FC<CommunityConnectionCenterProps>
                       <button
                         type="button"
                         onClick={() => setConfirmDisconnect('discord')}
-                        className="flex items-center gap-1.5 rounded-lg border border-rose-900/50 bg-rose-950/40 px-3 py-2 text-xs font-semibold text-rose-300 hover:bg-rose-900/50 hover:text-rose-200 transition-colors"
+                        className="flex items-center gap-1.5 rounded-lg border border-rose-900/50 bg-rose-950/40 px-3 py-2 text-xs font-semibold text-rose-300 hover:bg-rose-900/50 hover:text-rose-200 transition-colors whitespace-nowrap"
                       >
                         <Unlink className="h-3.5 w-3.5" />
-                        <span>Disconnect</span>
+                        <span>{isRtl ? 'فصل الخادم' : 'Disconnect'}</span>
                       </button>
                     )}
                   </>
@@ -558,14 +683,10 @@ export const CommunityConnectionCenter: React.FC<CommunityConnectionCenterProps>
             </div>
 
             {/* Server Verification & Linking Form */}
-            <form onSubmit={handleConnectDiscordGuild} className="border-t border-slate-800 pt-6 space-y-4">
+            <form onSubmit={handleConnectDiscordGuild} className="border-t border-slate-800 pt-5 space-y-4">
               <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider">
-                Server Association & Verification
+                {isRtl ? 'ربط معرف خادم Discord وقناة الإجراءات' : 'Link Server ID & Designated Channel'}
               </h4>
-              <p className="text-xs text-slate-400">
-                After inviting the bot to your Discord server, enter your Server ID (Guild ID) below to complete association with <span className="text-indigo-300 font-semibold">{community.name}</span>.
-              </p>
-
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
                   <label className="text-[11px] font-mono text-slate-400 block mb-1">
@@ -576,7 +697,7 @@ export const CommunityConnectionCenter: React.FC<CommunityConnectionCenterProps>
                     value={discordGuildInput}
                     onChange={(e) => setDiscordGuildInput(e.target.value)}
                     placeholder="e.g. 11983029102938129"
-                    className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-xs font-mono text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500"
+                    className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs font-mono text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500"
                     required
                   />
                 </div>
@@ -590,7 +711,7 @@ export const CommunityConnectionCenter: React.FC<CommunityConnectionCenterProps>
                     value={discordGuildNameInput}
                     onChange={(e) => setDiscordGuildNameInput(e.target.value)}
                     placeholder="e.g. Acme Community Discord"
-                    className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500"
+                    className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500"
                   />
                 </div>
 
@@ -603,32 +724,60 @@ export const CommunityConnectionCenter: React.FC<CommunityConnectionCenterProps>
                     value={discordChannelInput}
                     onChange={(e) => setDiscordChannelInput(e.target.value)}
                     placeholder="e.g. 1293847291029381"
-                    className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-xs font-mono text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500"
+                    className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs font-mono text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500"
                   />
                 </div>
               </div>
 
-              <div className="flex items-center justify-between pt-2">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-1">
                 <span className="text-[11px] text-slate-500">
-                  Tip: Enable Developer Mode in Discord Settings to right-click your server icon and select &quot;Copy Server ID&quot;.
+                  Tip: Enable Developer Mode in Discord Settings to copy your Server ID & Channel ID.
                 </span>
                 <button
                   type="submit"
-                  className="rounded-lg bg-indigo-600 px-4 py-2 text-xs font-bold text-white hover:bg-indigo-500 transition-colors"
+                  className="rounded-lg bg-indigo-600 px-4 py-2 text-xs font-bold text-white hover:bg-indigo-500 transition-colors whitespace-nowrap"
                 >
-                  Verify & Save Server Connection
+                  {isRtl ? 'حفظ وربط الخادم' : 'Verify & Save Server Connection'}
                 </button>
               </div>
             </form>
           </div>
 
-          {/* Discord Slash Commands Available */}
+          {/* Discord Interactive Menu Publisher (Inside Discord Hub!) */}
+          <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-6 space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                  <Pin className="h-4 w-4 text-amber-400" />
+                  <span>{isRtl ? 'نشر القائمة التفاعلية داخل قناة ديسكورد' : 'Publish Persistent Interactive Hub to Discord Channel'}</span>
+                </h4>
+                <p className="text-xs text-slate-400 mt-1">
+                  Sends a rich Discord embed with clickable ActionRow buttons (Action Hub, NeedSignal Requests, QuestLoop Tasks, Passport).
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handlePublishDiscordMenu}
+                disabled={isPublishingDiscordMenu}
+                className="flex items-center gap-2 rounded-lg bg-[#5865F2] px-4 py-2 text-xs font-bold text-white hover:bg-[#4956e0] transition-colors whitespace-nowrap disabled:opacity-50"
+              >
+                <Pin className="h-3.5 w-3.5" />
+                <span>
+                  {isPublishingDiscordMenu
+                    ? isRtl ? 'جاري النشر...' : 'Publishing...'
+                    : isRtl ? 'نشر القائمة في Discord' : 'Publish Discord Menu'}
+                </span>
+              </button>
+            </div>
+          </div>
+
+          {/* Discord Slash Commands Reference */}
           <div className="rounded-xl border border-slate-800 bg-slate-900/30 p-5 space-y-3">
             <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
-              <Terminal className="h-4 w-4 text-indigo-400" />
-              <span>Available Discord Slash Commands (10 Commands Registered)</span>
+              <Terminal className="h-4 w-4 text-[#9aa8ff]" />
+              <span>Discord Bot Slash Commands (10 Active Commands)</span>
             </h4>
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
               {[
                 { cmd: '/help', desc: 'Display full interactive command index' },
                 { cmd: '/hub', desc: 'Direct link to community Web Action Hub' },
@@ -638,11 +787,11 @@ export const CommunityConnectionCenter: React.FC<CommunityConnectionCenterProps>
                 { cmd: '/mytasks', desc: 'View tasks assigned to your verified account' },
                 { cmd: '/passport', desc: 'Inspect verified competencies & portfolio' },
                 { cmd: '/contribution', desc: 'Submit deliverable evidence (SourceTrail)' },
-                { cmd: '/connect', desc: 'Link Discord account to Community OS profile' },
-                { cmd: '/status', desc: 'Check gateway latency and database sync' }
+                { cmd: '/connect [code]', desc: 'Link Discord profile or verify OS-XXXX code' },
+                { cmd: '/status', desc: 'Check Discord gateway & database sync' }
               ].map((c) => (
-                <div key={c.cmd} className="p-2.5 rounded-lg border border-slate-800/80 bg-slate-900/60 text-xs">
-                  <span className="font-mono font-bold text-indigo-300">{c.cmd}</span>
+                <div key={c.cmd} className="p-2.5 rounded-lg border border-slate-800/80 bg-slate-950/60 text-xs">
+                  <span className="font-mono font-bold text-[#9aa8ff]">{c.cmd}</span>
                   <p className="text-[11px] text-slate-400 mt-0.5">{c.desc}</p>
                 </div>
               ))}
@@ -652,24 +801,26 @@ export const CommunityConnectionCenter: React.FC<CommunityConnectionCenterProps>
       )}
 
       {/* ========================================================================= */}
-      {/* TAB 2: TELEGRAM GROUP CONNECTION                                          */}
+      {/* HUB 2: TELEGRAM GROUP & BOT (100% SELF-CONTAINED)                         */}
       {/* ========================================================================= */}
-      {activeTab === 'telegram' && (
+      {activeHub === 'telegram' && (
         <div className="space-y-6">
           {/* Status Diagnostic Strip */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-4 space-y-1">
               <span className="text-[11px] font-mono text-slate-500 uppercase block">Telegram Bot Identity</span>
-              <span className="text-sm font-bold text-white block">@CommunityOutcomeBot</span>
-              <span className="text-[11px] text-sky-400 font-mono block">
-                Webhook: /api/telegram/webhook
+              <span className="text-sm font-bold text-white block">
+                @{telegramLiveCheck?.botUsername || 'CommunityOutcomeBot'}
+              </span>
+              <span className="text-[11px] text-[#5dc5f7] font-mono block truncate">
+                Webhook: {telegramWebhookUrl || '/api/telegram/webhook'}
               </span>
             </div>
 
             <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-4 space-y-1">
-              <span className="text-[11px] font-mono text-slate-500 uppercase block">Connected Group</span>
+              <span className="text-[11px] font-mono text-slate-500 uppercase block">Connected Telegram Group</span>
               <span className="text-sm font-bold text-white font-mono block truncate">
-                {community.telegramConfig?.groupTitle || 'No Group Associated'}
+                {community.telegramConfig?.groupTitle || 'No Group Linked'}
               </span>
               <span className="text-[11px] text-slate-400 font-mono block">
                 Chat ID: {community.telegramConfig?.groupId || 'None'}
@@ -677,64 +828,89 @@ export const CommunityConnectionCenter: React.FC<CommunityConnectionCenterProps>
             </div>
 
             <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-4 space-y-1">
-              <span className="text-[11px] font-mono text-slate-500 uppercase block">Connection State</span>
+              <span className="text-[11px] font-mono text-slate-500 uppercase block">Group & Webhook State</span>
               <span className={`text-sm font-bold font-mono block ${isTelegramConnected ? 'text-emerald-400' : 'text-amber-400'}`}>
                 {community.telegramConfig?.status || 'not_connected'}
               </span>
               <span className="text-[11px] text-slate-400 font-mono block">
-                Admin Verification: {isTelegramConnected ? 'Verified Administrator' : 'Pending Verification'}
+                {telegramPendingUpdates !== null
+                  ? `Pending Queue: ${telegramPendingUpdates}`
+                  : isTelegramConnected
+                  ? 'Admin Verification: Active'
+                  : 'Pending Verification'}
               </span>
             </div>
           </div>
 
-          {/* Status Message Banner */}
           {telegramStatusMsg && (
-            <div className={`p-4 rounded-xl border text-xs leading-relaxed flex items-center justify-between gap-3 ${
-              telegramStatusMsg.type === 'success'
-                ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-300'
-                : telegramStatusMsg.type === 'error'
-                ? 'bg-rose-950/40 border-rose-500/40 text-rose-300'
-                : 'bg-sky-950/40 border-sky-500/40 text-sky-300'
-            }`}>
+            <div
+              className={`p-4 rounded-xl border text-xs leading-relaxed flex items-center justify-between gap-3 ${
+                telegramStatusMsg.type === 'success'
+                  ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-300'
+                  : telegramStatusMsg.type === 'error'
+                  ? 'bg-rose-950/40 border-rose-500/40 text-rose-300'
+                  : 'bg-sky-950/40 border-sky-500/40 text-sky-300'
+              }`}
+            >
               <div className="flex items-center gap-2">
                 {telegramStatusMsg.type === 'success' && <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" />}
                 {telegramStatusMsg.type === 'error' && <AlertTriangle className="h-4 w-4 shrink-0 text-rose-400" />}
                 <span>{telegramStatusMsg.text}</span>
               </div>
-              <button onClick={() => setTelegramStatusMsg(null)} className="text-slate-400 hover:text-white">✕</button>
+              <button type="button" onClick={() => setTelegramStatusMsg(null)} className="text-slate-400 hover:text-white">
+                ✕
+              </button>
             </div>
           )}
 
-          {/* Step-by-Step Telegram Group Connection Guide */}
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-6 space-y-6">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          {/* Telegram Group Linking & Webhook Sync */}
+          <div className="rounded-2xl border border-[#229ED9]/30 bg-slate-900/40 p-6 space-y-6">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
               <div>
                 <h3 className="text-base font-bold text-white flex items-center gap-2">
-                  <Send className="h-5 w-5 text-sky-400" />
-                  <span>Connect Your Telegram Group or Supergroup</span>
+                  <Send className="h-5 w-5 text-[#5dc5f7]" />
+                  <span>{isRtl ? 'ربط مجموعة تيلغرام وتفعيل الـ Webhook' : 'Connect Telegram Group & Sync Webhook'}</span>
                 </h3>
                 <p className="text-xs text-slate-400 mt-1">
-                  Generate a cryptographic single-use linking code and send it inside your Telegram group as an administrator.
+                  {isRtl
+                    ? 'أنشئ كود ربط خاصاً للمجموعة ثم أرسله داخل الجروب بعد إضافة البوت كمشرف، واضغط مزامنة Webhook لضمان استجابة البوت الفورية.'
+                    : 'Generate a single-use group code, send it inside your Telegram group with the bot added as admin, and sync the webhook endpoint.'}
                 </p>
               </div>
 
-              <div className="flex flex-wrap items-center gap-2.5">
+              <div className="flex flex-wrap items-center gap-2">
                 <button
+                  type="button"
                   onClick={handleGenerateTelegramChallenge}
                   disabled={isGeneratingChallenge}
-                  className="flex items-center gap-2 rounded-lg bg-sky-600 px-4 py-2 text-xs font-bold text-white shadow-lg hover:bg-sky-500 transition-all"
+                  className="flex items-center gap-1.5 rounded-lg bg-[#229ED9] px-3.5 py-2 text-xs font-bold text-white shadow hover:bg-[#1e8ec3] transition-all whitespace-nowrap disabled:opacity-50"
                 >
                   <Sparkles className="h-3.5 w-3.5" />
-                  <span>{telegramChallenge ? 'Regenerate Code' : 'Generate Group Connection Code'}</span>
+                  <span>
+                    {telegramChallenge
+                      ? isRtl ? 'توليد كود جديد' : 'Regenerate Group Code'
+                      : isRtl ? 'توليد كود ربط المجموعة' : 'Generate Group Code'}
+                  </span>
                 </button>
 
                 <button
+                  type="button"
+                  onClick={handleSyncTelegramWebhook}
+                  disabled={isSyncingTelegramWebhook}
+                  className="flex items-center gap-1.5 rounded-lg border border-sky-500/40 bg-sky-500/15 px-3 py-2 text-xs font-semibold text-sky-200 hover:bg-sky-500/25 transition-colors whitespace-nowrap disabled:opacity-50"
+                >
+                  <Wrench className={`h-3.5 w-3.5 ${isSyncingTelegramWebhook ? 'animate-spin' : ''}`} />
+                  <span>{isRtl ? 'مزامنة Webhook' : 'Sync Telegram Webhook'}</span>
+                </button>
+
+                <button
+                  type="button"
                   onClick={handleVerifyTelegram}
                   disabled={isVerifyingTelegram}
-                  className="flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-800 px-3.5 py-2 text-xs font-semibold text-slate-200 hover:bg-slate-700 hover:text-white transition-colors"
+                  className="flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-xs font-semibold text-slate-200 hover:bg-slate-700 hover:text-white transition-colors whitespace-nowrap disabled:opacity-50"
                 >
                   <RefreshCw className={`h-3.5 w-3.5 ${isVerifyingTelegram ? 'animate-spin' : ''}`} />
-                  <span>Check Bot Status</span>
+                  <span>{isRtl ? 'فحص البوت' : 'Check Bot & Webhook'}</span>
                 </button>
 
                 {isTelegramConnected && (
@@ -761,26 +937,23 @@ export const CommunityConnectionCenter: React.FC<CommunityConnectionCenterProps>
                     <button
                       type="button"
                       onClick={() => setConfirmDisconnect('telegram')}
-                      className="flex items-center gap-1.5 rounded-lg border border-rose-900/50 bg-rose-950/40 px-3 py-2 text-xs font-semibold text-rose-300 hover:bg-rose-900/50 hover:text-rose-200 transition-colors"
+                      className="flex items-center gap-1.5 rounded-lg border border-rose-900/50 bg-rose-950/40 px-3 py-2 text-xs font-semibold text-rose-300 hover:bg-rose-900/50 hover:text-rose-200 transition-colors whitespace-nowrap"
                     >
                       <Unlink className="h-3.5 w-3.5" />
-                      <span>Disconnect</span>
+                      <span>{isRtl ? 'فصل المجموعة' : 'Disconnect'}</span>
                     </button>
                   )
                 )}
               </div>
             </div>
 
-            {/* Generated Challenge Box */}
             {telegramChallenge && (
               <div className="rounded-xl border border-sky-500/40 bg-sky-950/30 p-5 space-y-4">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-mono font-bold text-sky-300 uppercase tracking-wider">
-                    Single-Use Group Connection Challenge
+                    Single-Use Group Connection Command
                   </span>
-                  <span className="text-[11px] text-slate-400 font-mono">
-                    Expires in 15 minutes
-                  </span>
+                  <span className="text-[11px] text-slate-400 font-mono">Expires in 15 minutes</span>
                 </div>
 
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-900/90 border border-slate-800 p-3 rounded-lg">
@@ -789,6 +962,7 @@ export const CommunityConnectionCenter: React.FC<CommunityConnectionCenterProps>
                   </div>
                   <div className="flex items-center gap-2">
                     <button
+                      type="button"
                       onClick={() => copyToClipboard(telegramChallenge.command)}
                       className="flex items-center gap-1.5 rounded-md bg-sky-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-sky-500 transition-colors"
                     >
@@ -807,197 +981,95 @@ export const CommunityConnectionCenter: React.FC<CommunityConnectionCenterProps>
                   </div>
                 </div>
 
-                {/* Step Instructions */}
-                <div className="space-y-2 text-xs text-slate-300">
-                  <span className="font-bold text-white block">Execution Steps:</span>
-                  <ol className="list-decimal list-inside space-y-1.5 text-slate-300">
-                    {telegramChallenge.instructions.map((step, idx) => (
-                      <li key={idx} className="leading-relaxed">{step}</li>
-                    ))}
-                  </ol>
-                </div>
+                <ol className="list-decimal list-inside space-y-1.5 text-xs text-slate-300">
+                  {telegramChallenge.instructions.map((step, idx) => (
+                    <li key={idx} className="leading-relaxed">{step}</li>
+                  ))}
+                </ol>
               </div>
             )}
 
-            {/* Permissions Explanation */}
             <div className="border-t border-slate-800 pt-5 space-y-3">
               <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider">
-                Required Telegram Bot Permissions & Why They Are Needed
+                Required Telegram Bot Permissions
               </h4>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
-                <div className="p-3 rounded-lg border border-slate-800 bg-slate-900/60 space-y-1">
+                <div className="p-3 rounded-lg border border-slate-800 bg-slate-950/60 space-y-1">
                   <span className="font-bold text-white">Send Messages</span>
-                  <p className="text-slate-400 text-[11px]">
-                    Allows the bot to respond to slash commands (/hub, /requests, /tasks) and interact with members.
-                  </p>
+                  <p className="text-slate-400 text-[11px]">Responds to /requests, /tasks, /mytasks, and /passport inside group chat.</p>
                 </div>
-                <div className="p-3 rounded-lg border border-slate-800 bg-slate-900/60 space-y-1">
+                <div className="p-3 rounded-lg border border-slate-800 bg-slate-950/60 space-y-1">
                   <span className="font-bold text-white">Pin Messages</span>
-                  <p className="text-slate-400 text-[11px]">
-                    Allows pinning the Community OS Action Hub interactive menu at the top of the group chat.
-                  </p>
+                  <p className="text-slate-400 text-[11px]">Pins the interactive inline keyboard hub menu to the top of your Telegram group.</p>
                 </div>
-                <div className="p-3 rounded-lg border border-slate-800 bg-slate-900/60 space-y-1">
-                  <span className="font-bold text-white">Administrator Role</span>
-                  <p className="text-slate-400 text-[11px]">
-                    Required by Telegram API to verify genuine group administrator status during association.
-                  </p>
+                <div className="p-3 rounded-lg border border-slate-800 bg-slate-950/60 space-y-1">
+                  <span className="font-bold text-white">Group Admin</span>
+                  <p className="text-slate-400 text-[11px]">Required by Telegram Bot API so only genuine group admins can link a community.</p>
                 </div>
               </div>
             </div>
           </div>
-        </div>
-      )}
 
-      {/* ========================================================================= */}
-      {/* TAB 3: PUBLISH IN-GROUP INTERACTIVE MENU                                  */}
-      {/* ========================================================================= */}
-      {activeTab === 'menu' && (
-        <div className="space-y-6">
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-6 space-y-6">
-            <div className="space-y-2">
-              <h3 className="text-base font-bold text-white flex items-center gap-2">
-                <Pin className="h-5 w-5 text-amber-400" />
-                <span>Publish In-Group Persistent Action Menu</span>
-              </h3>
-              <p className="text-xs text-slate-300 leading-relaxed max-w-2xl">
-                Publish a permanent, interactive action hub message into your Discord channel or Telegram group.
-                Members can tap buttons like &quot;NeedSignal Requests&quot;, &quot;QuestLoop Tasks&quot;, and &quot;Member Passport&quot; without leaving the chat.
-              </p>
-            </div>
-
-            {/* Platform Selection */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <button
-                onClick={() => setPublishingPlatform('telegram')}
-                className={`p-4 rounded-xl border text-left transition-all ${
-                  publishingPlatform === 'telegram'
-                    ? 'border-sky-500 bg-sky-950/30 ring-1 ring-sky-500'
-                    : 'border-slate-800 bg-slate-900/60 hover:border-slate-700'
-                }`}
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <span className="font-bold text-white text-sm flex items-center gap-2">
-                    <Send className="h-4 w-4 text-sky-400" />
-                    <span>Telegram Group</span>
-                  </span>
-                  {isTelegramConnected ? (
-                    <span className="text-[10px] font-mono text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-800/40">
-                      Connected: {community.telegramConfig?.groupTitle}
-                    </span>
-                  ) : (
-                    <span className="text-[10px] font-mono text-amber-400 bg-amber-950/60 px-2 py-0.5 rounded border border-amber-800/40">
-                      Not Connected
-                    </span>
-                  )}
-                </div>
+          {/* Telegram Interactive Menu Publisher (Inside Telegram Hub!) */}
+          <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-6 space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="space-y-1">
+                <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                  <Pin className="h-4 w-4 text-amber-400" />
+                  <span>{isRtl ? 'نشر وتثبيت القائمة التفاعلية في مجموعة تيلغرام' : 'Publish & Pin Interactive Menu in Telegram Group'}</span>
+                </h4>
                 <p className="text-xs text-slate-400">
-                  Sends an interactive message with Telegram Inline Keyboard buttons. Can be automatically pinned to the top of the group.
+                  Sends an inline keyboard hub message directly to your connected Telegram group.
                 </p>
-              </button>
-
+                <label className="inline-flex items-center gap-2 text-xs text-slate-300 cursor-pointer pt-1">
+                  <input
+                    type="checkbox"
+                    checked={pinTelegramMenu}
+                    onChange={(e) => setPinTelegramMenu(e.target.checked)}
+                    className="rounded border-slate-700 bg-slate-900 text-sky-600 focus:ring-0"
+                  />
+                  <span>{isRtl ? 'تثبيت الرسالة في أعلى المجموعة' : 'Pin menu message to group header'}</span>
+                </label>
+              </div>
               <button
-                onClick={() => setPublishingPlatform('discord')}
-                className={`p-4 rounded-xl border text-left transition-all ${
-                  publishingPlatform === 'discord'
-                    ? 'border-indigo-500 bg-indigo-950/30 ring-1 ring-indigo-500'
-                    : 'border-slate-800 bg-slate-900/60 hover:border-slate-700'
-                }`}
+                type="button"
+                onClick={handlePublishTelegramMenu}
+                disabled={isPublishingTelegramMenu}
+                className="flex items-center gap-2 rounded-lg bg-[#229ED9] px-4 py-2 text-xs font-bold text-white hover:bg-[#1e8ec3] transition-colors whitespace-nowrap disabled:opacity-50"
               >
-                <div className="flex items-center justify-between mb-2">
-                  <span className="font-bold text-white text-sm flex items-center gap-2">
-                    <Bot className="h-4 w-4 text-indigo-400" />
-                    <span>Discord Channel</span>
-                  </span>
-                  {isDiscordConnected ? (
-                    <span className="text-[10px] font-mono text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-800/40">
-                      Connected: {community.discordConfig?.serverName}
-                    </span>
-                  ) : (
-                    <span className="text-[10px] font-mono text-amber-400 bg-amber-950/60 px-2 py-0.5 rounded border border-amber-800/40">
-                      Not Connected
-                    </span>
-                  )}
-                </div>
-                <p className="text-xs text-slate-400">
-                  Sends a rich Discord embed with ActionRow component buttons for instant slash command parity.
-                </p>
-              </button>
-            </div>
-
-            {/* Menu Options & Preview */}
-            <div className="rounded-xl border border-slate-800 bg-slate-950 p-5 space-y-4">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-mono font-bold text-slate-400 uppercase tracking-wider">
-                  Menu Preview ({publishingPlatform.toUpperCase()})
-                </span>
-                {publishingPlatform === 'telegram' && (
-                  <label className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={pinTelegramMenu}
-                      onChange={(e) => setPinTelegramMenu(e.target.checked)}
-                      className="rounded border-slate-700 bg-slate-900 text-sky-600 focus:ring-0"
-                    />
-                    <span>Pin message to group header</span>
-                  </label>
-                )}
-              </div>
-
-              {/* Visual Preview */}
-              <div className="rounded-lg border border-slate-800 bg-slate-900/80 p-4 space-y-3 font-sans">
-                <div className="text-sm font-bold text-white flex items-center gap-2">
-                  <Sparkles className="h-4 w-4 text-amber-400" />
-                  <span>🌟 Community OS Hub — {community.name}</span>
-                </div>
-                <p className="text-xs text-slate-300 leading-relaxed">
-                  Welcome to our community workspace! Use the instant buttons below to participate, claim deliverables, and view verified outcomes:
-                </p>
-                <div className="grid grid-cols-2 gap-2 pt-2">
-                  <div className="rounded border border-indigo-500/40 bg-indigo-950/40 p-2 text-center text-xs font-semibold text-indigo-300">
-                    🚀 Open Action Hub
-                  </div>
-                  <div className="rounded border border-indigo-500/40 bg-indigo-950/40 p-2 text-center text-xs font-semibold text-indigo-300">
-                    🆘 NeedSignal Requests
-                  </div>
-                  <div className="rounded border border-slate-700 bg-slate-800 p-2 text-center text-xs font-semibold text-slate-300">
-                    📋 QuestLoop Tasks
-                  </div>
-                  <div className="rounded border border-slate-700 bg-slate-800 p-2 text-center text-xs font-semibold text-slate-300">
-                    🎖️ Member Passport
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Action Feedback Result */}
-            {publishResult && (
-              <div className={`p-4 rounded-xl border text-xs leading-relaxed flex items-center gap-2 ${
-                publishResult.type === 'success'
-                  ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-300'
-                  : 'bg-rose-950/40 border-rose-500/40 text-rose-300'
-              }`}>
-                {publishResult.type === 'success' ? (
-                  <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" />
-                ) : (
-                  <AlertTriangle className="h-4 w-4 shrink-0 text-rose-400" />
-                )}
-                <span>{publishResult.message}</span>
-              </div>
-            )}
-
-            {/* Publish Trigger Button */}
-            <div className="flex items-center justify-end">
-              <button
-                onClick={handlePublishMenu}
-                disabled={isPublishingMenu}
-                className="flex items-center gap-2 rounded-lg bg-indigo-600 px-5 py-2.5 text-xs font-bold text-white shadow-lg hover:bg-indigo-500 transition-colors"
-              >
-                <Pin className={`h-4 w-4 ${isPublishingMenu ? 'animate-bounce' : ''}`} />
+                <Pin className="h-3.5 w-3.5" />
                 <span>
-                  {isPublishingMenu ? 'Publishing Interactive Menu...' : `Publish to ${publishingPlatform === 'discord' ? 'Discord Channel' : 'Telegram Group'}`}
+                  {isPublishingTelegramMenu
+                    ? isRtl ? 'جاري النشر...' : 'Publishing...'
+                    : isRtl ? 'نشر القائمة في Telegram' : 'Publish Telegram Menu'}
                 </span>
               </button>
+            </div>
+          </div>
+
+          {/* Telegram Bot Commands Reference */}
+          <div className="rounded-xl border border-slate-800 bg-slate-900/30 p-5 space-y-3">
+            <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
+              <Terminal className="h-4 w-4 text-[#5dc5f7]" />
+              <span>Telegram Bot Commands & Deep Links</span>
+            </h4>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
+              {[
+                { cmd: '/start', desc: 'Open bot welcome hub & quick inline menu' },
+                { cmd: '/connect CONNECT-TG-XXXX', desc: 'Admin command to link a Telegram group' },
+                { cmd: '/connect OS-XXXX', desc: 'Member command to bind personal Telegram profile' },
+                { cmd: '/hub', desc: 'Open direct Community Web Action Hub link' },
+                { cmd: '/requests', desc: 'View open NeedSignal assistance requests' },
+                { cmd: '/tasks', desc: 'List available QuestLoop tasks & bounties' },
+                { cmd: '/mytasks', desc: 'Check tasks assigned to your linked account' },
+                { cmd: '/passport', desc: 'View your verified skills & reputation passport' },
+                { cmd: '/status', desc: 'Inspect Telegram bot sync & database connectivity' }
+              ].map((c) => (
+                <div key={c.cmd} className="p-2.5 rounded-lg border border-slate-800/80 bg-slate-950/60 text-xs">
+                  <span className="font-mono font-bold text-[#5dc5f7]">{c.cmd}</span>
+                  <p className="text-[11px] text-slate-400 mt-0.5">{c.desc}</p>
+                </div>
+              ))}
             </div>
           </div>
         </div>

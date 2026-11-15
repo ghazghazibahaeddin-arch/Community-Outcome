@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { ensureDatabaseHydrated } from '@/lib/db/store';
+import { ensureDatabaseHydrated, getDatabase } from '@/lib/db/store';
 import { getAuthenticatedUserFromRequest } from '@/lib/services/auth';
 import { getVerifiedAppUrl } from '@/lib/services/securityConfig';
 import { getRuntimeEnv } from '@/lib/env';
@@ -33,9 +33,17 @@ export async function POST(req: NextRequest, _context?: any) {
   try {
     await ensureDatabaseHydrated(env);
     const authUser = await getAuthenticatedUserFromRequest(req);
-    // Only platform admin can register webhooks
-    if (authUser && authUser.platformRole !== 'platform_admin') {
-      return NextResponse.json({ success: false, error: 'Unauthorized: requires platform admin role' }, { status: 403 });
+    const db = getDatabase();
+    const ownsCommunity = authUser ? db.communities.some((c) => c.ownerId === authUser.id) : false;
+    const isAuthorized =
+      !authUser ||
+      ['platform_admin', 'community_owner', 'admin'].includes(authUser.platformRole) ||
+      ownsCommunity;
+    if (!isAuthorized) {
+      return NextResponse.json(
+        { success: false, error: 'Unauthorized: requires community owner or platform admin role' },
+        { status: 403 }
+      );
     }
 
     const token = env.TELEGRAM_BOT_TOKEN;

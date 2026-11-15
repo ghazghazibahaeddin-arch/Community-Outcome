@@ -11,6 +11,7 @@ export async function GET(req: NextRequest, _context?: any) {
   try {
     const url = new URL(req.url);
     const mode = url.searchParams.get('mode') || 'bot'; // 'bot' (server install) or 'user'/'user_oauth' (user OAuth login/link)
+    const intent: 'owner' | 'member' = url.searchParams.get('intent') === 'owner' ? 'owner' : 'member';
     const isUserMode = mode === 'user' || mode === 'user_oauth';
     const communityId = url.searchParams.get('communityId') || 'comm_devforge';
     await ensureDatabaseHydrated(env);
@@ -35,7 +36,7 @@ export async function GET(req: NextRequest, _context?: any) {
     // 274877906944 + 2147483648 + 262144 + 65536 + 32768 + 16384 + 8192 + 2048 + 1024 + 64 = 277025774752
     const permissions = '277025774752';
     const userSessionSuffix = authUser ? authUser.id : 'anon';
-    const state = `os_discord_${mode}_${communityId}_${userSessionSuffix}_${Date.now()}`;
+    const state = `os_discord_${mode}_${intent}_${communityId}_${userSessionSuffix}_${Date.now()}`;
     
     // Fixed production APP_URL and DISCORD_REDIRECT_URI from server env validated against allowlist
     const verifiedRedirectUri = getDiscordRedirectUri(env);

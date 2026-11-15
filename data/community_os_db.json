@@ -242,6 +242,128 @@
         "allowCrossCommunitySharing": true,
         "shareableRecordIds": []
       }
+    },
+    {
+      "id": "usr_1794756115144_d57f13b8",
+      "name": "E2E Tester",
+      "email": "e2e_1794756114830@example.com",
+      "avatar": "https://picsum.photos/seed/usr_1794756115144_d57f13b8/200/200",
+      "bio": "Community member focused on collaborative outcomes.",
+      "platformRole": "user",
+      "createdAt": "2026-11-15T15:21:55.188Z",
+      "identities": {},
+      "passport": {
+        "displayName": "E2E Tester",
+        "biography": "Community member.",
+        "skills": [],
+        "interests": [],
+        "languages": [
+          "English"
+        ],
+        "collaborationPreferences": "Open to community collaborations.",
+        "portfolioLinks": [],
+        "isPublic": true
+      },
+      "privacy": {
+        "showBio": true,
+        "showSkills": true,
+        "showVerifiedOnly": false,
+        "allowDiscovery": true,
+        "allowCrossCommunitySharing": false,
+        "shareableRecordIds": []
+      }
+    },
+    {
+      "id": "usr_1794756138621_313bb13c",
+      "name": "E2E Tester",
+      "email": "e2e_1794756138597@example.com",
+      "avatar": "https://picsum.photos/seed/usr_1794756138621_313bb13c/200/200",
+      "bio": "Community member focused on collaborative outcomes.",
+      "platformRole": "user",
+      "createdAt": "2026-11-15T15:22:18.667Z",
+      "identities": {},
+      "passport": {
+        "displayName": "E2E Tester",
+        "biography": "Community member.",
+        "skills": [],
+        "interests": [],
+        "languages": [
+          "English"
+        ],
+        "collaborationPreferences": "Open to community collaborations.",
+        "portfolioLinks": [],
+        "isPublic": true
+      },
+      "privacy": {
+        "showBio": true,
+        "showSkills": true,
+        "showVerifiedOnly": false,
+        "allowDiscovery": true,
+        "allowCrossCommunitySharing": false,
+        "shareableRecordIds": []
+      }
+    },
+    {
+      "id": "usr_1794756154384_f701fa01",
+      "name": "E2E Tester",
+      "email": "e2e_1794756154353@example.com",
+      "avatar": "https://picsum.photos/seed/usr_1794756154384_f701fa01/200/200",
+      "bio": "Community member focused on collaborative outcomes.",
+      "platformRole": "user",
+      "createdAt": "2026-11-15T15:22:34.422Z",
+      "identities": {
+        "linkedAt": "2026-11-15T15:22:36.855Z"
+      },
+      "passport": {
+        "displayName": "E2E Tester",
+        "biography": "Community member.",
+        "skills": [],
+        "interests": [],
+        "languages": [
+          "English"
+        ],
+        "collaborationPreferences": "Open to community collaborations.",
+        "portfolioLinks": [],
+        "isPublic": true
+      },
+      "privacy": {
+        "showBio": true,
+        "showSkills": true,
+        "showVerifiedOnly": false,
+        "allowDiscovery": true,
+        "allowCrossCommunitySharing": false,
+        "shareableRecordIds": []
+      }
+    },
+    {
+      "id": "usr_1794756166686_513bad25",
+      "name": "E2E Tester 2",
+      "email": "e2e2_1794756166589@example.com",
+      "avatar": "https://picsum.photos/seed/usr_1794756166686_513bad25/200/200",
+      "bio": "Community member focused on collaborative outcomes.",
+      "platformRole": "user",
+      "createdAt": "2026-11-15T15:22:46.733Z",
+      "identities": {},
+      "passport": {
+        "displayName": "E2E Tester 2",
+        "biography": "Community member.",
+        "skills": [],
+        "interests": [],
+        "languages": [
+          "English"
+        ],
+        "collaborationPreferences": "Open to community collaborations.",
+        "portfolioLinks": [],
+        "isPublic": true
+      },
+      "privacy": {
+        "showBio": true,
+        "showSkills": true,
+        "showVerifiedOnly": false,
+        "allowDiscovery": true,
+        "allowCrossCommunitySharing": false,
+        "shareableRecordIds": []
+      }
     }
   ],
   "authAccounts": [
@@ -280,9 +402,94 @@
       "emailVerified": true,
       "createdAt": "2026-01-18T12:00:00Z",
       "updatedAt": "2026-01-18T12:00:00Z"
+    },
+    {
+      "id": "usr_1794756115144_d57f13b8",
+      "email": "e2e_1794756114830@example.com",
+      "passwordHash": "d7ab553f2e24f313ff5faea1a5b65ec84826209060ac5679f0ccb2a3927d178efe804a186a4a59b31413d44c353cd56a86463f0b08bd73cb02e548edc1ce7f23",
+      "salt": "9e58b17622dd4789af7f073730afdeed",
+      "emailVerified": false,
+      "createdAt": "2026-11-15T15:21:55.188Z",
+      "updatedAt": "2026-11-15T15:21:55.188Z"
+    },
+    {
+      "id": "usr_1794756138621_313bb13c",
+      "email": "e2e_1794756138597@example.com",
+      "passwordHash": "3d7ad6166894153aca878b3db4ec80d207c9675bd61a8584adbaa53f9a6c149abc79aeb8c99d8e776b09471337c7f0bdaf5ae1869ef7ee483466a2f8be602597",
+      "salt": "221d5b1d5abbac66fb36d8f070522f3f",
+      "emailVerified": false,
+      "createdAt": "2026-11-15T15:22:18.667Z",
+      "updatedAt": "2026-11-15T15:22:18.667Z"
+    },
+    {
+      "id": "usr_1794756154384_f701fa01",
+      "email": "e2e_1794756154353@example.com",
+      "passwordHash": "f7673977c9a0849167f60267695a42657d89abd325022bff0622bebe319520cda65b4f946e4b9fac572d735f0658965be874d759c406cf4c23916c4ff351b016",
+      "salt": "220aef4cb8471136282f7fe674fe8381",
+      "emailVerified": false,
+      "createdAt": "2026-11-15T15:22:34.422Z",
+      "updatedAt": "2026-11-15T15:22:34.422Z"
+    },
+    {
+      "id": "usr_1794756166686_513bad25",
+      "email": "e2e2_1794756166589@example.com",
+      "passwordHash": "16e532fd6f793e466fbc799320a60f2cd5ebc651eb5b498ec556392735ffba69c0b27eff6850648b56ad82cc8a996cff3555a30fb649d7630ff3d5a7724dc192",
+      "salt": "e8df95e9bcef930ad7ab3c2f1418643d",
+      "emailVerified": false,
+      "createdAt": "2026-11-15T15:22:46.733Z",
+      "updatedAt": "2026-11-15T15:22:46.733Z"
     }
   ],
-  "sessions": [],
+  "sessions": [
+    {
+      "token": "76f6344023d1a00650c62d47b5db3579920d1a53af38440e5b517f7cb8bd6576",
+      "userId": "usr_1794756115144_d57f13b8",
+      "createdAt": "2026-11-15T15:21:55.190Z",
+      "expiresAt": "2026-11-22T15:21:55.190Z",
+      "userAgent": "node",
+      "ip": "::ffff:127.0.0.1"
+    },
+    {
+      "token": "542269cc8933cc0da6cc1267f2aee952c3f1b777683c0c2e982f472b74a94591",
+      "userId": "usr_1794756138621_313bb13c",
+      "createdAt": "2026-11-15T15:22:18.668Z",
+      "expiresAt": "2026-11-22T15:22:18.668Z",
+      "userAgent": "node",
+      "ip": "::ffff:127.0.0.1"
+    },
+    {
+      "token": "08b9d732a702c92526e1b61fa3c8eb3fb4525a8813235e3284e89f3f58387030",
+      "userId": "usr_1794756138621_313bb13c",
+      "createdAt": "2026-11-15T15:22:21.006Z",
+      "expiresAt": "2026-11-22T15:22:21.006Z",
+      "userAgent": "node",
+      "ip": "::ffff:127.0.0.1"
+    },
+    {
+      "token": "b693a7b2b1e1e4d26361526f4bd4862c5f11e4fac4c7d3eeace7a615919a293c",
+      "userId": "usr_1794756154384_f701fa01",
+      "createdAt": "2026-11-15T15:22:34.423Z",
+      "expiresAt": "2026-11-22T15:22:34.423Z",
+      "userAgent": "node",
+      "ip": "::ffff:127.0.0.1"
+    },
+    {
+      "token": "7ba0e239bbbb5e5875ab004d9601386fd26c6e4685388afef800a6437bb5aa98",
+      "userId": "usr_1794756154384_f701fa01",
+      "createdAt": "2026-11-15T15:22:34.495Z",
+      "expiresAt": "2026-11-22T15:22:34.495Z",
+      "userAgent": "node",
+      "ip": "::ffff:127.0.0.1"
+    },
+    {
+      "token": "0df54009119711d4302149d31143331e857fc7062e22436e52206b87c0e7f46c",
+      "userId": "usr_1794756166686_513bad25",
+      "createdAt": "2026-11-15T15:22:46.735Z",
+      "expiresAt": "2026-11-22T15:22:46.735Z",
+      "userAgent": "node",
+      "ip": "::ffff:127.0.0.1"
+    }
+  ],
   "devEmails": [],
   "communities": [
     {
@@ -1628,6 +1835,22 @@
   ],
   "auditLogs": [
     {
+      "id": "aud_1794756156907",
+      "communityId": "all",
+      "actorId": "usr_1794756154384_f701fa01",
+      "action": "telegram_identity_unlinked",
+      "details": "Unlinked personal telegram account from user profile",
+      "timestamp": "2026-11-15T15:22:36.907Z"
+    },
+    {
+      "id": "aud_1794756156855",
+      "communityId": "all",
+      "actorId": "usr_1794756154384_f701fa01",
+      "action": "identity_linked",
+      "details": "Linked verified telegram account (@linked_tg_e2e) via one-time challenge",
+      "timestamp": "2026-11-15T15:22:36.855Z"
+    },
+    {
       "id": "aud_01",
       "communityId": "comm_devforge",
       "actorId": "usr_sarah",
@@ -1688,7 +1911,35 @@
     }
   ],
   "moderationActions": [],
-  "identityChallenges": [],
+  "identityChallenges": [
+    {
+      "id": "chl_1794756154528",
+      "code": "OS-9DX0",
+      "userId": "usr_1794756154384_f701fa01",
+      "platform": "telegram",
+      "createdAt": "2026-11-15T15:22:34.528Z",
+      "expiresAt": "2026-11-15T15:37:34.528Z",
+      "isUsed": true
+    },
+    {
+      "id": "chl_1794756154512",
+      "code": "OS-8UT2",
+      "userId": "usr_1794756154384_f701fa01",
+      "platform": "discord",
+      "createdAt": "2026-11-15T15:22:34.512Z",
+      "expiresAt": "2026-11-15T15:37:34.512Z",
+      "isUsed": false
+    },
+    {
+      "id": "chl_1794756141040",
+      "code": "OS-JICU",
+      "userId": "usr_1794756138621_313bb13c",
+      "platform": "discord",
+      "createdAt": "2026-11-15T15:22:21.040Z",
+      "expiresAt": "2026-11-15T15:37:21.040Z",
+      "isUsed": false
+    }
+  ],
   "dataMode": "demo",
   "subscriptions": [
     {

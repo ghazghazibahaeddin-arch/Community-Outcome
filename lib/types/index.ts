@@ -20,7 +20,7 @@ export interface User {
   email: string;
   avatar: string;
   bio: string;
-  platformRole: 'platform_admin' | 'user';
+  platformRole: 'platform_admin' | 'community_owner' | 'user';
   createdAt: string;
   identities: {
     discordId?: string;

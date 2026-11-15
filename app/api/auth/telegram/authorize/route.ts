@@ -5,16 +5,20 @@ import {
 } from '@/lib/services/telegramOidc';
 import { getRuntimeEnv, CloudflareEnv } from '@/lib/env';
 
+import { isHttpsRequest } from '@/lib/services/auth';
+
 /**
  * Initiates the official Telegram OpenID Connect (OIDC) flow with PKCE S256.
  * Generates code_verifier, code_challenge (S256), state, and nonce.
- * Stores session parameters in an HttpOnly, Secure cookie.
+ * Stores session parameters in an HttpOnly cookie.
  */
 export async function GET(req: NextRequest, _context?: any) {
   const env = getRuntimeEnv(_context?.env || _context);
   try {
-    const { authUrl, sessionState } = buildTelegramOidcAuthorization(env);
     const url = new URL(req.url);
+    const intentParam = url.searchParams.get('intent');
+    const intent: 'owner' | 'member' = intentParam === 'owner' ? 'owner' : 'member';
+    const { authUrl, sessionState } = buildTelegramOidcAuthorization(env, intent);
     const shouldRedirect = url.searchParams.get('redirect') !== 'false';
 
     const response = shouldRedirect
@@ -22,16 +26,17 @@ export async function GET(req: NextRequest, _context?: any) {
       : NextResponse.json({
           success: true,
           authUrl,
+          intent,
           clientId: sessionState.clientId,
           redirectUri: sessionState.redirectUri
         });
 
-    // Store state in HttpOnly, Secure cookie for callback validation
+    // Store state in HttpOnly cookie for callback validation (protocol-aware Secure flag)
     response.cookies.set({
       name: TELEGRAM_OIDC_COOKIE_NAME,
       value: JSON.stringify(sessionState),
       httpOnly: true,
-      secure: true,
+      secure: isHttpsRequest(req),
       sameSite: 'lax',
       path: '/',
       maxAge: 600 // 10 minutes expiry

@@ -50,13 +50,18 @@ import {
   Globe,
   Sparkles,
   Trash2,
-  Bell
+  Bell,
+  Unlink,
+  Crown,
+  Terminal
 } from 'lucide-react';
 
 interface MemberWorkspaceProps {
   currentUser: User;
   users: User[];
   communities: Community[];
+  ownedCommunities?: Community[];
+  onSwitchToOwnedCommunity?: (communityId: string) => void;
   memberships?: CommunityMembership[];
   announcements?: CommunityAnnouncement[];
   events?: CommunityEvent[];
@@ -83,6 +88,8 @@ export const MemberWorkspace: React.FC<MemberWorkspaceProps> = ({
   currentUser,
   users,
   communities,
+  ownedCommunities = [],
+  onSwitchToOwnedCommunity,
   memberships = [],
   announcements = [],
   events = [],
@@ -102,6 +109,7 @@ export const MemberWorkspace: React.FC<MemberWorkspaceProps> = ({
   onOpenAccountSettings
 }) => {
   const _t = translations[lang];
+  const isRtl = lang === 'ar';
 
   const [activeSubTab, setActiveSubTab] = useState<
     'inbox' | 'feed' | 'communities' | 'events' | 'tasks' | 'commitments' | 'passport' | 'identity'
@@ -155,11 +163,13 @@ export const MemberWorkspace: React.FC<MemberWorkspaceProps> = ({
     return () => clearTimeout(timer);
   }, [currentUser]);
 
-  // One-time challenge state
-  const [isGeneratingChallenge, setIsGeneratingChallenge] = useState<boolean>(false);
-  const [challengePlatform, setChallengePlatform] = useState<'discord' | 'telegram'>('discord');
-  const [createdChallengeCode, setCreatedChallengeCode] = useState<string | null>(null);
-  const [copiedCode, setCopiedCode] = useState<boolean>(false);
+  // Per-platform One-Time Challenge & Unlink state
+  const [generatingPlatform, setGeneratingPlatform] = useState<'discord' | 'telegram' | null>(null);
+  const [discordChallengeCode, setDiscordChallengeCode] = useState<string | null>(null);
+  const [telegramChallengeCode, setTelegramChallengeCode] = useState<string | null>(null);
+  const [copiedPlatformCode, setCopiedPlatformCode] = useState<'discord' | 'telegram' | null>(null);
+  const [confirmUnlinkPlatform, setConfirmUnlinkPlatform] = useState<'discord' | 'telegram' | null>(null);
+  const [unlinkingPlatform, setUnlinkingPlatform] = useState<'discord' | 'telegram' | null>(null);
 
   // Evidence submission state
   const [completingTaskId, setCompletingTaskId] = useState<string | null>(null);
@@ -420,32 +430,58 @@ export const MemberWorkspace: React.FC<MemberWorkspaceProps> = ({
     }
   };
 
-  const handleGenerateChallenge = async () => {
-    setIsGeneratingChallenge(true);
+  const handleGeneratePlatformChallenge = async (platform: 'discord' | 'telegram') => {
+    setGeneratingPlatform(platform);
     setActionFeedback(null);
     try {
       const data = await callApiAction('create_identity_challenge', {
         userId: currentUser.id,
-        platform: challengePlatform
+        platform
       });
-      setCreatedChallengeCode(data.result.code);
+      if (platform === 'discord') {
+        setDiscordChallengeCode(data.result.code);
+      } else {
+        setTelegramChallengeCode(data.result.code);
+      }
       onRefresh();
     } catch (err: any) {
       setActionFeedback({ type: 'error', text: err?.message || 'Network error generating challenge.' });
     } finally {
-      setIsGeneratingChallenge(false);
+      setGeneratingPlatform(null);
     }
   };
 
-  const handleCopyChallengeCode = async () => {
-    if (!createdChallengeCode) return;
+  const handleCopyPlatformCode = async (platform: 'discord' | 'telegram', code: string) => {
     try {
       if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(createdChallengeCode);
-        setCopiedCode(true);
-        setTimeout(() => setCopiedCode(false), 2500);
+        await navigator.clipboard.writeText(code);
+        setCopiedPlatformCode(platform);
+        setTimeout(() => setCopiedPlatformCode(null), 2500);
       }
     } catch {}
+  };
+
+  const handleUnlinkPlatform = async (platform: 'discord' | 'telegram') => {
+    setUnlinkingPlatform(platform);
+    setActionFeedback(null);
+    try {
+      await callApiAction('unlink_platform', {
+        userId: currentUser.id,
+        platform
+      });
+      setConfirmUnlinkPlatform(null);
+      setActionFeedback({
+        type: 'success',
+        text: isRtl
+          ? `تم فك ربط ${platform === 'discord' ? 'ديسكورد' : 'تيلغرام'} بنجاح. يمكنك إعادة ربطه في أي وقت.`
+          : `${platform === 'discord' ? 'Discord' : 'Telegram'} unlinked cleanly. You can re-link anytime.`
+      });
+      onRefresh();
+    } catch (err: any) {
+      setActionFeedback({ type: 'error', text: err?.message || `Failed to unlink ${platform}.` });
+    } finally {
+      setUnlinkingPlatform(null);
+    }
   };
 
   const handleToggleChecklist = async (taskId: string, checklistId: string, completed: boolean) => {
@@ -482,105 +518,106 @@ export const MemberWorkspace: React.FC<MemberWorkspaceProps> = ({
   return (
     <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 space-y-6">
       {/* Persona Bar & Active Member Identity */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-4">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-slate-800 pb-4">
         <div>
           <div className="flex items-center gap-2">
             <span className="text-xs font-mono font-bold uppercase tracking-wider text-indigo-400">
-              {lang === 'ar' ? 'مساحة العضو الشخصية' : 'Member Workspace & Personal Space'}
+              {isRtl ? 'مساحة العضو الشخصية' : 'Member Workspace & Personal Space'}
             </span>
             <span className="text-slate-600">·</span>
             <span className="text-xs text-slate-400 font-mono">
-              Active Member: {currentUser.name}
+              {isRtl ? 'العضو النشط:' : 'Active Member:'} {currentUser.name}
             </span>
           </div>
           <h2 className="text-xl font-bold tracking-tight text-white mt-1">
-            {lang === 'ar' ? 'مركز المهام، الفعاليات، والإنجازات الموثقة' : 'Personal Action Hub & Portable Records'}
+            {isRtl ? 'مركز المهام، الفعاليات، والإنجازات الموثقة' : 'Personal Action Hub & Portable Records'}
           </h2>
         </div>
 
-        {/* Real Member Profile Badge */}
-        <div className="flex items-center gap-3 bg-slate-900/80 border border-slate-800 px-3.5 py-2 rounded-xl text-xs shrink-0">
-          <div className="flex items-center gap-2">
-            <div className="h-8 w-8 rounded-full bg-gradient-to-tr from-indigo-500 to-violet-500 flex items-center justify-center font-bold text-white text-xs shadow">
-              {currentUser.name.charAt(0)}
-            </div>
-            <div>
-              <div className="font-semibold text-white flex items-center gap-1.5">
-                <span>{currentUser.name}</span>
-                <span className="rounded bg-indigo-500/10 px-1.5 py-0.5 text-[10px] font-mono text-indigo-400 border border-indigo-500/20">
-                  {currentUser.platformRole}
-                </span>
+        {/* Multi-Role Owner Switcher + Real Member Profile Badge */}
+        <div className="flex flex-wrap items-center gap-3 shrink-0">
+          {ownedCommunities.length > 0 && onSwitchToOwnedCommunity && (
+            <button
+              type="button"
+              onClick={() => onSwitchToOwnedCommunity(ownedCommunities[0].id)}
+              className="flex items-center gap-2 rounded-xl border border-amber-500/40 bg-amber-500/15 hover:bg-amber-500/25 px-3.5 py-2 text-xs font-bold text-amber-300 transition-colors whitespace-nowrap"
+            >
+              <Crown className="h-4 w-4 text-amber-400" />
+              <span>
+                {isRtl
+                  ? `الانتقال لإدارة مجموعتي (${ownedCommunities[0].name})`
+                  : `Manage My Group (${ownedCommunities[0].name})`}
+              </span>
+            </button>
+          )}
+
+          <div className="flex items-center gap-3 bg-slate-900/80 border border-slate-800 px-3.5 py-2 rounded-xl text-xs shrink-0">
+            <div className="flex items-center gap-2">
+              <div className="h-8 w-8 rounded-full bg-gradient-to-tr from-indigo-500 to-violet-500 flex items-center justify-center font-bold text-white text-xs shadow">
+                {currentUser.name.charAt(0)}
               </div>
-              <div className="text-[11px] text-slate-400 font-mono">{currentUser.email}</div>
+              <div>
+                <div className="font-semibold text-white flex items-center gap-1.5">
+                  <span>{currentUser.name}</span>
+                  <span className="rounded bg-indigo-500/10 px-1.5 py-0.5 text-[10px] font-mono text-indigo-400 border border-indigo-500/20">
+                    {currentUser.platformRole}
+                  </span>
+                </div>
+                <div className="text-[11px] text-slate-400 font-mono">{currentUser.email}</div>
+              </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Clear Member Sign-In & Direct Discord/Telegram Account Linking Strip */}
-      <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-3.5 sm:p-4 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-        <div className="space-y-0.5">
-          <div className="text-xs font-semibold text-white flex items-center gap-2">
+      {/* Compact Member Connected Platforms Summary Strip */}
+      <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-3.5 flex flex-col md:flex-row md:items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-2.5 text-xs">
+          <span className="text-slate-400 font-medium flex items-center gap-1.5">
             <UserCheck className="h-4 w-4 text-indigo-400" />
-            <span>
-              {lang === 'ar'
-                ? 'حساب العضو وربط Discord و Telegram مباشرة'
-                : 'Member Account & Direct Discord / Telegram Linking'}
-            </span>
-          </div>
-          <p className="text-[11px] text-slate-400">
-            {lang === 'ar'
-              ? 'اربط حسابك في Discord أو Telegram مباشرة بملفك لاستلام المهام والإشعارات وتوثيق النتائج.'
-              : 'Link your Discord and Telegram accounts directly to your profile for instant task sync, bot commands, and verified outcomes.'}
-          </p>
-        </div>
+            <span>{isRtl ? 'حالة ربط المنصات:' : 'Platform Connections:'}</span>
+          </span>
 
-        <div className="flex flex-wrap items-center gap-2">
           {currentUser.identities?.discordId ? (
-            <div className="inline-flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1.5 text-xs">
-              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
-              <span className="text-emerald-300 font-medium">
-                Discord: @{currentUser.identities.discordUsername || 'Connected'}
-              </span>
-              <a
-                href="/api/discord/connect?mode=user&redirect=true"
-                className="text-[10px] font-mono text-[#9aa8ff] hover:underline ml-1"
-              >
-                {lang === 'ar' ? 'تحديث' : 'Re-link'}
-              </a>
-            </div>
+            <span className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-300">
+              <Bot className="h-3.5 w-3.5" />
+              <span>Discord: @{currentUser.identities.discordUsername || 'Connected'}</span>
+            </span>
           ) : (
             <a
               href="/api/discord/connect?mode=user&redirect=true"
-              className="inline-flex items-center gap-1.5 rounded-lg border border-[#5865F2]/50 bg-[#5865F2]/20 hover:bg-[#5865F2]/30 px-3 py-1.5 text-xs font-semibold text-[#9aa8ff] transition-all whitespace-nowrap"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-[#5865F2]/50 bg-[#5865F2]/15 hover:bg-[#5865F2]/25 px-2.5 py-1 text-xs font-semibold text-[#9aa8ff] transition-colors whitespace-nowrap"
             >
               <Bot className="h-3.5 w-3.5" />
-              <span>{lang === 'ar' ? 'ربط Discord الآن' : 'Link Discord Now'}</span>
+              <span>{isRtl ? '+ إضافة Discord' : '+ Add Discord'}</span>
             </a>
           )}
 
           {currentUser.identities?.telegramId ? (
-            <div className="inline-flex items-center gap-2 rounded-lg border border-sky-500/30 bg-sky-500/10 px-2.5 py-1.5 text-xs">
-              <CheckCircle2 className="h-3.5 w-3.5 text-sky-400" />
-              <span className="text-sky-300 font-medium">
-                Telegram: @{currentUser.identities.telegramUsername || 'Connected'}
-              </span>
-              <a
-                href="/api/auth/telegram/authorize?redirect=true"
-                className="text-[10px] font-mono text-[#5dc5f7] hover:underline ml-1"
-              >
-                {lang === 'ar' ? 'تحديث' : 'Re-link'}
-              </a>
-            </div>
+            <span className="inline-flex items-center gap-1.5 rounded-lg border border-sky-500/30 bg-sky-500/10 px-2.5 py-1 text-xs font-medium text-sky-300">
+              <Send className="h-3.5 w-3.5" />
+              <span>Telegram: @{currentUser.identities.telegramUsername || 'Connected'}</span>
+            </span>
           ) : (
             <a
               href="/api/auth/telegram/authorize?redirect=true"
-              className="inline-flex items-center gap-1.5 rounded-lg border border-[#229ED9]/50 bg-[#229ED9]/20 hover:bg-[#229ED9]/30 px-3 py-1.5 text-xs font-semibold text-[#5dc5f7] transition-all whitespace-nowrap"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-[#229ED9]/50 bg-[#229ED9]/15 hover:bg-[#229ED9]/25 px-2.5 py-1 text-xs font-semibold text-[#5dc5f7] transition-colors whitespace-nowrap"
             >
               <Send className="h-3.5 w-3.5" />
-              <span>{lang === 'ar' ? 'ربط Telegram الآن' : 'Link Telegram Now'}</span>
+              <span>{isRtl ? '+ إضافة Telegram' : '+ Add Telegram'}</span>
             </a>
           )}
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
+          <button
+            type="button"
+            onClick={() => setActiveSubTab('identity')}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-500/30 bg-indigo-500/10 hover:bg-indigo-500/20 px-3 py-1.5 text-xs font-semibold text-indigo-300 transition-colors whitespace-nowrap"
+          >
+            <Key className="h-3.5 w-3.5" />
+            <span>{isRtl ? 'إدارة Discord و Telegram' : 'Manage Discord & Telegram'}</span>
+          </button>
 
           {onOpenAccountSettings && (
             <button
@@ -589,16 +626,16 @@ export const MemberWorkspace: React.FC<MemberWorkspaceProps> = ({
               className="inline-flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800/80 hover:bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-200 transition-colors whitespace-nowrap"
             >
               <Settings className="h-3.5 w-3.5 text-slate-400" />
-              <span>{lang === 'ar' ? 'إعدادات الحساب' : 'Account'}</span>
+              <span>{isRtl ? 'الإعدادات' : 'Account'}</span>
             </button>
           )}
 
           <Link
             href="/auth/login"
-            className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-500/40 bg-indigo-500/10 hover:bg-indigo-500/20 px-3 py-1.5 text-xs font-semibold text-indigo-300 transition-colors whitespace-nowrap"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-900 hover:bg-slate-800 px-3 py-1.5 text-xs font-semibold text-slate-300 transition-colors whitespace-nowrap"
           >
             <LogIn className="h-3.5 w-3.5" />
-            <span>{lang === 'ar' ? 'تسجيل / تبديل الحساب' : 'Sign In / Switch'}</span>
+            <span>{isRtl ? 'تبديل الحساب' : 'Switch Account'}</span>
           </Link>
         </div>
       </div>
@@ -1613,184 +1650,339 @@ export const MemberWorkspace: React.FC<MemberWorkspaceProps> = ({
         </div>
       )}
 
-      {/* SUBTAB 6: CONNECTED ACCOUNTS & IDENTITY LINKING */}
+      {/* SUBTAB 6: DEDICATED DISCORD & TELEGRAM MEMBER SECTIONS (ZERO OVERLAP) */}
       {activeSubTab === 'identity' && (
         <div className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Discord Account Card */}
-            <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-5 space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="h-8 w-8 rounded-lg bg-[#5865F2]/20 border border-[#5865F2]/40 flex items-center justify-center text-[#8ea1ff]">
-                    <Bot className="h-4 w-4" />
+          <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div>
+              <h3 className="text-sm font-bold text-white">
+                {isRtl ? 'ربط وإدارة حسابات ديسكورد وتيلغرام بشكل منفصل' : 'Dedicated Discord & Telegram Member Sections'}
+              </h3>
+              <p className="text-xs text-slate-400 mt-0.5">
+                {isRtl
+                  ? 'يمكنك البدء بمنصة واحدة فقط ثم إضافة المنصة الأخرى في أي وقت، أو توليد كود ربط مخصص لكل بوت.'
+                  : 'Start with one platform and add the other anytime. Each platform has its own linking, unlink, and in-chat /connect verification flow.'}
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* ============================================================== */}
+            {/* DISCORD MEMBER SECTION                                         */}
+            {/* ============================================================== */}
+            <div className="rounded-2xl border border-[#5865F2]/35 bg-slate-900/50 p-5 space-y-5">
+              <div className="flex items-center justify-between gap-3 border-b border-slate-800 pb-4">
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-xl bg-[#5865F2]/20 border border-[#5865F2]/40 flex items-center justify-center text-[#9aa8ff]">
+                    <Bot className="h-5 w-5" />
                   </div>
                   <div>
-                    <h4 className="text-xs font-bold text-white">Personal Discord Account</h4>
-                    <span className="text-[10px] text-slate-400 font-mono">Member Identity & Roles</span>
+                    <h4 className="text-sm font-bold text-white">
+                      {isRtl ? 'قسم ديسكورد للعضو' : 'Discord Member Account'}
+                    </h4>
+                    <span className="text-[11px] text-slate-400 font-mono">
+                      OAuth2 & Slash Commands
+                    </span>
                   </div>
                 </div>
                 {currentUser.identities?.discordId ? (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 px-2 py-0.5 text-[10px] font-mono text-emerald-400">
-                    <CheckCircle2 className="h-3 w-3" />
-                    <span>Connected</span>
+                  <span className="inline-flex items-center gap-1 rounded-md bg-emerald-500/15 border border-emerald-500/30 px-2.5 py-1 text-[11px] font-mono text-emerald-300">
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                    <span>{isRtl ? 'متصل' : 'Connected'}</span>
                   </span>
                 ) : (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-slate-800 border border-slate-700 px-2 py-0.5 text-[10px] font-mono text-slate-400">
-                    <span>Not Linked</span>
+                  <span className="inline-flex items-center gap-1 rounded-md bg-slate-800 border border-slate-700 px-2.5 py-1 text-[11px] font-mono text-slate-400">
+                    <span>{isRtl ? 'غير مربوط' : 'Not Linked'}</span>
                   </span>
                 )}
               </div>
 
+              {/* Linked Identity or OAuth CTA */}
               {currentUser.identities?.discordId ? (
-                <div className="space-y-2">
-                  <div className="rounded-lg bg-slate-950 p-3 space-y-1 text-xs font-mono">
-                    <div className="text-slate-300">@{currentUser.identities.discordUsername || 'discord_user'}</div>
-                    <div className="text-[10px] text-slate-500">ID: {currentUser.identities.discordId}</div>
+                <div className="space-y-3">
+                  <div className="rounded-xl bg-slate-950 border border-slate-800 p-3.5 space-y-1 text-xs font-mono">
+                    <div className="text-white font-semibold">@{currentUser.identities.discordUsername || 'discord_user'}</div>
+                    <div className="text-[11px] text-slate-500">Discord ID: {currentUser.identities.discordId}</div>
                   </div>
-                  <a
-                    href="/api/discord/connect?mode=user&redirect=true"
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-[#5865F2]/40 bg-[#5865F2]/10 hover:bg-[#5865F2]/20 px-3 py-1 text-[11px] font-semibold text-[#8ea1ff] transition-all"
-                  >
-                    <Bot className="h-3 w-3" />
-                    <span>{lang === 'ar' ? 'إعادة ربط / تبديل Discord' : 'Re-link / Switch Discord'}</span>
-                  </a>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <a
+                      href="/api/discord/connect?mode=user&redirect=true"
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-[#5865F2]/40 bg-[#5865F2]/15 hover:bg-[#5865F2]/25 px-3 py-1.5 text-xs font-semibold text-[#9aa8ff] transition-all"
+                    >
+                      <Bot className="h-3.5 w-3.5" />
+                      <span>{isRtl ? 'تبديل / إعادة ربط Discord' : 'Re-link / Switch Discord'}</span>
+                    </a>
+
+                    {confirmUnlinkPlatform === 'discord' ? (
+                      <div className="inline-flex items-center gap-1.5 rounded-lg border border-rose-500/40 bg-rose-950/60 px-2.5 py-1 text-xs">
+                        <span className="text-rose-200">{isRtl ? 'تأكيد؟' : 'Confirm?'}</span>
+                        <button
+                          type="button"
+                          disabled={unlinkingPlatform === 'discord'}
+                          onClick={() => handleUnlinkPlatform('discord')}
+                          className="rounded bg-rose-600 px-2 py-0.5 font-semibold text-white hover:bg-rose-500"
+                        >
+                          {unlinkingPlatform === 'discord' ? '...' : (isRtl ? 'نعم' : 'Yes')}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setConfirmUnlinkPlatform(null)}
+                          className="rounded bg-slate-800 px-2 py-0.5 text-slate-300"
+                        >
+                          {isRtl ? 'إلغاء' : 'Cancel'}
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setConfirmUnlinkPlatform('discord')}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-rose-900/50 bg-rose-950/30 hover:bg-rose-950/60 px-3 py-1.5 text-xs font-semibold text-rose-300 transition-colors"
+                      >
+                        <Unlink className="h-3.5 w-3.5" />
+                        <span>{isRtl ? 'فك ربط Discord' : 'Unlink Discord'}</span>
+                      </button>
+                    )}
+                  </div>
                 </div>
               ) : (
-                <div className="space-y-2">
-                  <p className="text-xs text-slate-400 leading-normal">
-                    Link your Discord identity to receive role attestations, notifications, and slash command access.
+                <div className="space-y-3">
+                  <p className="text-xs text-slate-400 leading-relaxed">
+                    {isRtl
+                      ? 'اربط حسابك في ديسكورد لاستلام المهام وتوثيق المساهمات واستخدام أوامر البوت.'
+                      : 'Link your Discord account to claim bounties, verify contributions, and run slash commands.'}
                   </p>
                   <a
                     href="/api/discord/connect?mode=user&redirect=true"
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-[#5865F2]/40 bg-[#5865F2]/10 hover:bg-[#5865F2]/20 px-3.5 py-1.5 text-xs font-semibold text-[#8ea1ff] transition-all"
+                    className="inline-flex items-center gap-2 rounded-lg bg-[#5865F2] hover:bg-[#4956e0] px-4 py-2 text-xs font-bold text-white transition-all shadow"
                   >
-                    <Bot className="h-3.5 w-3.5" />
-                    <span>Connect Discord via OAuth</span>
+                    <Bot className="h-4 w-4" />
+                    <span>{isRtl ? 'ربط ديسكورد عبر OAuth2' : 'Connect Discord via OAuth'}</span>
                   </a>
                 </div>
               )}
+
+              {/* Dedicated Discord /connect Verification Code */}
+              <div className="border-t border-slate-800 pt-4 space-y-3">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5 text-xs font-semibold text-white">
+                    <Key className="h-3.5 w-3.5 text-[#9aa8ff]" />
+                    <span>{isRtl ? 'ربط عبر كود داخل ديسكورد' : 'Link in Discord Chat (/connect)'}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleGeneratePlatformChallenge('discord')}
+                    disabled={generatingPlatform === 'discord'}
+                    className="rounded-lg border border-[#5865F2]/40 bg-[#5865F2]/15 hover:bg-[#5865F2]/25 px-3 py-1.5 text-[11px] font-semibold text-[#a5b2ff] disabled:opacity-50 whitespace-nowrap"
+                  >
+                    {generatingPlatform === 'discord'
+                      ? isRtl ? 'جاري التوليد...' : 'Generating...'
+                      : isRtl ? 'توليد كود Discord' : 'Generate Discord Code'}
+                  </button>
+                </div>
+
+                {discordChallengeCode && (
+                  <div className="rounded-xl border border-[#5865F2]/40 bg-slate-950 p-3.5 space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <code className="text-sm font-mono font-bold text-white tracking-wider">
+                        /connect code:{discordChallengeCode}
+                      </code>
+                      <button
+                        type="button"
+                        onClick={() => handleCopyPlatformCode('discord', `/connect ${discordChallengeCode}`)}
+                        className="inline-flex items-center gap-1 rounded bg-slate-800 hover:bg-slate-700 px-2.5 py-1 text-[11px] text-slate-200 border border-slate-700"
+                      >
+                        {copiedPlatformCode === 'discord' ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
+                        <span>{copiedPlatformCode === 'discord' ? 'Copied' : 'Copy'}</span>
+                      </button>
+                    </div>
+                    <p className="text-[11px] text-slate-400">
+                      {isRtl
+                        ? `شغّل الأمر /connect واختر code: ${discordChallengeCode} داخل أي قناة فيها بوت Community Outcome.`
+                        : `Run /connect with code: ${discordChallengeCode} inside any Discord channel where the bot is installed.`}
+                    </p>
+                  </div>
+                )}
+
+                <div className="rounded-lg bg-slate-950/60 border border-slate-800/80 p-3 space-y-1.5">
+                  <div className="flex items-center gap-1.5 text-[11px] font-mono text-slate-400 uppercase">
+                    <Terminal className="h-3 w-3 text-[#9aa8ff]" />
+                    <span>{isRtl ? 'أوامر العضو في ديسكورد' : 'Discord Member Commands'}</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-1.5 text-[11px] font-mono text-slate-300">
+                    <span>/hub · Action Hub</span>
+                    <span>/requests · Open Needs</span>
+                    <span>/tasks · Open Tasks</span>
+                    <span>/mytasks · My Assigned</span>
+                    <span>/passport · My Passport</span>
+                    <span>/connect · Bind Profile</span>
+                  </div>
+                </div>
+              </div>
             </div>
 
-            {/* Telegram Account Card */}
-            <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-5 space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="h-8 w-8 rounded-lg bg-[#229ED9]/20 border border-[#229ED9]/40 flex items-center justify-center text-[#54bbf0]">
-                    <Send className="h-4 w-4" />
+            {/* ============================================================== */}
+            {/* TELEGRAM MEMBER SECTION                                        */}
+            {/* ============================================================== */}
+            <div className="rounded-2xl border border-[#229ED9]/35 bg-slate-900/50 p-5 space-y-5">
+              <div className="flex items-center justify-between gap-3 border-b border-slate-800 pb-4">
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-xl bg-[#229ED9]/20 border border-[#229ED9]/40 flex items-center justify-center text-[#5dc5f7]">
+                    <Send className="h-5 w-5" />
                   </div>
                   <div>
-                    <h4 className="text-xs font-bold text-white">Personal Telegram Account</h4>
-                    <span className="text-[10px] text-slate-400 font-mono">Member Passport & Alerts</span>
+                    <h4 className="text-sm font-bold text-white">
+                      {isRtl ? 'قسم تيلغرام للعضو' : 'Telegram Member Account'}
+                    </h4>
+                    <span className="text-[11px] text-slate-400 font-mono">
+                      OIDC & @CommunityOutcomeBot
+                    </span>
                   </div>
                 </div>
                 {currentUser.identities?.telegramId ? (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 px-2 py-0.5 text-[10px] font-mono text-emerald-400">
-                    <CheckCircle2 className="h-3 w-3" />
-                    <span>Connected</span>
+                  <span className="inline-flex items-center gap-1 rounded-md bg-sky-500/15 border border-sky-500/30 px-2.5 py-1 text-[11px] font-mono text-sky-300">
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                    <span>{isRtl ? 'متصل' : 'Connected'}</span>
                   </span>
                 ) : (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-slate-800 border border-slate-700 px-2 py-0.5 text-[10px] font-mono text-slate-400">
-                    <span>Not Linked</span>
+                  <span className="inline-flex items-center gap-1 rounded-md bg-slate-800 border border-slate-700 px-2.5 py-1 text-[11px] font-mono text-slate-400">
+                    <span>{isRtl ? 'غير مربوط' : 'Not Linked'}</span>
                   </span>
                 )}
               </div>
 
+              {/* Linked Identity or OIDC CTA */}
               {currentUser.identities?.telegramId ? (
-                <div className="space-y-2">
-                  <div className="rounded-lg bg-slate-950 p-3 space-y-1 text-xs font-mono">
-                    <div className="text-slate-300">@{currentUser.identities.telegramUsername || 'telegram_user'}</div>
-                    <div className="text-[10px] text-slate-500">ID: {currentUser.identities.telegramId}</div>
+                <div className="space-y-3">
+                  <div className="rounded-xl bg-slate-950 border border-slate-800 p-3.5 space-y-1 text-xs font-mono">
+                    <div className="text-white font-semibold">@{currentUser.identities.telegramUsername || 'telegram_user'}</div>
+                    <div className="text-[11px] text-slate-500">Telegram ID: {currentUser.identities.telegramId}</div>
                   </div>
-                  <a
-                    href="/api/auth/telegram/authorize?redirect=true"
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-[#229ED9]/40 bg-[#229ED9]/10 hover:bg-[#229ED9]/20 px-3 py-1 text-[11px] font-semibold text-[#54bbf0] transition-all"
-                  >
-                    <Send className="h-3 w-3" />
-                    <span>{lang === 'ar' ? 'إعادة ربط / تبديل Telegram' : 'Re-link / Switch Telegram'}</span>
-                  </a>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <a
+                      href="/api/auth/telegram/authorize?redirect=true"
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-[#229ED9]/40 bg-[#229ED9]/15 hover:bg-[#229ED9]/25 px-3 py-1.5 text-xs font-semibold text-[#5dc5f7] transition-all"
+                    >
+                      <Send className="h-3.5 w-3.5" />
+                      <span>{isRtl ? 'تبديل / إعادة ربط Telegram' : 'Re-link / Switch Telegram'}</span>
+                    </a>
+
+                    {confirmUnlinkPlatform === 'telegram' ? (
+                      <div className="inline-flex items-center gap-1.5 rounded-lg border border-rose-500/40 bg-rose-950/60 px-2.5 py-1 text-xs">
+                        <span className="text-rose-200">{isRtl ? 'تأكيد؟' : 'Confirm?'}</span>
+                        <button
+                          type="button"
+                          disabled={unlinkingPlatform === 'telegram'}
+                          onClick={() => handleUnlinkPlatform('telegram')}
+                          className="rounded bg-rose-600 px-2 py-0.5 font-semibold text-white hover:bg-rose-500"
+                        >
+                          {unlinkingPlatform === 'telegram' ? '...' : (isRtl ? 'نعم' : 'Yes')}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setConfirmUnlinkPlatform(null)}
+                          className="rounded bg-slate-800 px-2 py-0.5 text-slate-300"
+                        >
+                          {isRtl ? 'إلغاء' : 'Cancel'}
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setConfirmUnlinkPlatform('telegram')}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-rose-900/50 bg-rose-950/30 hover:bg-rose-950/60 px-3 py-1.5 text-xs font-semibold text-rose-300 transition-colors"
+                      >
+                        <Unlink className="h-3.5 w-3.5" />
+                        <span>{isRtl ? 'فك ربط Telegram' : 'Unlink Telegram'}</span>
+                      </button>
+                    )}
+                  </div>
                 </div>
               ) : (
-                <div className="space-y-2">
-                  <p className="text-xs text-slate-400 leading-normal">
-                    Link your Telegram identity to verify deliverables and query tasks directly via @CommunityOutcomeBot.
+                <div className="space-y-3">
+                  <p className="text-xs text-slate-400 leading-relaxed">
+                    {isRtl
+                      ? 'اربط حسابك في تيلغرام لاستعلام مهامك وجواز سفرك واستلام التنبيهات مباشرة عبر البوت.'
+                      : 'Link your Telegram account to query your tasks, check your passport, and receive group alerts.'}
                   </p>
                   <div className="flex flex-wrap items-center gap-2">
                     <a
                       href="/api/auth/telegram/authorize?redirect=true"
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-[#229ED9]/40 bg-[#229ED9]/10 hover:bg-[#229ED9]/20 px-3 py-1.5 text-xs font-semibold text-[#54bbf0] transition-all"
+                      className="inline-flex items-center gap-2 rounded-lg bg-[#229ED9] hover:bg-[#1e8ec3] px-4 py-2 text-xs font-bold text-white transition-all shadow"
                     >
-                      <Send className="h-3.5 w-3.5" />
-                      <span>Connect via Telegram OIDC</span>
+                      <Send className="h-4 w-4" />
+                      <span>{isRtl ? 'ربط تيلغرام عبر OIDC' : 'Connect via Telegram OIDC'}</span>
                     </a>
                     <a
                       href="https://t.me/CommunityOutcomeBot?start=connect"
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800 hover:bg-slate-700 px-3 py-1.5 text-xs text-slate-300 transition-all"
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800 hover:bg-slate-700 px-3 py-2 text-xs text-slate-200 transition-all"
                     >
-                      <span>Open @Bot</span>
+                      <ExternalLink className="h-3.5 w-3.5" />
+                      <span>{isRtl ? 'فتح @Bot' : 'Open @Bot'}</span>
                     </a>
                   </div>
                 </div>
               )}
-            </div>
-          </div>
 
-          {/* In-Chat One-Time Verification Challenge Generator */}
-          <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-5 space-y-4">
-            <div className="flex items-center gap-2">
-              <Key className="h-4 w-4 text-indigo-400" />
-              <h3 className="text-sm font-bold text-white">
-                Link via In-Chat Verification Code (/connect &lt;code&gt;)
-              </h3>
-            </div>
-            <p className="text-xs text-slate-400 leading-relaxed">
-              If you prefer not to use OAuth, generate a cryptographically bound single-use 6-character challenge code and send it directly to the bot.
-            </p>
-
-            <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-              <select
-                value={challengePlatform}
-                onChange={(e) => setChallengePlatform(e.target.value as any)}
-                className="rounded-md border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs text-white capitalize"
-              >
-                <option value="discord">Discord (/connect &lt;code&gt;)</option>
-                <option value="telegram">Telegram (/connect &lt;code&gt;)</option>
-              </select>
-
-              <button
-                onClick={handleGenerateChallenge}
-                disabled={isGeneratingChallenge}
-                className="flex items-center gap-1.5 rounded-md bg-indigo-600 px-4 py-1.5 text-xs font-semibold text-white hover:bg-indigo-500 transition-colors disabled:opacity-50"
-              >
-                <Key className="h-3.5 w-3.5" />
-                <span>Generate 15-Minute Challenge</span>
-              </button>
-            </div>
-
-            {createdChallengeCode && (
-              <div className="rounded-lg border border-indigo-700/60 bg-indigo-950/30 p-4 space-y-2">
-                <span className="text-xs text-indigo-200 font-medium block">
-                  Your One-Time Verification Challenge Code:
-                </span>
-                <div className="flex items-center gap-3">
-                  <span className="text-xl font-bold font-mono tracking-widest text-white bg-slate-900 px-4 py-2 rounded-md border border-slate-700">
-                    {createdChallengeCode}
-                  </span>
+              {/* Dedicated Telegram /connect Verification Code */}
+              <div className="border-t border-slate-800 pt-4 space-y-3">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5 text-xs font-semibold text-white">
+                    <Key className="h-3.5 w-3.5 text-[#5dc5f7]" />
+                    <span>{isRtl ? 'ربط عبر كود لبوت تيلغرام' : 'Link in Telegram Chat (/connect)'}</span>
+                  </div>
                   <button
-                    onClick={handleCopyChallengeCode}
-                    className="flex items-center gap-1 rounded-md bg-slate-800 px-3 py-2 text-xs text-slate-200 hover:text-white border border-slate-700"
+                    type="button"
+                    onClick={() => handleGeneratePlatformChallenge('telegram')}
+                    disabled={generatingPlatform === 'telegram'}
+                    className="rounded-lg border border-[#229ED9]/40 bg-[#229ED9]/15 hover:bg-[#229ED9]/25 px-3 py-1.5 text-[11px] font-semibold text-[#6ecdf9] disabled:opacity-50 whitespace-nowrap"
                   >
-                    {copiedCode ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
-                    <span>{copiedCode ? 'Copied' : 'Copy Code'}</span>
+                    {generatingPlatform === 'telegram'
+                      ? isRtl ? 'جاري التوليد...' : 'Generating...'
+                      : isRtl ? 'توليد كود Telegram' : 'Generate Telegram Code'}
                   </button>
                 </div>
-                <p className="text-[11px] text-slate-400">
-                  Run <code className="text-indigo-300">/connect {createdChallengeCode}</code> inside{' '}
-                  {challengePlatform === 'discord' ? 'Discord bot channel' : 'Telegram bot chat'} to complete authentication.
-                </p>
+
+                {telegramChallengeCode && (
+                  <div className="rounded-xl border border-[#229ED9]/40 bg-slate-950 p-3.5 space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <code className="text-sm font-mono font-bold text-white tracking-wider">
+                        /connect {telegramChallengeCode}
+                      </code>
+                      <button
+                        type="button"
+                        onClick={() => handleCopyPlatformCode('telegram', `/connect ${telegramChallengeCode}`)}
+                        className="inline-flex items-center gap-1 rounded bg-slate-800 hover:bg-slate-700 px-2.5 py-1 text-[11px] text-slate-200 border border-slate-700"
+                      >
+                        {copiedPlatformCode === 'telegram' ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
+                        <span>{copiedPlatformCode === 'telegram' ? 'Copied' : 'Copy'}</span>
+                      </button>
+                    </div>
+                    <p className="text-[11px] text-slate-400">
+                      {isRtl
+                        ? `أرسل الأمر /connect ${telegramChallengeCode} إلى @CommunityOutcomeBot في المحادثة الخاصة أو داخل الجروب.`
+                        : `Send /connect ${telegramChallengeCode} directly to @CommunityOutcomeBot in DM or group chat.`}
+                    </p>
+                  </div>
+                )}
+
+                <div className="rounded-lg bg-slate-950/60 border border-slate-800/80 p-3 space-y-1.5">
+                  <div className="flex items-center gap-1.5 text-[11px] font-mono text-slate-400 uppercase">
+                    <Terminal className="h-3 w-3 text-[#5dc5f7]" />
+                    <span>{isRtl ? 'أوامر العضو في تيلغرام' : 'Telegram Member Commands'}</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-1.5 text-[11px] font-mono text-slate-300">
+                    <span>/start · Welcome Menu</span>
+                    <span>/requests · Open Needs</span>
+                    <span>/tasks · Open Tasks</span>
+                    <span>/mytasks · My Assigned</span>
+                    <span>/passport · My Passport</span>
+                    <span>/connect OS-XXXX · Bind</span>
+                  </div>
+                </div>
               </div>
-            )}
+            </div>
           </div>
         </div>
       )}

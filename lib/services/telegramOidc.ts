@@ -47,6 +47,7 @@ export interface TelegramOidcSessionState {
   codeVerifier: string;
   clientId: string;
   redirectUri: string;
+  intent?: 'owner' | 'member';
   createdAt: number;
 }
 
@@ -106,7 +107,10 @@ export function getTelegramOidcClientId(explicitEnv?: CloudflareEnv): string {
 /**
  * Build the official Telegram OpenID Connect Authorization Request URL
  */
-export function buildTelegramOidcAuthorization(explicitEnv?: CloudflareEnv): {
+export function buildTelegramOidcAuthorization(
+  explicitEnv?: CloudflareEnv,
+  intent?: 'owner' | 'member'
+): {
   authUrl: string;
   sessionState: TelegramOidcSessionState;
 } {
@@ -136,6 +140,7 @@ export function buildTelegramOidcAuthorization(explicitEnv?: CloudflareEnv): {
     codeVerifier: pkce.codeVerifier,
     clientId,
     redirectUri,
+    intent: intent === 'owner' ? 'owner' : 'member',
     createdAt: Date.now()
   };
 
