@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Header } from '@/components/Header';
+import Link from 'next/link';
+import { Header, WorkspaceMode } from '@/components/Header';
 import { CommunityHero } from '@/components/CommunityHero';
 import { OwnerWorkspace } from '@/components/OwnerWorkspace';
 import { MemberWorkspace } from '@/components/MemberWorkspace';
@@ -19,6 +20,9 @@ import { TestingSuiteSection } from '@/components/TestingSuiteSection';
 import { AuthPortal } from '@/components/AuthPortal';
 import { AccountSettingsModal } from '@/components/AccountSettingsModal';
 import { OnboardingChoiceModal } from '@/components/OnboardingChoiceModal';
+import { PricingPlansSection } from '@/components/PricingPlansSection';
+import { DeviceAccessCenter, DeviceExperienceMode } from '@/components/DeviceAccessCenter';
+import { PrivacyPoliciesSection } from '@/components/PrivacyPoliciesSection';
 
 import { translations } from '@/lib/i18n';
 import {
@@ -57,13 +61,32 @@ import {
   AuditLogItem
 } from '@/lib/types';
 import { CommunityOutcomeAnalytics } from '@/lib/services/analytics';
-import { ArrowRight, ShieldCheck, CheckCircle2, MessageSquare } from 'lucide-react';
+import {
+  ArrowRight,
+  ShieldCheck,
+  CheckCircle2,
+  MessageSquare,
+  LayoutGrid,
+  CreditCard,
+  MonitorSmartphone,
+  Lock,
+  Shield,
+  Award,
+  Link2,
+  BookOpen,
+  BarChart3,
+  Bot,
+  FlaskConical,
+  ListChecks,
+  Compass
+} from 'lucide-react';
 
 export default function HomePage() {
   const [lang, setLang] = useState<Language>('en');
   const [darkMode, setDarkMode] = useState<boolean>(true);
   const [activeTab, setActiveTab] = useState<string>('hub');
-  const [workspaceMode, setWorkspaceMode] = useState<'owner' | 'member' | 'modules'>('owner');
+  const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>('owner');
+  const [deviceMode, setDeviceMode] = useState<DeviceExperienceMode>('auto');
   const [ownerSection, setOwnerSection] = useState<'operations' | 'connect' | 'pricing'>('operations');
   const [memberSubTab, setMemberSubTab] = useState<
     'inbox' | 'feed' | 'communities' | 'events' | 'tasks' | 'commitments' | 'passport' | 'identity'
@@ -160,7 +183,16 @@ export default function HomePage() {
       const isIdentityLinkedRedirect =
         subtab === 'identity' || accountUpdated === 'discord_linked' || connected === 'telegram';
 
-      if (tab === 'member' || tab === 'owner' || isDiscordGuildConnected || isIdentityLinkedRedirect) {
+      const isKnownTab =
+        tab === 'member' ||
+        tab === 'owner' ||
+        tab === 'modules' ||
+        tab === 'billing' ||
+        tab === 'pricing' ||
+        tab === 'devices' ||
+        tab === 'privacy';
+
+      if (isKnownTab || isDiscordGuildConnected || isIdentityLinkedRedirect) {
         explicitTabRef.current = true;
         if (tab === 'owner' || isDiscordGuildConnected) {
           explicitWorkspaceIntentRef.current = 'owner';
@@ -199,8 +231,7 @@ export default function HomePage() {
       }
 
       if (
-        tab === 'member' ||
-        tab === 'owner' ||
+        isKnownTab ||
         section ||
         onboarding ||
         isDiscordGuildConnected ||
@@ -215,6 +246,14 @@ export default function HomePage() {
             setWorkspaceMode('owner');
           } else if (tab === 'member' || isIdentityLinkedRedirect) {
             setWorkspaceMode('member');
+          } else if (tab === 'modules') {
+            setWorkspaceMode('modules');
+          } else if (tab === 'billing' || tab === 'pricing') {
+            setWorkspaceMode('billing');
+          } else if (tab === 'devices') {
+            setWorkspaceMode('devices');
+          } else if (tab === 'privacy') {
+            setWorkspaceMode('privacy');
           }
 
           if (section === 'connect' || isDiscordGuildConnected) {
@@ -654,8 +693,16 @@ export default function HomePage() {
         onToggleDataMode={handleToggleDataMode}
       />
 
-      {/* Main Content Viewport */}
-      <main className="min-h-[calc(100vh-140px)]">
+      {/* Main Content Viewport (Adapts to Desktop / Auto / Mobile Preview) */}
+      <main
+        className={`min-h-[calc(100vh-140px)] ${
+          deviceMode === 'mobile'
+            ? 'max-w-md mx-auto border-x border-slate-800/80 shadow-2xl pb-24'
+            : deviceMode === 'desktop'
+            ? 'min-w-[960px] pb-8'
+            : 'pb-20 md:pb-8'
+        }`}
+      >
         {statusBanner && (
           <div className="mx-auto max-w-7xl px-4 pt-4 sm:px-6">
             <div
@@ -737,6 +784,8 @@ export default function HomePage() {
                   setActiveTab(tab);
                 }}
                 onSwitchToMemberSpace={() => setWorkspaceMode('member')}
+                onOpenPrivacy={() => setWorkspaceMode('privacy')}
+                onOpenCreateCommunity={() => setIsCreateCommunityOpen(true)}
                 initialSection={ownerSection}
               />
             )}
@@ -792,6 +841,81 @@ export default function HomePage() {
                     onSelectTab={setActiveTab}
                   />
                 )}
+
+                {/* Organized 3-Group Feature Directory */}
+                <div className="border-b border-slate-800/80 bg-slate-950/60">
+                  <div className="mx-auto max-w-7xl px-4 py-4 sm:px-6 space-y-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                      <span className="font-semibold text-slate-300">
+                        {lang === 'ar'
+                          ? 'خريطة الميزات المنظمة — جميع أقسام التنسيق والتوثيق والربط'
+                          : 'Organized Feature Directory — Collaboration, Trust & Ops'}
+                      </span>
+                      <span className="text-[11px] font-mono text-slate-500">
+                        {lang === 'ar' ? 'اختر القسم للعمل المباشر' : 'Select any module to open'}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
+                      {[
+                        {
+                          groupTitle: lang === 'ar' ? '1. التعاون والطلبات' : '1. Collaboration',
+                          items: [
+                            { id: 'hub', label: t.navigation.hub, icon: Compass },
+                            { id: 'requests', label: t.navigation.requests, icon: MessageSquare },
+                            { id: 'tasks', label: t.navigation.tasks, icon: ListChecks }
+                          ]
+                        },
+                        {
+                          groupTitle: lang === 'ar' ? '2. الثقة والنمو' : '2. Trust & Growth',
+                          items: [
+                            { id: 'trust', label: t.navigation.contributions, icon: Shield },
+                            { id: 'passport', label: t.navigation.passport, icon: Award },
+                            { id: 'links', label: t.navigation.links, icon: Link2 },
+                            { id: 'knowledge', label: t.navigation.knowledge, icon: BookOpen }
+                          ]
+                        },
+                        {
+                          groupTitle: lang === 'ar' ? '3. البوتات والفحص' : '3. Ops & QA',
+                          items: [
+                            { id: 'analytics', label: t.navigation.analytics, icon: BarChart3 },
+                            { id: 'integrations', label: t.navigation.integrations, icon: Bot },
+                            { id: 'tests', label: t.navigation.testSuite, icon: FlaskConical }
+                          ]
+                        }
+                      ].map((group) => (
+                        <div
+                          key={group.groupTitle}
+                          className="rounded-xl border border-slate-800/80 bg-slate-900/50 p-2.5 space-y-2"
+                        >
+                          <div className="text-[11px] font-mono uppercase tracking-wider text-slate-400 px-1">
+                            {group.groupTitle}
+                          </div>
+                          <div className="flex flex-wrap gap-1.5">
+                            {group.items.map((item) => {
+                              const Icon = item.icon;
+                              const isActive = activeTab === item.id;
+                              return (
+                                <button
+                                  key={item.id}
+                                  type="button"
+                                  onClick={() => setActiveTab(item.id)}
+                                  className={`min-h-[36px] flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors whitespace-nowrap ${
+                                    isActive
+                                      ? 'bg-indigo-600/25 text-indigo-300 border border-indigo-500/40 font-semibold'
+                                      : 'bg-slate-950/60 text-slate-300 border border-slate-800 hover:border-slate-700 hover:text-white'
+                                  }`}
+                                >
+                                  <Icon className="h-3.5 w-3.5 shrink-0" />
+                                  <span>{item.label}</span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
 
                 {/* Viewport Sections */}
                 <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
@@ -1043,6 +1167,71 @@ export default function HomePage() {
                 </div>
               </div>
             )}
+
+            {/* WORKSPACE MODE 4: BILLING, PRICING TIMING & QUOTA */}
+            {workspaceMode === 'billing' && (
+              <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
+                <PricingPlansSection
+                  community={
+                    currentCommunity ||
+                    communities[0] || {
+                      id: 'comm_preview',
+                      name: lang === 'ar' ? 'معاينة خطط المنصة' : 'Platform Billing Overview',
+                      slug: 'preview',
+                      description: 'Free for members forever; owners upgrade at scale.',
+                      ownerId: currentUser.id,
+                      themeColor: '#6366f1',
+                      categories: ['Development'],
+                      privacyPolicy: 'Consent-first ledger',
+                      createdAt: new Date().toISOString()
+                    }
+                  }
+                  subscription={subscription}
+                  entitlements={entitlements}
+                  isOwner={
+                    ['platform_admin', 'community_owner', 'admin'].includes(currentUserRole) ||
+                    Boolean(currentCommunity && authUser && currentCommunity.ownerId === authUser.id)
+                  }
+                  lang={lang}
+                  onRefresh={() => fetchData(currentCommunityId)}
+                  onOpenCreateCommunity={() => setIsCreateCommunityOpen(true)}
+                  onOpenPrivacy={() => setWorkspaceMode('privacy')}
+                />
+              </div>
+            )}
+
+            {/* WORKSPACE MODE 5: PC / DESKTOP & MOBILE PHONE ACCESS HUB */}
+            {workspaceMode === 'devices' && (
+              <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
+                <DeviceAccessCenter
+                  currentUser={currentUser}
+                  community={currentCommunity}
+                  lang={lang}
+                  deviceMode={deviceMode}
+                  onChangeDeviceMode={setDeviceMode}
+                  onNavigateWorkspace={(mode, subTab) => {
+                    if (mode === 'modules' && subTab) {
+                      setActiveTab(subTab);
+                    } else if (mode === 'member' && subTab) {
+                      setMemberSubTab(subTab as any);
+                    }
+                    setWorkspaceMode(mode);
+                  }}
+                  onRefresh={() => fetchData(currentCommunityId)}
+                />
+              </div>
+            )}
+
+            {/* WORKSPACE MODE 6: PRIVACY & GOVERNANCE POLICIES */}
+            {workspaceMode === 'privacy' && (
+              <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
+                <PrivacyPoliciesSection
+                  currentUser={authUser}
+                  lang={lang}
+                  onRefresh={() => fetchData(currentCommunityId)}
+                />
+              </div>
+            )}
           </div>
         )}
       </main>
@@ -1077,20 +1266,119 @@ export default function HomePage() {
         onClose={() => setIsOnboardingOpen(false)}
       />
 
+      {/* Mobile Bottom Thumb Navigation Bar (Respects <=15% sticky height, min-h-[44px] targets) */}
+      <nav
+        aria-label={lang === 'ar' ? 'تنقل الهاتف السريع' : 'Mobile quick navigation'}
+        className={`fixed bottom-0 left-0 right-0 z-40 h-16 border-t border-slate-800 bg-[#090d16]/95 backdrop-blur-md px-2 ${
+          deviceMode === 'mobile' ? 'block' : deviceMode === 'desktop' ? 'hidden' : 'lg:hidden'
+        }`}
+      >
+        <div className="mx-auto grid h-full max-w-md grid-cols-5 items-center gap-1">
+          {[
+            {
+              id: 'home',
+              label: lang === 'ar' ? 'الرئيسية' : 'Home',
+              icon: Shield,
+              active: workspaceMode === 'owner' || workspaceMode === 'member',
+              onClick: () =>
+                setWorkspaceMode(
+                  ['platform_admin', 'community_owner', 'admin'].includes(currentUserRole) ||
+                    communities.some((c) => authUser && c.ownerId === authUser.id)
+                    ? 'owner'
+                    : 'member'
+                )
+            },
+            {
+              id: 'modules',
+              label: lang === 'ar' ? 'الميزات' : 'Modules',
+              icon: LayoutGrid,
+              active: workspaceMode === 'modules',
+              onClick: () => setWorkspaceMode('modules')
+            },
+            {
+              id: 'devices',
+              label: lang === 'ar' ? 'الأجهزة' : 'Devices',
+              icon: MonitorSmartphone,
+              active: workspaceMode === 'devices',
+              onClick: () => setWorkspaceMode('devices')
+            },
+            {
+              id: 'billing',
+              label: lang === 'ar' ? 'الدفع' : 'Billing',
+              icon: CreditCard,
+              active: workspaceMode === 'billing',
+              onClick: () => setWorkspaceMode('billing')
+            },
+            {
+              id: 'privacy',
+              label: lang === 'ar' ? 'الخصوصية' : 'Privacy',
+              icon: Lock,
+              active: workspaceMode === 'privacy',
+              onClick: () => setWorkspaceMode('privacy')
+            }
+          ].map((item) => {
+            const Icon = item.icon;
+            return (
+              <button
+                key={item.id}
+                type="button"
+                onClick={item.onClick}
+                className={`flex min-h-[44px] flex-col items-center justify-center gap-0.5 rounded-lg px-1 py-1 text-[10px] font-semibold transition-colors ${
+                  item.active
+                    ? 'bg-indigo-500/20 text-indigo-300'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <Icon className="h-4 w-4 shrink-0" />
+                <span className="truncate max-w-full">{item.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      </nav>
+
       {/* Quiet, Anti-Slop Footer */}
-      <footer className="border-t border-slate-800 bg-[#090d16] py-6 text-xs text-slate-500">
+      <footer
+        className={`border-t border-slate-800 bg-[#090d16] pt-6 text-xs text-slate-500 ${
+          deviceMode === 'mobile' ? 'pb-24' : deviceMode === 'desktop' ? 'pb-6' : 'pb-24 lg:pb-6'
+        }`}
+      >
         <div className="mx-auto flex max-w-7xl flex-col sm:flex-row items-center justify-between gap-4 px-4 sm:px-6">
           <div className="flex items-center gap-2">
             <span className="font-semibold text-slate-400">Community OS</span>
             <span>·</span>
-            <span>Outcome Operating System for Discord, Telegram & Web</span>
+            <span>Outcome Operating System for Discord, Telegram &amp; Web</span>
           </div>
-          <div className="flex items-center gap-4 font-mono text-[11px] text-slate-400">
-            <span>Multi-Tenant Isolation: Active</span>
+          <div className="flex flex-wrap items-center justify-center gap-4 text-[11px] text-slate-400">
+            <button
+              type="button"
+              onClick={() => setWorkspaceMode('billing')}
+              className="hover:text-amber-300 transition-colors"
+            >
+              {lang === 'ar' ? 'الخطط والدفع' : 'Plans & Billing'}
+            </button>
             <span>·</span>
-            <span>Silence != Consent Rule: Enforced</span>
+            <button
+              type="button"
+              onClick={() => setWorkspaceMode('devices')}
+              className="hover:text-sky-300 transition-colors"
+            >
+              {lang === 'ar' ? 'الكمبيوتر والهاتف' : 'PC & Mobile'}
+            </button>
             <span>·</span>
-            <span>2026 Community OS Foundation</span>
+            <button
+              type="button"
+              onClick={() => setWorkspaceMode('privacy')}
+              className="hover:text-emerald-300 transition-colors"
+            >
+              {lang === 'ar' ? 'الخصوصية والسياسات' : 'Privacy & Policies'}
+            </button>
+            <span>·</span>
+            <Link href="/privacy" className="font-mono hover:text-emerald-300 transition-colors">
+              /privacy
+            </Link>
+            <span>·</span>
+            <span className="font-mono">2026 Community OS</span>
           </div>
         </div>
       </footer>

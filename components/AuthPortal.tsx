@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import Link from 'next/link';
 import { Language, User } from '@/lib/types';
 import {
   ShieldCheck,
@@ -980,8 +981,18 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({
 
       {/* Footer */}
       <footer className="border-t border-slate-900 bg-slate-950/80 px-6 py-4 text-center text-xs text-slate-500">
-        <div>
-          Community OS — Multi-Tenant Decentralized Coordination Ledger &amp; Official Bot Hub.
+        <div className="mx-auto flex max-w-6xl flex-col sm:flex-row items-center justify-between gap-2">
+          <div>
+            Community OS — Multi-Tenant Decentralized Coordination Ledger &amp; Official Bot Hub.
+          </div>
+          <div className="flex items-center gap-4">
+            <Link
+              href="/privacy"
+              className="text-slate-300 hover:text-emerald-300 underline-offset-4 hover:underline transition-colors font-medium"
+            >
+              {isRtl ? 'الخصوصية والسياسات' : 'Privacy & Policies'}
+            </Link>
+          </div>
         </div>
       </footer>
 

@@ -541,10 +541,12 @@ export async function POST(req: NextRequest, _context?: any) {
 export async function GET(req: NextRequest, _context?: any) {
   const env = getRuntimeEnv(_context?.env || _context);
   const publicKey = env.DISCORD_PUBLIC_KEY;
+  const appUrl = getVerifiedAppUrl(env);
   return NextResponse.json({
     status: 'online',
     endpoint: 'Discord Interactions Endpoint',
-    url: 'https://community-outcome.ghazghazibahaeddin.workers.dev/api/discord/interactions',
+    url: `${appUrl}/api/discord/interactions`,
+    productionUrl: 'https://community-outcome.ghazghazibahaeddin.workers.dev/api/discord/interactions',
     publicKeyConfigured: Boolean(publicKey),
     message: publicKey
       ? 'DISCORD_PUBLIC_KEY is configured. Ready for Discord verification.'

@@ -263,23 +263,38 @@ function getInitialSeedData(): DatabaseSchema {
         'Respect contributor privacy and consent settings.'
       ],
       discordConfig: {
-        connected: false,
-        serverId: '',
-        serverName: '',
-        channelId: '',
-        status: 'disconnected',
-        lastChecked: ''
+        connected: true,
+        serverId: 'discord_guild_devforge',
+        serverName: 'DevForge Builders Discord',
+        channelId: 'ch_devforge_ops',
+        status: 'connected',
+        lastChecked: '2026-10-30T11:00:00Z'
       },
       telegramConfig: {
-        connected: false,
-        groupId: '',
-        groupTitle: '',
-        channelId: '',
-        status: 'disconnected',
-        lastChecked: ''
+        connected: true,
+        groupId: 'tg_group_devforge',
+        groupTitle: 'DevForge Builders Telegram',
+        channelId: 'tg_ch_devforge_updates',
+        status: 'connected',
+        lastChecked: '2026-10-30T11:05:00Z'
       },
-      connectedDiscordServers: [],
-      connectedTelegramGroups: [],
+      connectedDiscordServers: [
+        {
+          serverId: 'discord_guild_devforge',
+          serverName: 'DevForge Builders Discord',
+          channelId: 'ch_devforge_ops',
+          status: 'connected',
+          connectedAt: '2026-01-12T10:00:00Z'
+        }
+      ],
+      connectedTelegramGroups: [
+        {
+          groupId: 'tg_group_devforge',
+          groupTitle: 'DevForge Builders Telegram',
+          status: 'connected',
+          connectedAt: '2026-01-12T10:05:00Z'
+        }
+      ],
       contributionCategories: [
         { id: 'cat_tech', name: 'Technical Assistance', nameAr: 'المساعدة البرمجية والتقنية', description: 'Code contributions, PR reviews, bug triage, architecture audits.', requiresReview: true },
         { id: 'cat_mentor', name: 'Mentoring & Sessions', nameAr: 'الإرشاد والجلسات التوجيهية', description: '1-on-1 consultations and technical mentorship hours.', requiresReview: true },

@@ -89,6 +89,8 @@ interface OwnerWorkspaceProps {
   onRefresh: () => void;
   onSelectTab: (tab: string) => void;
   onSwitchToMemberSpace?: () => void;
+  onOpenPrivacy?: () => void;
+  onOpenCreateCommunity?: () => void;
   initialSection?:
     | 'operations'
     | 'announcements'
@@ -128,6 +130,8 @@ export const OwnerWorkspace: React.FC<OwnerWorkspaceProps> = ({
   onRefresh,
   onSelectTab,
   onSwitchToMemberSpace,
+  onOpenPrivacy,
+  onOpenCreateCommunity,
   initialSection
 }) => {
   const _t = translations[lang];
@@ -835,6 +839,8 @@ export const OwnerWorkspace: React.FC<OwnerWorkspaceProps> = ({
           isOwner={isOwnerOrAdmin}
           lang={lang}
           onRefresh={onRefresh}
+          onOpenCreateCommunity={onOpenCreateCommunity}
+          onOpenPrivacy={onOpenPrivacy}
         />
       )}
 

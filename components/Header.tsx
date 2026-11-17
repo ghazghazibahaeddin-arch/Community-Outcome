@@ -20,8 +20,14 @@ import {
   Building2,
   Settings,
   Bot,
-  Send
+  Send,
+  CreditCard,
+  MonitorSmartphone,
+  Lock,
+  LayoutGrid
 } from 'lucide-react';
+
+export type WorkspaceMode = 'owner' | 'member' | 'modules' | 'billing' | 'devices' | 'privacy';
 
 interface HeaderProps {
   lang: Language;
@@ -37,8 +43,8 @@ interface HeaderProps {
   onRefresh: () => void;
   isRefreshing?: boolean;
   // Workspace integration
-  workspaceMode: 'owner' | 'member' | 'modules';
-  onSelectWorkspaceMode: (mode: 'owner' | 'member' | 'modules') => void;
+  workspaceMode: WorkspaceMode;
+  onSelectWorkspaceMode: (mode: WorkspaceMode) => void;
   onSelectOwnerSection?: (section: 'operations' | 'connect' | 'pricing') => void;
   // Real authenticated user
   authUser: User | null;
@@ -168,15 +174,18 @@ export const Header: React.FC<HeaderProps> = ({
             {/* All Modules Hub */}
             <button
               type="button"
-              onClick={() => onSelectWorkspaceMode('modules')}
+              onClick={() => {
+                onSelectWorkspaceMode('modules');
+                if (!activeTab) onSelectTab('hub');
+              }}
               className={`flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-semibold transition-all whitespace-nowrap shrink-0 ${
                 workspaceMode === 'modules'
-                  ? 'bg-slate-700/50 text-slate-200 border border-slate-600'
+                  ? 'bg-slate-700/60 text-white border border-slate-500'
                   : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
               }`}
             >
               <Sparkles className="h-3.5 w-3.5 text-slate-400" />
-              <span>{isRtl ? 'كل الوحدات' : 'All Modules'}</span>
+              <span>{isRtl ? 'كل الميزات' : 'All Modules'}</span>
             </button>
           </div>
 
@@ -309,69 +318,74 @@ export const Header: React.FC<HeaderProps> = ({
           </Link>
         </div>
 
-        {/* Zone 2: Primary Nav Links */}
-        <nav className="hidden lg:flex items-center gap-4 text-xs font-medium text-slate-400">
-          <button
-            onClick={() => { onSelectWorkspaceMode('modules'); onSelectTab('hub'); }}
-            className={`whitespace-nowrap transition-colors py-1 ${activeTab === 'hub' && workspaceMode === 'modules' ? 'text-indigo-400 border-b border-indigo-500' : 'hover:text-slate-200'}`}
-          >
-            {t.navigation.hub}
-          </button>
-          <button
-            onClick={() => { onSelectWorkspaceMode('modules'); onSelectTab('requests'); }}
-            className={`whitespace-nowrap transition-colors py-1 ${activeTab === 'requests' && workspaceMode === 'modules' ? 'text-indigo-400 border-b border-indigo-500' : 'hover:text-slate-200'}`}
-          >
-            {t.navigation.requests}
-          </button>
-          <button
-            onClick={() => { onSelectWorkspaceMode('modules'); onSelectTab('tasks'); }}
-            className={`whitespace-nowrap transition-colors py-1 ${activeTab === 'tasks' && workspaceMode === 'modules' ? 'text-indigo-400 border-b border-indigo-500' : 'hover:text-slate-200'}`}
-          >
-            {t.navigation.tasks}
-          </button>
-          <button
-            onClick={() => { onSelectWorkspaceMode('modules'); onSelectTab('trust'); }}
-            className={`whitespace-nowrap transition-colors py-1 ${activeTab === 'trust' && workspaceMode === 'modules' ? 'text-indigo-400 border-b border-indigo-500' : 'hover:text-slate-200'}`}
-          >
-            {t.navigation.contributions}
-          </button>
-          <button
-            onClick={() => { onSelectWorkspaceMode('modules'); onSelectTab('passport'); }}
-            className={`whitespace-nowrap transition-colors py-1 ${activeTab === 'passport' && workspaceMode === 'modules' ? 'text-indigo-400 border-b border-indigo-500' : 'hover:text-slate-200'}`}
-          >
-            {t.navigation.passport}
-          </button>
-          <button
-            onClick={() => { onSelectWorkspaceMode('modules'); onSelectTab('links'); }}
-            className={`whitespace-nowrap transition-colors py-1 ${activeTab === 'links' && workspaceMode === 'modules' ? 'text-indigo-400 border-b border-indigo-500' : 'hover:text-slate-200'}`}
-          >
-            {t.navigation.links}
-          </button>
-          <button
-            onClick={() => { onSelectWorkspaceMode('modules'); onSelectTab('analytics'); }}
-            className={`whitespace-nowrap transition-colors py-1 ${activeTab === 'analytics' && workspaceMode === 'modules' ? 'text-indigo-400 border-b border-indigo-500' : 'hover:text-slate-200'}`}
-          >
-            {t.navigation.analytics}
-          </button>
-          <button
-            onClick={() => { onSelectWorkspaceMode('modules'); onSelectTab('integrations'); }}
-            className={`whitespace-nowrap transition-colors py-1 ${activeTab === 'integrations' && workspaceMode === 'modules' ? 'text-indigo-400 border-b border-indigo-500' : 'hover:text-slate-200'}`}
-          >
-            {t.navigation.integrations}
-          </button>
-          <button
-            onClick={() => { onSelectWorkspaceMode('modules'); onSelectTab('tests'); }}
-            className={`whitespace-nowrap transition-colors py-1 ${activeTab === 'tests' && workspaceMode === 'modules' ? 'text-amber-400 border-b border-amber-500' : 'hover:text-slate-200'}`}
-          >
-            {t.navigation.testSuite}
-          </button>
+        {/* Zone 2: Clean 5-Destination Navigation */}
+        <nav className="hidden lg:flex items-center gap-2 text-xs font-medium text-slate-400">
           <button
             type="button"
-            onClick={() => handleOwnerWorkspaceClick('pricing')}
-            className="whitespace-nowrap transition-all py-1 px-2 rounded-md bg-amber-500/10 text-amber-300 border border-amber-500/30 hover:bg-amber-500/20 text-xs font-semibold flex items-center gap-1"
+            onClick={() => onSelectWorkspaceMode(canOpenOwnerWorkspace ? 'owner' : 'member')}
+            className={`flex items-center gap-1.5 rounded-md px-2.5 py-1.5 whitespace-nowrap shrink-0 transition-colors ${
+              workspaceMode === 'owner' || workspaceMode === 'member'
+                ? 'bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 font-semibold'
+                : 'hover:text-slate-200 hover:bg-slate-800/50'
+            }`}
           >
-            <Sparkles className="h-3 w-3 text-amber-400" />
-            <span>Pricing ($15)</span>
+            <Shield className="h-3.5 w-3.5" />
+            <span>{isRtl ? 'مساحة العمل' : 'Workspace'}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              onSelectWorkspaceMode('modules');
+              onSelectTab(activeTab || 'hub');
+            }}
+            className={`flex items-center gap-1.5 rounded-md px-2.5 py-1.5 whitespace-nowrap shrink-0 transition-colors ${
+              workspaceMode === 'modules'
+                ? 'bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 font-semibold'
+                : 'hover:text-slate-200 hover:bg-slate-800/50'
+            }`}
+          >
+            <LayoutGrid className="h-3.5 w-3.5" />
+            <span>{isRtl ? 'الميزات والأقسام' : 'Features & Modules'}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => onSelectWorkspaceMode('billing')}
+            className={`flex items-center gap-1.5 rounded-md px-2.5 py-1.5 whitespace-nowrap shrink-0 transition-colors ${
+              workspaceMode === 'billing'
+                ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 font-semibold'
+                : 'text-amber-300/85 hover:text-amber-200 hover:bg-amber-500/10'
+            }`}
+          >
+            <CreditCard className="h-3.5 w-3.5 text-amber-400" />
+            <span>{isRtl ? 'الدفع والخطط' : 'Plans & Billing'}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => onSelectWorkspaceMode('devices')}
+            className={`flex items-center gap-1.5 rounded-md px-2.5 py-1.5 whitespace-nowrap shrink-0 transition-colors ${
+              workspaceMode === 'devices'
+                ? 'bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 font-semibold'
+                : 'hover:text-slate-200 hover:bg-slate-800/50'
+            }`}
+          >
+            <MonitorSmartphone className="h-3.5 w-3.5 text-sky-400" />
+            <span>{isRtl ? 'الكمبيوتر والهاتف' : 'PC & Mobile'}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => onSelectWorkspaceMode('privacy')}
+            className={`flex items-center gap-1.5 rounded-md px-2.5 py-1.5 whitespace-nowrap shrink-0 transition-colors ${
+              workspaceMode === 'privacy'
+                ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 font-semibold'
+                : 'hover:text-slate-200 hover:bg-slate-800/50'
+            }`}
+          >
+            <Lock className="h-3.5 w-3.5 text-emerald-400" />
+            <span>{isRtl ? 'الخصوصية والسياسات' : 'Privacy & Policies'}</span>
           </button>
         </nav>
 
@@ -451,19 +465,6 @@ export const Header: React.FC<HeaderProps> = ({
             <span className="sm:hidden">{t.common.create}</span>
           </button>
         </div>
-      </div>
-
-      {/* Mobile Nav Scroller */}
-      <div className="flex lg:hidden overflow-x-auto gap-2 px-4 py-2 border-t border-slate-800/80 text-xs font-medium text-slate-400 no-scrollbar">
-        {['hub', 'requests', 'tasks', 'trust', 'passport', 'links', 'knowledge', 'analytics', 'integrations', 'tests'].map((tabKey) => (
-          <button
-            key={tabKey}
-            onClick={() => { onSelectWorkspaceMode('modules'); onSelectTab(tabKey); }}
-            className={`whitespace-nowrap px-2.5 py-1 rounded transition-colors ${activeTab === tabKey && workspaceMode === 'modules' ? 'bg-indigo-600/20 text-indigo-400 font-semibold' : 'hover:text-slate-200'}`}
-          >
-            {t.navigation[tabKey as keyof typeof t.navigation] || tabKey}
-          </button>
-        ))}
       </div>
     </header>
   );

@@ -52,6 +52,7 @@ export const CommunityConnectionCenter: React.FC<CommunityConnectionCenterProps>
   // Telegram Hub State
   const [isVerifyingTelegram, setIsVerifyingTelegram] = useState(false);
   const [isSyncingTelegramWebhook, setIsSyncingTelegramWebhook] = useState(false);
+  const [isPollingTelegramUpdates, setIsPollingTelegramUpdates] = useState(false);
   const [isPublishingTelegramMenu, setIsPublishingTelegramMenu] = useState(false);
   const [pinTelegramMenu, setPinTelegramMenu] = useState(true);
   const [telegramWebhookUrl, setTelegramWebhookUrl] = useState<string | null>(null);
@@ -316,6 +317,38 @@ export const CommunityConnectionCenter: React.FC<CommunityConnectionCenterProps>
       setTelegramStatusMsg({ type: 'error', text: `Webhook sync failed: ${err.message}` });
     } finally {
       setIsSyncingTelegramWebhook(false);
+    }
+  };
+
+  // Sync Telegram "/" Command Menu & Pull/Reply Pending Bot Messages (for dev/local without public webhook)
+  const handlePollTelegramLive = async () => {
+    setIsPollingTelegramUpdates(true);
+    setTelegramStatusMsg(null);
+    try {
+      const res = await fetch('/api/telegram/poll', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ syncCommands: true, limit: 25 })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        setTelegramStatusMsg({
+          type: 'error',
+          text: data.error || 'Failed to sync Telegram commands/messages.'
+        });
+        return;
+      }
+      setTelegramPendingUpdates(0);
+      setTelegramStatusMsg({
+        type: 'success',
+        text: data.message || (isRtl ? 'تمت مزامنة أوامر تيلغرام ومعالجة الرسائل بنجاح!' : 'Telegram commands & messages synced!')
+      });
+      if (data.processedCount > 0) onRefresh();
+    } catch (err: any) {
+      setTelegramStatusMsg({ type: 'error', text: `Live sync error: ${err.message}` });
+    } finally {
+      setIsPollingTelegramUpdates(false);
     }
   };
 
@@ -901,6 +934,16 @@ export const CommunityConnectionCenter: React.FC<CommunityConnectionCenterProps>
                 >
                   <Wrench className={`h-3.5 w-3.5 ${isSyncingTelegramWebhook ? 'animate-spin' : ''}`} />
                   <span>{isRtl ? 'مزامنة Webhook' : 'Sync Telegram Webhook'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handlePollTelegramLive}
+                  disabled={isPollingTelegramUpdates}
+                  className="flex items-center gap-1.5 rounded-lg border border-emerald-500/40 bg-emerald-500/15 px-3 py-2 text-xs font-semibold text-emerald-200 hover:bg-emerald-500/25 transition-colors whitespace-nowrap disabled:opacity-50"
+                >
+                  <Terminal className={`h-3.5 w-3.5 ${isPollingTelegramUpdates ? 'animate-spin' : ''}`} />
+                  <span>{isRtl ? 'سحب والرد على الرسائل + مزامنة /' : 'Sync / Commands & Pull Updates'}</span>
                 </button>
 
                 <button

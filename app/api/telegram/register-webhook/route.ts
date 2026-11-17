@@ -3,6 +3,7 @@ import { ensureDatabaseHydrated, getDatabase } from '@/lib/db/store';
 import { getAuthenticatedUserFromRequest } from '@/lib/services/auth';
 import { getVerifiedAppUrl } from '@/lib/services/securityConfig';
 import { getRuntimeEnv } from '@/lib/env';
+import { syncTelegramBotCommands } from '@/lib/services/telegramBotProcessor';
 
 export async function GET(req: NextRequest, _context?: any) {
   const env = getRuntimeEnv(_context?.env || _context);
@@ -80,10 +81,13 @@ export async function POST(req: NextRequest, _context?: any) {
       }, { status: 400 });
     }
 
+    const commandsSync = await syncTelegramBotCommands(token);
+
     return NextResponse.json({
       success: true,
-      message: 'Telegram Webhook registered successfully for Cloudflare Workers',
+      message: 'Telegram Webhook & command menu registered successfully',
       webhookUrl,
+      commandsSynced: commandsSync.ok,
       telegramResponse: setResult
     });
   } catch (err: any) {
