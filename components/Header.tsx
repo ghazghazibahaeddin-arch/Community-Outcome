@@ -24,7 +24,8 @@ import {
   CreditCard,
   MonitorSmartphone,
   Lock,
-  LayoutGrid
+  LayoutGrid,
+  Search
 } from 'lucide-react';
 
 export type WorkspaceMode = 'owner' | 'member' | 'modules' | 'billing' | 'devices' | 'privacy';
@@ -55,6 +56,7 @@ interface HeaderProps {
   // Data mode
   dataMode: DataMode;
   onToggleDataMode: () => void;
+  onOpenSearch?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -79,7 +81,8 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenCreateCommunity,
   onOpenAccountSettings,
   dataMode,
-  onToggleDataMode
+  onToggleDataMode,
+  onOpenSearch
 }) => {
   const t = translations[lang];
   const isRtl = lang === 'ar';
@@ -427,6 +430,22 @@ export const Header: React.FC<HeaderProps> = ({
             <Building2 className="h-3.5 w-3.5 text-indigo-400" />
             <span className="hidden xl:inline">+ New Community</span>
           </button>
+
+          {/* Quick Jump Search (Cmd/Ctrl + K) */}
+          {onOpenSearch && (
+            <button
+              type="button"
+              onClick={onOpenSearch}
+              title={isRtl ? 'بحث وانتقال سريع (Ctrl+K)' : 'Quick Jump Search (⌘K / Ctrl+K)'}
+              className="flex h-8 items-center gap-1.5 rounded-md border border-slate-700 bg-slate-900 px-2.5 text-xs font-medium text-slate-300 hover:text-white hover:border-slate-600 transition-colors shrink-0"
+            >
+              <Search className="h-3.5 w-3.5 text-indigo-400" />
+              <span className="hidden xl:inline">{isRtl ? 'بحث' : 'Search'}</span>
+              <kbd className="hidden sm:inline rounded bg-slate-800 px-1 py-0.5 text-[10px] font-mono text-slate-400 border border-slate-700">
+                ⌘K
+              </kbd>
+            </button>
+          )}
 
           {/* Refresh Data */}
           <button

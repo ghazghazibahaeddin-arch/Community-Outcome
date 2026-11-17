@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { translations } from '@/lib/i18n';
 import { NeedSignalRequest, Offer, Community, Language, User } from '@/lib/types';
 import { Plus, Clock, AlertCircle, CheckCircle, Send, Globe, ChevronRight } from 'lucide-react';
@@ -28,8 +28,10 @@ export const NeedSignalSection: React.FC<NeedSignalSectionProps> = ({
 
   const [selectedRequestId, setSelectedRequestId] = useState<string | null>(requests[0]?.id || null);
   const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [searchQuery, setSearchQuery] = useState<string>('');
   const [isSubmittingOffer, setIsSubmittingOffer] = useState<boolean>(false);
   const [isCreatingRequest, setIsCreatingRequest] = useState<boolean>(false);
+  const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   // New Request Form State
   const [newTitle, setNewTitle] = useState('');
@@ -45,22 +47,52 @@ export const NeedSignalSection: React.FC<NeedSignalSectionProps> = ({
   const [offerAvailability, setOfferAvailability] = useState('Weekdays (10 hrs/week)');
   const [offerHours, setOfferHours] = useState('8');
 
-  const selectedRequest = requests.find((r) => r.id === selectedRequestId);
-  const selectedRequestOffers = offers.filter((o) => o.requestId === selectedRequestId);
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setNewCategory(community.contributionCategories[0]?.id || 'cat_tech');
+      setSelectedRequestId((prev) =>
+        prev && requests.some((r) => r.id === prev) ? prev : (requests[0]?.id || null)
+      );
+      setFeedback(null);
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [community.id, community.contributionCategories, requests]);
+
+  const effectiveSelectedId =
+    selectedRequestId && requests.some((r) => r.id === selectedRequestId)
+      ? selectedRequestId
+      : (requests[0]?.id || null);
+
+  const selectedRequest = requests.find((r) => r.id === effectiveSelectedId);
+  const selectedRequestOffers = offers.filter((o) => o.requestId === effectiveSelectedId);
+  const canAcceptOffers = Boolean(
+    selectedRequest &&
+      (currentUser.id === selectedRequest.creatorId ||
+        currentUser.id === community.ownerId ||
+        currentUser.platformRole === 'platform_admin')
+  );
 
   const filteredRequests = requests.filter((r) => {
-    if (filterStatus === 'all') return true;
-    return r.status === filterStatus;
+    const matchesStatus = filterStatus === 'all' || r.status === filterStatus;
+    const q = searchQuery.trim().toLowerCase();
+    const matchesQuery =
+      !q ||
+      r.title.toLowerCase().includes(q) ||
+      r.description.toLowerCase().includes(q) ||
+      r.skillsRequired.some((s) => s.toLowerCase().includes(q));
+    return matchesStatus && matchesQuery;
   });
 
   const handleCreateRequest = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTitle.trim()) return;
+    setFeedback(null);
 
     try {
       const res = await fetch('/api/data', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
           action: 'create_request',
           payload: {
@@ -79,32 +111,37 @@ export const NeedSignalSection: React.FC<NeedSignalSectionProps> = ({
         })
       });
       const data = await res.json();
-      if (data.success) {
-        setIsCreatingRequest(false);
-        setNewTitle('');
-        setNewDesc('');
-        setNewSkills('');
-        onRequestCreated(data.result);
-        setSelectedRequestId(data.result.id);
-        onRefresh();
+      if (!res.ok || !data.success) {
+        setFeedback({ type: 'error', text: data.error || 'Failed to create help request.' });
+        return;
       }
-    } catch (err) {
-      console.error('Failed to create request:', err);
+      setIsCreatingRequest(false);
+      setNewTitle('');
+      setNewDesc('');
+      setNewSkills('');
+      setFeedback({ type: 'success', text: 'Help request published cleanly.' });
+      onRequestCreated(data.result);
+      setSelectedRequestId(data.result.id);
+      onRefresh();
+    } catch (err: any) {
+      setFeedback({ type: 'error', text: err?.message || 'Network error creating request.' });
     }
   };
 
   const handleSubmitOffer = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedRequestId || !offerHelp.trim()) return;
+    if (!effectiveSelectedId || !offerHelp.trim()) return;
+    setFeedback(null);
 
     try {
       const res = await fetch('/api/data', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
           action: 'submit_offer',
           payload: {
-            requestId: selectedRequestId,
+            requestId: effectiveSelectedId,
             communityId: community.id,
             memberId: currentUser.id,
             proposedHelp: offerHelp,
@@ -117,39 +154,60 @@ export const NeedSignalSection: React.FC<NeedSignalSectionProps> = ({
         })
       });
       const data = await res.json();
-      if (data.success) {
-        setIsSubmittingOffer(false);
-        setOfferHelp('');
-        onRefresh();
+      if (!res.ok || !data.success) {
+        setFeedback({ type: 'error', text: data.error || 'Failed to submit assistance offer.' });
+        return;
       }
-    } catch (err) {
-      console.error('Failed to submit offer:', err);
+      setIsSubmittingOffer(false);
+      setOfferHelp('');
+      setFeedback({ type: 'success', text: 'Offer submitted cleanly.' });
+      onRefresh();
+    } catch (err: any) {
+      setFeedback({ type: 'error', text: err?.message || 'Network error submitting offer.' });
     }
   };
 
   const handleAcceptOffer = async (offerId: string) => {
+    setFeedback(null);
     try {
       const res = await fetch('/api/data', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
           action: 'accept_offer',
           payload: { offerId }
         })
       });
       const data = await res.json();
-      if (data.success) {
-        onRefresh();
+      if (!res.ok || !data.success) {
+        setFeedback({ type: 'error', text: data.error || 'Failed to accept offer.' });
+        return;
       }
-    } catch (err) {
-      console.error('Failed to accept offer:', err);
+      setFeedback({ type: 'success', text: 'Offer accepted and QuestLoop task created!' });
+      onRefresh();
+    } catch (err: any) {
+      setFeedback({ type: 'error', text: err?.message || 'Network error accepting offer.' });
     }
   };
 
   return (
     <div className="space-y-6">
+      {feedback && (
+        <div
+          className={`rounded-xl border p-3 text-xs flex items-center justify-between gap-2 ${
+            feedback.type === 'success'
+              ? 'border-emerald-500/40 bg-emerald-950/40 text-emerald-300'
+              : 'border-rose-500/40 bg-rose-950/40 text-rose-300'
+          }`}
+        >
+          <span>{feedback.text}</span>
+          <button type="button" onClick={() => setFeedback(null)} className="text-slate-400 hover:text-white px-1">✕</button>
+        </div>
+      )}
+
       {/* Header and Controls */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div>
           <h2 className="text-lg font-bold tracking-tight text-white">
             {t.needSignal.title}
@@ -159,14 +217,21 @@ export const NeedSignalSection: React.FC<NeedSignalSectionProps> = ({
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder={lang === 'ar' ? 'بحث في الطلبات...' : 'Search requests...'}
+            className="h-8 rounded-lg border border-slate-800 bg-slate-900 px-3 text-xs text-slate-200 placeholder-slate-500 focus:border-indigo-500 focus:outline-none"
+          />
           {/* Segmented Filter */}
-          <div className="flex rounded-lg border border-slate-800 bg-slate-900/90 p-0.5 text-xs">
+          <div className="flex flex-wrap rounded-lg border border-slate-800 bg-slate-900/90 p-0.5 text-xs">
             {['all', 'open', 'receiving_offers', 'in_progress', 'completed'].map((st) => (
               <button
                 key={st}
                 onClick={() => setFilterStatus(st)}
-                className={`px-2.5 py-1 rounded-md font-medium capitalize transition-colors ${
+                className={`px-2.5 py-1 rounded-md font-medium capitalize transition-colors whitespace-nowrap ${
                   filterStatus === st ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'
                 }`}
               >
@@ -196,7 +261,7 @@ export const NeedSignalSection: React.FC<NeedSignalSectionProps> = ({
           ) : (
             filteredRequests.map((req) => {
               const reqOffers = offers.filter((o) => o.requestId === req.id);
-              const isSelected = req.id === selectedRequestId;
+              const isSelected = req.id === effectiveSelectedId;
               return (
                 <div
                   key={req.id}
@@ -407,13 +472,19 @@ export const NeedSignalSection: React.FC<NeedSignalSectionProps> = ({
 
                         {off.status === 'pending' && selectedRequest.status !== 'in_progress' && (
                           <div className="mt-3 flex justify-end">
-                            <button
-                              onClick={() => handleAcceptOffer(off.id)}
-                              className="flex items-center gap-1.5 rounded-md bg-emerald-600 px-3 py-1 text-xs font-semibold text-white hover:bg-emerald-500 transition-colors"
-                            >
-                              <CheckCircle className="h-3 w-3" />
-                              <span>{t.matchOffer.acceptOffer}</span>
-                            </button>
+                            {canAcceptOffers ? (
+                              <button
+                                onClick={() => handleAcceptOffer(off.id)}
+                                className="flex items-center gap-1.5 rounded-md bg-emerald-600 px-3 py-1 text-xs font-semibold text-white hover:bg-emerald-500 transition-colors"
+                              >
+                                <CheckCircle className="h-3 w-3" />
+                                <span>{t.matchOffer.acceptOffer}</span>
+                              </button>
+                            ) : (
+                              <span className="text-[11px] font-mono text-slate-400">
+                                {lang === 'ar' ? 'بانتظار موافقة صاحب الطلب أو المالك' : 'Awaiting requester/owner approval'}
+                              </span>
+                            )}
                           </div>
                         )}
                       </div>

@@ -3,12 +3,13 @@
 import React, { useState } from 'react';
 import { Community, Language } from '@/lib/types';
 import { translations } from '@/lib/i18n';
-import { ShieldCheck, Plus, X, AlertCircle } from 'lucide-react';
+import { ShieldCheck, Plus, X, AlertCircle, Sparkles, ExternalLink } from 'lucide-react';
 
 interface CreateCommunityModalProps {
   isOpen: boolean;
   onClose: () => void;
   onCreated: (newCommunity: Community) => void;
+  onOpenBilling?: () => void;
   lang: Language;
 }
 
@@ -16,8 +17,10 @@ export const CreateCommunityModal: React.FC<CreateCommunityModalProps> = ({
   isOpen,
   onClose,
   onCreated,
+  onOpenBilling,
   lang
 }) => {
+  const isRtl = lang === 'ar';
   const [name, setName] = useState('');
   const [slug, setSlug] = useState('');
   const [category, setCategory] = useState('Open Source Engineering');
@@ -25,6 +28,7 @@ export const CreateCommunityModal: React.FC<CreateCommunityModalProps> = ({
   const [rules, setRules] = useState('1. Verifiable deliverable evidence required for all contributions.\n2. Respectful collaboration and mutual review.\n3. Silence does not equal consent on attestations.');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [upgradeUrl, setUpgradeUrl] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
@@ -38,6 +42,7 @@ export const CreateCommunityModal: React.FC<CreateCommunityModalProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setUpgradeUrl(null);
     setIsLoading(true);
 
     try {
@@ -60,6 +65,7 @@ export const CreateCommunityModal: React.FC<CreateCommunityModalProps> = ({
 
       if (!res.ok || !data.success) {
         setError(data.error || 'Failed to create community');
+        if (data.upgradeUrl) setUpgradeUrl(data.upgradeUrl);
         return;
       }
 
@@ -76,7 +82,7 @@ export const CreateCommunityModal: React.FC<CreateCommunityModalProps> = ({
   };
 
   return (
-    <div dir={lang === 'ar' ? 'rtl' : 'ltr'} className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4">
+    <div dir={isRtl ? 'rtl' : 'ltr'} className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4">
       <div className="w-full max-w-lg rounded-2xl border border-slate-800 bg-[#0d1322] p-6 shadow-2xl space-y-5">
         <div className="flex items-center justify-between border-b border-slate-800/80 pb-3">
           <div className="flex items-center gap-2">
@@ -84,8 +90,12 @@ export const CreateCommunityModal: React.FC<CreateCommunityModalProps> = ({
               <ShieldCheck className="h-4 w-4" />
             </div>
             <div>
-              <h3 className="text-sm font-bold text-white">Create New Community</h3>
-              <p className="text-[11px] text-slate-400 font-mono">You will become the founding Community Owner</p>
+              <h3 className="text-sm font-bold text-white">
+                {isRtl ? 'إنشاء مجتمع أو خادم جديد' : 'Create New Community'}
+              </h3>
+              <p className="text-[11px] text-slate-400 font-mono">
+                {isRtl ? 'ستصبح المالك المؤسس لهذه المساحة' : 'You will become the founding Community Owner'}
+              </p>
             </div>
           </div>
           <button
@@ -97,9 +107,37 @@ export const CreateCommunityModal: React.FC<CreateCommunityModalProps> = ({
         </div>
 
         {error && (
-          <div className="rounded-lg bg-rose-950/40 border border-rose-800/50 p-3 text-xs text-rose-300 flex items-center gap-2">
-            <AlertCircle className="h-4 w-4 shrink-0 text-rose-400" />
-            <span>{error}</span>
+          <div className="rounded-lg bg-rose-950/40 border border-rose-800/50 p-3 text-xs text-rose-300 space-y-2.5">
+            <div className="flex items-start gap-2">
+              <AlertCircle className="h-4 w-4 shrink-0 text-rose-400 mt-0.5" />
+              <span>{error}</span>
+            </div>
+            {upgradeUrl && (
+              <div className="flex flex-wrap items-center gap-2 pt-1">
+                <a
+                  href={upgradeUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 px-3 py-1.5 text-xs font-semibold text-white transition-colors"
+                >
+                  <Sparkles className="h-3.5 w-3.5" />
+                  <span>{isRtl ? 'ترقية إلى Pro ($15/شهر عبر Whop)' : 'Upgrade to Pro ($15/mo via Whop)'}</span>
+                  <ExternalLink className="h-3 w-3" />
+                </a>
+                {onOpenBilling && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onClose();
+                      onOpenBilling();
+                    }}
+                    className="rounded-lg border border-amber-500/40 bg-amber-950/40 px-3 py-1.5 text-xs font-semibold text-amber-200 hover:bg-amber-900/40 transition-colors"
+                  >
+                    {isRtl ? 'عرض صفحة الدفع والحدود' : 'View Plans & Limits'}
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         )}
 

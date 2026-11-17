@@ -1,9 +1,9 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { translations } from '@/lib/i18n';
-import { Contribution, MutualAttestation, Dispute, Community, User, Language } from '@/lib/types';
-import { ShieldCheck, AlertOctagon, CheckCircle2, XCircle, FileText, ExternalLink, Plus, MessageSquare } from 'lucide-react';
+import { Contribution, MutualAttestation, Dispute, Community, User, Language, UserRole } from '@/lib/types';
+import { ShieldCheck, AlertOctagon, CheckCircle2, XCircle, ExternalLink } from 'lucide-react';
 
 interface TrustGraphSectionProps {
   contributions: Contribution[];
@@ -11,6 +11,7 @@ interface TrustGraphSectionProps {
   disputes: Dispute[];
   community: Community;
   currentUser: User;
+  currentUserRole?: UserRole;
   users: User[];
   lang: Language;
   onRefresh: () => void;
@@ -22,13 +23,15 @@ export const TrustGraphSection: React.FC<TrustGraphSectionProps> = ({
   disputes,
   community,
   currentUser,
+  currentUserRole = 'member',
   users,
   lang,
   onRefresh
 }) => {
-  const t = translations[lang];
+  const _t = translations[lang];
 
   const [activeSubTab, setActiveSubTab] = useState<'contributions' | 'attestations' | 'disputes'>('contributions');
+  const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   // Review Drawer State
   const [reviewingContributionId, setReviewingContributionId] = useState<string | null>(null);
@@ -40,14 +43,37 @@ export const TrustGraphSection: React.FC<TrustGraphSectionProps> = ({
   const [disputeContribId, setDisputeContribId] = useState(contributions[0]?.id || '');
   const [disputeReason, setDisputeReason] = useState('');
 
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDisputeContribId((prev) =>
+        prev && contributions.some((c) => c.id === prev) ? prev : (contributions[0]?.id || '')
+      );
+      setReviewingContributionId(null);
+      setFeedback(null);
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [community.id, contributions]);
+
+  const effectiveDisputeContribId =
+    disputeContribId && contributions.some((c) => c.id === disputeContribId)
+      ? disputeContribId
+      : (contributions[0]?.id || '');
+
+  const canReview =
+    ['platform_admin', 'community_owner', 'admin', 'reviewer'].includes(currentUserRole) ||
+    currentUser.id === community.ownerId ||
+    currentUser.platformRole === 'platform_admin';
+
   const handleReview = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!reviewingContributionId || !reviewReason.trim()) return;
+    setFeedback(null);
 
     try {
       const res = await fetch('/api/data', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
           action: 'review_contribution',
           payload: {
@@ -59,29 +85,34 @@ export const TrustGraphSection: React.FC<TrustGraphSectionProps> = ({
         })
       });
       const data = await res.json();
-      if (data.success) {
-        setReviewingContributionId(null);
-        setReviewReason('');
-        onRefresh();
+      if (!res.ok || !data.success) {
+        setFeedback({ type: 'error', text: data.error || 'Failed to submit review decision.' });
+        return;
       }
-    } catch (err) {
-      console.error('Failed to submit review:', err);
+      setReviewingContributionId(null);
+      setReviewReason('');
+      setFeedback({ type: 'success', text: `Contribution marked as "${reviewDecision}". Contributor notified.` });
+      onRefresh();
+    } catch (err: any) {
+      setFeedback({ type: 'error', text: err?.message || 'Network error submitting review.' });
     }
   };
 
   const handleFileDispute = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!disputeContribId || !disputeReason.trim()) return;
+    if (!effectiveDisputeContribId || !disputeReason.trim()) return;
+    setFeedback(null);
 
     try {
       const res = await fetch('/api/data', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
           action: 'file_dispute',
           payload: {
             communityId: community.id,
-            contributionId: disputeContribId,
+            contributionId: effectiveDisputeContribId,
             filedById: currentUser.id,
             reason: disputeReason,
             evidenceLinks: []
@@ -89,18 +120,35 @@ export const TrustGraphSection: React.FC<TrustGraphSectionProps> = ({
         })
       });
       const data = await res.json();
-      if (data.success) {
-        setIsFilingDispute(false);
-        setDisputeReason('');
-        onRefresh();
+      if (!res.ok || !data.success) {
+        setFeedback({ type: 'error', text: data.error || 'Failed to file Community Shield dispute.' });
+        return;
       }
-    } catch (err) {
-      console.error('Failed to file dispute:', err);
+      setIsFilingDispute(false);
+      setDisputeReason('');
+      setFeedback({ type: 'success', text: 'Formal Community Shield dispute submitted cleanly.' });
+      onRefresh();
+    } catch (err: any) {
+      setFeedback({ type: 'error', text: err?.message || 'Network error filing dispute.' });
     }
   };
 
   return (
     <div className="space-y-6">
+      {feedback && (
+        <div
+          className={`rounded-xl border p-3 text-xs flex items-center justify-between gap-2 ${
+            feedback.type === 'success'
+              ? 'border-emerald-500/40 bg-emerald-950/40 text-emerald-300'
+              : 'border-rose-500/40 bg-rose-950/40 text-rose-300'
+          }`}
+        >
+          <span>{feedback.text}</span>
+          <button type="button" onClick={() => setFeedback(null)} className="text-slate-400 hover:text-white px-1">
+            ✕
+          </button>
+        </div>
+      )}
       {/* Subnav */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-3">
         <div className="flex items-center gap-4 text-xs font-semibold">
@@ -268,16 +316,22 @@ export const TrustGraphSection: React.FC<TrustGraphSectionProps> = ({
                   {/* Review Button if pending */}
                   {cnt.reviewStatus === 'pending' && (
                     <div className="flex justify-end pt-2 border-t border-slate-800">
-                      <button
-                        onClick={() => {
-                          setReviewingContributionId(cnt.id);
-                          setReviewReason('');
-                        }}
-                        className="flex items-center gap-1.5 rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-500"
-                      >
-                        <ShieldCheck className="h-3.5 w-3.5" />
-                        <span>Perform Review & Signoff</span>
-                      </button>
+                      {canReview ? (
+                        <button
+                          onClick={() => {
+                            setReviewingContributionId(cnt.id);
+                            setReviewReason('');
+                          }}
+                          className="flex items-center gap-1.5 rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-500"
+                        >
+                          <ShieldCheck className="h-3.5 w-3.5" />
+                          <span>Perform Review & Signoff</span>
+                        </button>
+                      ) : (
+                        <span className="text-[11px] font-mono text-slate-400">
+                          Awaiting reviewer / owner verification
+                        </span>
+                      )}
                     </div>
                   )}
                 </div>
@@ -369,7 +423,7 @@ export const TrustGraphSection: React.FC<TrustGraphSectionProps> = ({
               <div>
                 <label className="text-[11px] text-slate-300 block mb-1">Select Disputed Contribution</label>
                 <select
-                  value={disputeContribId}
+                  value={effectiveDisputeContribId}
                   onChange={(e) => setDisputeContribId(e.target.value)}
                   className="w-full rounded-md border border-slate-700 bg-slate-900 px-2.5 py-1.5 text-xs text-white"
                 >

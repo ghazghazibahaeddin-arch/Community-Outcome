@@ -23,6 +23,7 @@ import { OnboardingChoiceModal } from '@/components/OnboardingChoiceModal';
 import { PricingPlansSection } from '@/components/PricingPlansSection';
 import { DeviceAccessCenter, DeviceExperienceMode } from '@/components/DeviceAccessCenter';
 import { PrivacyPoliciesSection } from '@/components/PrivacyPoliciesSection';
+import { CommandPalette } from '@/components/CommandPalette';
 
 import { translations } from '@/lib/i18n';
 import {
@@ -94,11 +95,14 @@ export default function HomePage() {
   const explicitTabRef = React.useRef<boolean>(false);
   const explicitWorkspaceIntentRef = React.useRef<'owner' | 'member' | null>(null);
   const hasAppliedInitialRoleRef = React.useRef<boolean>(false);
+  const fetchSeqRef = React.useRef<number>(0);
   const [dataMode, setDataMode] = useState<DataMode>('demo');
   const [currentCommunityId, setCurrentCommunityId] = useState<string>('comm_devforge');
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [isCreateCommunityOpen, setIsCreateCommunityOpen] = useState<boolean>(false);
+  const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState<boolean>(false);
+  const [initialInviteCode, setInitialInviteCode] = useState<string>('');
 
   // Real Authenticated User State
   const [authUser, setAuthUser] = useState<User | null>(null);
@@ -160,7 +164,40 @@ export default function HomePage() {
     eventAttendanceRate: 0
   });
 
-  // Clean up any legacy localStorage tokens on load and handle OAuth callback URL parameters
+  // Global Cmd/Ctrl + K Quick-Jump Shortcut & Theme Persistence
+  React.useEffect(() => {
+    if (typeof window === 'undefined') return;
+    document.documentElement.classList.toggle('cos-light-root', !darkMode);
+  }, [darkMode]);
+
+  React.useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const timer = setTimeout(() => {
+      try {
+        const savedTheme = localStorage.getItem('cos_theme');
+        const savedLang = localStorage.getItem('cos_lang');
+        if (savedTheme === 'light') {
+          setDarkMode(false);
+        }
+        if (savedLang === 'ar' || savedLang === 'en') {
+          setLang(savedLang);
+        }
+      } catch {}
+    }, 0);
+    const onKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setIsCommandPaletteOpen((prev) => !prev);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, []);
+
+  // Clean up any legacy localStorage tokens on load and handle OAuth / Invite callback URL parameters
   React.useEffect(() => {
     if (typeof window === 'undefined') return;
     try {
@@ -170,6 +207,9 @@ export default function HomePage() {
       const section = urlParams.get('section');
       const onboarding = urlParams.get('onboarding');
       const subtab = urlParams.get('subtab');
+      const inviteParam = urlParams.get('invite');
+      const savedInvite = sessionStorage.getItem('cos_pending_invite');
+      const effectiveInvite = inviteParam || savedInvite || '';
       const connectedPlatform = urlParams.get('connected_platform');
       const guildId = urlParams.get('guild_id');
       const guildName = urlParams.get('guild_name');
@@ -178,6 +218,12 @@ export default function HomePage() {
       const accountUpdated = urlParams.get('account_updated');
       const connected = urlParams.get('connected');
       const oauthError = urlParams.get('discord_error') || urlParams.get('auth_error');
+
+      if (inviteParam) {
+        try {
+          sessionStorage.setItem('cos_pending_invite', inviteParam);
+        } catch {}
+      }
 
       const isDiscordGuildConnected = connectedPlatform === 'discord' && Boolean(guildId);
       const isIdentityLinkedRedirect =
@@ -192,11 +238,11 @@ export default function HomePage() {
         tab === 'devices' ||
         tab === 'privacy';
 
-      if (isKnownTab || isDiscordGuildConnected || isIdentityLinkedRedirect) {
+      if (isKnownTab || isDiscordGuildConnected || isIdentityLinkedRedirect || Boolean(effectiveInvite)) {
         explicitTabRef.current = true;
         if (tab === 'owner' || isDiscordGuildConnected) {
           explicitWorkspaceIntentRef.current = 'owner';
-        } else if (tab === 'member') {
+        } else if (tab === 'member' || Boolean(effectiveInvite)) {
           explicitWorkspaceIntentRef.current = 'member';
         }
       }
@@ -208,6 +254,7 @@ export default function HomePage() {
         'section',
         'onboarding',
         'subtab',
+        'invite',
         'connected_platform',
         'guild_id',
         'guild_name',
@@ -239,12 +286,13 @@ export default function HomePage() {
         loginSuccess ||
         accountUpdated ||
         connected ||
-        subtab === 'identity'
+        subtab === 'identity' ||
+        Boolean(effectiveInvite)
       ) {
         const timer = setTimeout(() => {
           if (tab === 'owner' || isDiscordGuildConnected) {
             setWorkspaceMode('owner');
-          } else if (tab === 'member' || isIdentityLinkedRedirect) {
+          } else if (tab === 'member' || isIdentityLinkedRedirect || Boolean(effectiveInvite)) {
             setWorkspaceMode('member');
           } else if (tab === 'modules') {
             setWorkspaceMode('modules');
@@ -264,6 +312,9 @@ export default function HomePage() {
 
           if (isIdentityLinkedRedirect) {
             setMemberSubTab('identity');
+          } else if (effectiveInvite) {
+            setInitialInviteCode(effectiveInvite);
+            setMemberSubTab('communities');
           }
 
           if (onboarding === 'owner') {
@@ -299,6 +350,7 @@ export default function HomePage() {
   }, []);
 
   const fetchData = React.useCallback(async (commId = currentCommunityId) => {
+    const seq = ++fetchSeqRef.current;
     setIsRefreshing(true);
     try {
       // Credentials: 'include' sends the HttpOnly, Secure SameSite=Lax cookie automatically
@@ -306,6 +358,7 @@ export default function HomePage() {
         credentials: 'include'
       });
       const json = (await res.json()) as any;
+      if (seq !== fetchSeqRef.current) return;
       if (json.success && json.data) {
         const d = json.data;
         setCommunities(d.communities || []);
@@ -457,11 +510,24 @@ export default function HomePage() {
   };
 
   const handleToggleLang = () => {
-    setLang((prev) => (prev === 'en' ? 'ar' : 'en'));
+    setLang((prev) => {
+      const next = prev === 'en' ? 'ar' : 'en';
+      try {
+        localStorage.setItem('cos_lang', next);
+      } catch {}
+      return next;
+    });
   };
 
   const handleToggleDarkMode = () => {
-    setDarkMode((prev) => !prev);
+    setDarkMode((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem('cos_theme', next ? 'dark' : 'light');
+        document.documentElement.classList.toggle('cos-light-root', !next);
+      } catch {}
+      return next;
+    });
   };
 
   const handleToggleDataMode = async () => {
@@ -588,7 +654,6 @@ export default function HomePage() {
     setCurrentCommunity(newComm);
     setCurrentUserRole('community_owner');
     setWorkspaceMode('owner');
-    fetchData(newComm.id);
   };
 
   const currentUser = authUser || users[0] || {
@@ -665,8 +730,14 @@ export default function HomePage() {
   return (
     <div
       dir={lang === 'ar' ? 'rtl' : 'ltr'}
-      className={`min-h-screen ${darkMode ? 'dark bg-[#090d16] text-slate-100' : 'bg-slate-50 text-slate-900'} font-sans transition-colors`}
+      className={`min-h-screen ${darkMode ? 'dark bg-[#090d16] text-slate-100' : 'cos-light bg-slate-50 text-slate-900'} font-sans transition-colors`}
     >
+      {isRefreshing && (
+        <div
+          aria-hidden="true"
+          className="fixed top-0 left-0 right-0 z-[60] h-0.5 bg-gradient-to-r from-indigo-500 via-sky-400 to-emerald-400"
+        />
+      )}
       {/* Top Header with Dual Workspace Selector & Zero-Fabrication Switch */}
       <Header
         lang={lang}
@@ -691,6 +762,7 @@ export default function HomePage() {
         onOpenAccountSettings={() => setIsAccountSettingsOpen(true)}
         dataMode={dataMode}
         onToggleDataMode={handleToggleDataMode}
+        onOpenSearch={() => setIsCommandPaletteOpen(true)}
       />
 
       {/* Main Content Viewport (Adapts to Desktop / Auto / Mobile Preview) */}
@@ -796,6 +868,8 @@ export default function HomePage() {
                 currentUser={currentUser}
                 users={users}
                 communities={communities}
+                currentCommunityId={currentCommunityId}
+                onSelectCommunity={handleSelectCommunity}
                 ownedCommunities={communities.filter((c) => authUser && c.ownerId === authUser.id)}
                 onSwitchToOwnedCommunity={(commId) => {
                   handleSelectCommunity(commId);
@@ -818,6 +892,13 @@ export default function HomePage() {
                 identityChallenges={identityChallenges}
                 lang={lang}
                 initialSubTab={memberSubTab}
+                initialInviteCode={initialInviteCode}
+                onClearInitialInvite={() => {
+                  setInitialInviteCode('');
+                  try {
+                    sessionStorage.removeItem('cos_pending_invite');
+                  } catch {}
+                }}
                 onOpenAccountSettings={() => setIsAccountSettingsOpen(true)}
                 onRefresh={() => fetchData(currentCommunityId)}
                 onSelectUser={() => {}}
@@ -1080,6 +1161,7 @@ export default function HomePage() {
                       disputes={disputes}
                       community={currentCommunity}
                       currentUser={currentUser}
+                      currentUserRole={currentUserRole}
                       users={users}
                       lang={lang}
                       onRefresh={() => fetchData(currentCommunityId)}
@@ -1241,7 +1323,29 @@ export default function HomePage() {
         isOpen={isCreateCommunityOpen}
         onClose={() => setIsCreateCommunityOpen(false)}
         onCreated={handleCommunityCreated}
+        onOpenBilling={() => setWorkspaceMode('billing')}
         lang={lang}
+      />
+
+      {/* Quick Jump Command Palette (Cmd/Ctrl + K) */}
+      <CommandPalette
+        isOpen={isCommandPaletteOpen}
+        onClose={() => setIsCommandPaletteOpen(false)}
+        lang={lang}
+        communities={communities}
+        requests={requests}
+        tasks={tasks}
+        isOwnerOrAdmin={
+          ['platform_admin', 'community_owner', 'admin'].includes(currentUserRole) ||
+          communities.some((c) => authUser && c.ownerId === authUser.id)
+        }
+        onSelectCommunity={handleSelectCommunity}
+        onNavigate={(mode, opts) => {
+          if (opts?.tab) setActiveTab(opts.tab);
+          if (opts?.ownerSection) setOwnerSection(opts.ownerSection);
+          if (opts?.memberSubTab) setMemberSubTab(opts.memberSubTab as any);
+          setWorkspaceMode(mode);
+        }}
       />
 
       {/* Account Settings & Identity Modal */}

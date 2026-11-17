@@ -11,10 +11,80 @@
     font-feature-settings: "rlig" 1, "calt" 1;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    transition: background-color 0.2s ease, color 0.2s ease;
+  }
+  html.cos-light-root body {
+    background-color: #f8fafc;
+    color: #0f172a;
   }
 }
 
-/* Custom scrollbar for sleek dark SaaS view */
+/* Soft Light Theme Layer (scoped to .cos-light wrapper without harming colored CTAs) */
+.cos-light {
+  background-color: #f8fafc;
+  color: #0f172a;
+}
+.cos-light :where(header, footer, nav[aria-label]) {
+  background-color: rgba(255, 255, 255, 0.94);
+  border-color: #e2e8f0;
+}
+.cos-light :where(.bg-\[\#090d16\]\/95, .bg-\[\#090d16\], .bg-\[\#0d1322\]) {
+  background-color: #ffffff;
+}
+.cos-light :where(.bg-slate-950, .bg-slate-950\/80, .bg-slate-950\/60, .bg-slate-950\/50) {
+  background-color: #f1f5f9;
+}
+.cos-light :where(.bg-slate-900, .bg-slate-900\/90, .bg-slate-900\/80, .bg-slate-900\/60, .bg-slate-900\/50, .bg-slate-900\/40, .bg-slate-900\/30, .bg-slate-900\/20) {
+  background-color: #ffffff;
+}
+.cos-light :where(.bg-slate-800, .bg-slate-800\/80, .bg-slate-800\/60, .bg-slate-800\/40) {
+  background-color: #e2e8f0;
+}
+.cos-light :where(.border-slate-800, .border-slate-800\/80, .border-slate-700, .border-slate-700\/80) {
+  border-color: #cbd5e1;
+}
+.cos-light :where(.text-white, .text-slate-100, .text-slate-200) {
+  color: #0f172a;
+}
+.cos-light :where(.text-slate-300) {
+  color: #334155;
+}
+.cos-light :where(.text-slate-400) {
+  color: #475569;
+}
+.cos-light :where(.text-slate-500) {
+  color: #64748b;
+}
+.cos-light :where(input, textarea, select) {
+  background-color: #ffffff;
+  color: #0f172a;
+  border-color: #cbd5e1;
+}
+/* Preserve crisp white contrast inside solid colored CTA buttons & brand pills */
+.cos-light :where(
+  .bg-indigo-600,
+  .bg-indigo-500,
+  .bg-emerald-600,
+  .bg-emerald-500,
+  .bg-amber-600,
+  .bg-rose-600,
+  .bg-\[\#5865F2\],
+  .bg-\[\#229ED9\]
+),
+.cos-light :where(
+  .bg-indigo-600,
+  .bg-indigo-500,
+  .bg-emerald-600,
+  .bg-emerald-500,
+  .bg-amber-600,
+  .bg-rose-600,
+  .bg-\[\#5865F2\],
+  .bg-\[\#229ED9\]
+) :where(span, svg) {
+  color: #ffffff;
+}
+
+/* Custom scrollbar for sleek SaaS view */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -23,9 +93,9 @@
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(148, 163, 184, 0.2);
+  background: rgba(148, 163, 184, 0.25);
   border-radius: 9999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(148, 163, 184, 0.4);
+  background: rgba(148, 163, 184, 0.45);
 }

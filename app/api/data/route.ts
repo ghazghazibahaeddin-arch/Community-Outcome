@@ -104,6 +104,14 @@ export async function POST(req: NextRequest, _context?: any) {
     const payload = (body.payload ?? body ?? {}) as any;
     const db = getDatabase();
 
+    const isUserSuspendedInCommunity = (userId: string, commId?: string) => {
+      if (!userId || !commId) return false;
+      const mem = (db.memberships || []).find(
+        m => m.communityId === commId && m.userId === userId
+      );
+      return mem?.moderationStatus === 'suspended';
+    };
+
     let result = null;
 
     switch (action) {
@@ -152,6 +160,9 @@ export async function POST(req: NextRequest, _context?: any) {
 
       case 'join_community': {
         const userId = authUser?.id || payload.userId || 'usr_sarah';
+        if (isUserSuspendedInCommunity(userId, payload.communityId)) {
+          return NextResponse.json({ success: false, error: 'Your membership in this community is currently suspended.' }, { status: 403 });
+        }
 
         // Entitlement enforcement: Check monthly active member limit (100 for Free, 1,000 for Pro)
         const memberLimitCheck = verifyCommunityEntitlement(payload.communityId, 'member_limit');
@@ -174,6 +185,12 @@ export async function POST(req: NextRequest, _context?: any) {
 
       case 'create_request': {
         const creatorId = authUser?.id || payload.creatorId || 'usr_sarah';
+        if (isUserSuspendedInCommunity(creatorId, payload.communityId)) {
+          return NextResponse.json({ success: false, error: 'Suspended members cannot post requests in this community.' }, { status: 403 });
+        }
+        if (!String(payload.title || '').trim()) {
+          return NextResponse.json({ success: false, error: 'Request title is required' }, { status: 400 });
+        }
         result = dbOperations.createRequest({ ...payload, creatorId });
         break;
       }
@@ -181,13 +198,33 @@ export async function POST(req: NextRequest, _context?: any) {
       case 'create_offer':
       case 'submit_offer': {
         const memberId = authUser?.id || payload.memberId || 'usr_alex';
+        if (isUserSuspendedInCommunity(memberId, payload.communityId)) {
+          return NextResponse.json({ success: false, error: 'Suspended members cannot submit offers in this community.' }, { status: 403 });
+        }
         result = dbOperations.createOffer({ ...payload, memberId });
         break;
       }
 
-      case 'accept_offer':
+      case 'accept_offer': {
+        const actorId = authUser?.id || payload.actorId || 'usr_sarah';
+        const targetOffer = db.offers.find(o => o.id === payload.offerId);
+        if (!targetOffer) {
+          return NextResponse.json({ success: false, error: 'Offer not found' }, { status: 404 });
+        }
+        const targetRequest = db.requests.find(r => r.id === targetOffer.requestId);
+        const role = getUserRoleInCommunity(actorId, targetOffer.communityId);
+        const canAccept =
+          targetRequest?.creatorId === actorId ||
+          ['platform_admin', 'community_owner', 'admin', 'task_manager'].includes(role);
+        if (!canAccept) {
+          return NextResponse.json(
+            { success: false, error: 'Unauthorized: only the request creator or community staff can accept offers' },
+            { status: 403 }
+          );
+        }
         result = dbOperations.acceptOffer(payload.offerId);
         break;
+      }
 
       case 'update_checklist':
         result = dbOperations.updateTaskChecklist(payload.taskId, payload.checklistId, payload.completed);
@@ -195,12 +232,19 @@ export async function POST(req: NextRequest, _context?: any) {
 
       case 'complete_task': {
         const memberId = authUser?.id || payload.memberId || 'usr_alex';
+        const targetTask = db.tasks.find(t => t.id === payload.taskId);
+        if (targetTask && isUserSuspendedInCommunity(memberId, targetTask.communityId)) {
+          return NextResponse.json({ success: false, error: 'Suspended members cannot submit deliverables in this community.' }, { status: 403 });
+        }
         result = dbOperations.completeTaskWithEvidence(payload.taskId, payload.evidenceUrl, payload.description, memberId);
         break;
       }
 
       case 'submit_contribution': {
         const memberId = authUser?.id || payload.memberId || 'usr_alex';
+        if (isUserSuspendedInCommunity(memberId, payload.communityId)) {
+          return NextResponse.json({ success: false, error: 'Suspended members cannot submit contributions in this community.' }, { status: 403 });
+        }
         result = dbOperations.submitContribution({ ...payload, memberId });
         break;
       }
@@ -243,36 +287,67 @@ export async function POST(req: NextRequest, _context?: any) {
 
       case 'cast_vote': {
         const voterId = authUser?.id || payload.userId || 'usr_alex';
+        const poll = db.polls.find(p => p.id === payload.pollId);
+        if (poll && isUserSuspendedInCommunity(voterId, poll.communityId)) {
+          return NextResponse.json({ success: false, error: 'Suspended members cannot vote in this community.' }, { status: 403 });
+        }
         result = dbOperations.castVote(payload.pollId, payload.alternativeId, voterId);
         break;
       }
 
       case 'convert_poll_to_plan': {
         const leadOwnerId = authUser?.id || payload.leadOwnerId || 'usr_sarah';
+        const poll = db.polls.find(p => p.id === payload.pollId);
+        const role = getUserRoleInCommunity(leadOwnerId, poll?.communityId || 'comm_devforge');
+        if (!['platform_admin', 'community_owner', 'admin', 'task_manager'].includes(role)) {
+          return NextResponse.json({ success: false, error: 'Unauthorized: only community staff can convert polls to execution plans' }, { status: 403 });
+        }
         result = dbOperations.convertPollToPlan(payload.pollId, leadOwnerId, payload.planTitle, payload.agreedOutcome);
         break;
       }
 
-      case 'create_link':
+      case 'create_link': {
+        const actorId = authUser?.id || payload.actorId || 'usr_sarah';
+        const commId = payload.communityId || 'comm_devforge';
+        const role = getUserRoleInCommunity(actorId, commId);
+        if (!['platform_admin', 'community_owner', 'admin', 'moderator'].includes(role)) {
+          return NextResponse.json({ success: false, error: 'Unauthorized: only community owners or staff can create action links' }, { status: 403 });
+        }
         result = dbOperations.createLink(payload);
         break;
+      }
 
       case 'record_link_event':
         result = dbOperations.recordLinkEvent(payload.linkId, payload.eventType);
         break;
 
-      case 'revoke_link':
+      case 'revoke_link': {
+        const actorId = authUser?.id || payload.actorId || 'usr_sarah';
+        const targetLink = db.links.find(l => l.id === payload.linkId);
+        const role = getUserRoleInCommunity(actorId, targetLink?.communityId || 'comm_devforge');
+        if (!['platform_admin', 'community_owner', 'admin', 'moderator'].includes(role)) {
+          return NextResponse.json({ success: false, error: 'Unauthorized: only community owners or staff can revoke action links' }, { status: 403 });
+        }
         result = dbOperations.revokeLink(payload.linkId);
         break;
+      }
 
       case 'publish_knowledge': {
         const authorId = authUser?.id || payload.authorId || 'usr_sarah';
+        if (isUserSuspendedInCommunity(authorId, payload.communityId)) {
+          return NextResponse.json({ success: false, error: 'Suspended members cannot publish knowledge articles.' }, { status: 403 });
+        }
         result = dbOperations.publishKnowledge({ ...payload, authorId });
         break;
       }
 
       case 'supersede_knowledge': {
         const authorId = authUser?.id || payload.authorId || 'usr_sarah';
+        const oldArt = db.knowledge.find(k => k.id === payload.oldArticleId);
+        const role = getUserRoleInCommunity(authorId, oldArt?.communityId || 'comm_devforge');
+        if (oldArt && oldArt.authorId !== authorId && !['platform_admin', 'community_owner', 'admin', 'reviewer'].includes(role)) {
+          return NextResponse.json({ success: false, error: 'Unauthorized: only the author or community staff can supersede knowledge articles' }, { status: 403 });
+        }
         result = dbOperations.supersedeKnowledge(payload.oldArticleId, payload.newContent, authorId);
         break;
       }
@@ -286,6 +361,14 @@ export async function POST(req: NextRequest, _context?: any) {
       case 'update_privacy': {
         const targetUserId = authUser?.id || payload.userId || 'usr_sarah';
         result = dbOperations.updatePrivacy(targetUserId, payload.privacy);
+        break;
+      }
+
+      case 'update_passport_and_privacy': {
+        const targetUserId = authUser?.id || payload.userId || 'usr_sarah';
+        if (payload.passport) dbOperations.updatePassport(targetUserId, payload.passport);
+        if (payload.privacy) dbOperations.updatePrivacy(targetUserId, payload.privacy);
+        result = dbOperations.getUserById(targetUserId);
         break;
       }
 
@@ -577,6 +660,10 @@ export async function POST(req: NextRequest, _context?: any) {
         if (!userId) {
           return NextResponse.json({ success: false, error: 'Authentication required to claim tasks' }, { status: 401 });
         }
+        const taskForCheck = db.tasks.find(t => t.id === payload.taskId);
+        if (taskForCheck && isUserSuspendedInCommunity(userId, taskForCheck.communityId)) {
+          return NextResponse.json({ success: false, error: 'Suspended members cannot claim tasks in this community.' }, { status: 403 });
+        }
         const claimed = dbOperations.claimTask(payload.taskId, userId);
         if (!claimed) {
           return NextResponse.json({ success: false, error: 'Task not found' }, { status: 404 });
@@ -624,6 +711,10 @@ export async function POST(req: NextRequest, _context?: any) {
         const userId = authUser?.id || payload.userId;
         if (!userId) {
           return NextResponse.json({ success: false, error: 'Authentication required to RSVP' }, { status: 401 });
+        }
+        const evtForCheck = db.events.find(e => e.id === payload.eventId);
+        if (evtForCheck && isUserSuspendedInCommunity(userId, evtForCheck.communityId)) {
+          return NextResponse.json({ success: false, error: 'Suspended members cannot RSVP to community events.' }, { status: 403 });
         }
         result = dbOperations.rsvpEvent(payload.eventId, userId);
         break;

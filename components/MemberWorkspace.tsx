@@ -53,13 +53,16 @@ import {
   Bell,
   Unlink,
   Crown,
-  Terminal
+  Terminal,
+  Search
 } from 'lucide-react';
 
 interface MemberWorkspaceProps {
   currentUser: User;
   users: User[];
   communities: Community[];
+  currentCommunityId?: string;
+  onSelectCommunity?: (communityId: string) => void;
   ownedCommunities?: Community[];
   onSwitchToOwnedCommunity?: (communityId: string) => void;
   memberships?: CommunityMembership[];
@@ -81,6 +84,8 @@ interface MemberWorkspaceProps {
   onSelectUser: (user: User) => void;
   onSelectTab: (tab: string) => void;
   initialSubTab?: 'inbox' | 'feed' | 'communities' | 'events' | 'tasks' | 'commitments' | 'passport' | 'identity';
+  initialInviteCode?: string;
+  onClearInitialInvite?: () => void;
   onOpenAccountSettings?: () => void;
 }
 
@@ -88,6 +93,8 @@ export const MemberWorkspace: React.FC<MemberWorkspaceProps> = ({
   currentUser,
   users,
   communities,
+  currentCommunityId,
+  onSelectCommunity,
   ownedCommunities = [],
   onSwitchToOwnedCommunity,
   memberships = [],
@@ -106,6 +113,8 @@ export const MemberWorkspace: React.FC<MemberWorkspaceProps> = ({
   onRefresh,
   onSelectTab,
   initialSubTab,
+  initialInviteCode,
+  onClearInitialInvite,
   onOpenAccountSettings
 }) => {
   const _t = translations[lang];
@@ -121,9 +130,15 @@ export const MemberWorkspace: React.FC<MemberWorkspaceProps> = ({
     return () => clearTimeout(timer);
   }, [initialSubTab]);
 
-  // General UI Feedback
+  // General UI Feedback & Optimistic Overrides
   const [actionFeedback, setActionFeedback] = useState<{ type: 'error' | 'success'; text: string } | null>(null);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [optimisticReadIds, setOptimisticReadIds] = useState<string[]>([]);
+  const [optimisticAllRead, setOptimisticAllRead] = useState<boolean>(false);
+  const [optimisticVotes, setOptimisticVotes] = useState<Record<string, string>>({});
+  const [optimisticRsvps, setOptimisticRsvps] = useState<Record<string, boolean>>({});
+  const [optimisticChecklist, setOptimisticChecklist] = useState<Record<string, boolean>>({});
+  const [feedSearch, setFeedSearch] = useState<string>('');
 
   // Inbox filter
   const [inboxFilter, setInboxFilter] = useState<'all' | 'unread'>('all');
@@ -135,7 +150,16 @@ export const MemberWorkspace: React.FC<MemberWorkspaceProps> = ({
   const [offerAvailability, setOfferAvailability] = useState<string>('Available this week');
 
   // Invite Code Redemption state
-  const [inviteCodeInput, setInviteCodeInput] = useState<string>('');
+  const [inviteCodeInput, setInviteCodeInput] = useState<string>(initialInviteCode || '');
+
+  useEffect(() => {
+    if (!initialInviteCode) return;
+    const timer = setTimeout(() => {
+      setInviteCodeInput(initialInviteCode);
+      setActiveSubTab('communities');
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [initialInviteCode]);
 
   // Task Handoff Request state
   const [handoffTaskId, setHandoffTaskId] = useState<string | null>(null);
@@ -177,6 +201,7 @@ export const MemberWorkspace: React.FC<MemberWorkspaceProps> = ({
   const [evidenceNotes, setEvidenceNotes] = useState<string>('');
 
   // Derived collections
+  const activeSearch = feedSearch.trim().toLowerCase();
   const userSkillNames = currentUser.passport.skills.map((s) => s.name.toLowerCase());
   const opportunityFeed = requests.filter((r) => {
     if (r.creatorId === currentUser.id) return false;
@@ -184,15 +209,38 @@ export const MemberWorkspace: React.FC<MemberWorkspaceProps> = ({
     const hasSkillMatch = r.skillsRequired.some((sk) =>
       userSkillNames.some((uSk) => sk.toLowerCase().includes(uSk) || uSk.includes(sk.toLowerCase()))
     );
-    return hasSkillMatch || r.priority === 'urgent' || userSkillNames.length === 0;
+    const matchesRelevance = hasSkillMatch || r.priority === 'urgent' || userSkillNames.length === 0;
+    if (!matchesRelevance) return false;
+    if (!activeSearch) return true;
+    return (
+      r.title.toLowerCase().includes(activeSearch) ||
+      r.description.toLowerCase().includes(activeSearch) ||
+      r.skillsRequired.some((sk) => sk.toLowerCase().includes(activeSearch))
+    );
   });
 
-  const openBounties = tasks.filter((t) => !t.assigneeId && t.status === 'todo');
+  const openBounties = tasks.filter((t) => {
+    if (t.assigneeId || t.status !== 'todo') return false;
+    if (!activeSearch) return true;
+    return (
+      t.title.toLowerCase().includes(activeSearch) ||
+      t.description.toLowerCase().includes(activeSearch)
+    );
+  });
   const myOffers = offers.filter((o) => o.memberId === currentUser.id);
-  const myTasks = tasks.filter((t) => t.assigneeId === currentUser.id);
+  const myTasks = tasks.filter((t) => {
+    if (t.assigneeId !== currentUser.id) return false;
+    if (!activeSearch) return true;
+    return t.title.toLowerCase().includes(activeSearch) || t.description.toLowerCase().includes(activeSearch);
+  });
   const myCommitments = commitments.filter((c) => c.committedById === currentUser.id);
   const incomingHandoffs = handoffs.filter((h) => h.nextOwnerId === currentUser.id && !h.accepted);
-  const myNotifications = notifications.filter((n) => n.userId === currentUser.id);
+  const myNotifications = notifications
+    .filter((n) => n.userId === currentUser.id)
+    .map((n) => ({
+      ...n,
+      read: optimisticAllRead || n.read || optimisticReadIds.includes(n.id)
+    }));
   const unreadCount = myNotifications.filter((n) => !n.read).length;
   const visibleNotifications = inboxFilter === 'unread' ? myNotifications.filter((n) => !n.read) : myNotifications;
 
@@ -232,20 +280,26 @@ export const MemberWorkspace: React.FC<MemberWorkspaceProps> = ({
     return data;
   };
 
-  // Handlers
+  // Handlers with optimistic responsiveness & rollback on error
   const handleMarkNotificationRead = async (notificationId: string) => {
+    setOptimisticReadIds((prev) => (prev.includes(notificationId) ? prev : [...prev, notificationId]));
     try {
       await callApiAction('mark_notification_read', { notificationId });
       onRefresh();
-    } catch {}
+    } catch (err: any) {
+      setOptimisticReadIds((prev) => prev.filter((id) => id !== notificationId));
+      setActionFeedback({ type: 'error', text: err?.message || 'Failed to mark notification as read.' });
+    }
   };
 
   const handleMarkAllRead = async () => {
+    setOptimisticAllRead(true);
     try {
       await callApiAction('mark_all_notifications_read', { userId: currentUser.id });
       setActionFeedback({ type: 'success', text: 'All notifications marked as read.' });
       onRefresh();
     } catch (err: any) {
+      setOptimisticAllRead(false);
       setActionFeedback({ type: 'error', text: err?.message || 'Failed to mark notifications read.' });
     }
   };
@@ -320,6 +374,10 @@ export const MemberWorkspace: React.FC<MemberWorkspaceProps> = ({
         text: `Invite redeemed! Joined ${data.result?.community?.name || 'community'} as ${data.result?.membership?.role || 'member'}.`
       });
       setInviteCodeInput('');
+      onClearInitialInvite?.();
+      if (data.result?.community?.id && onSelectCommunity) {
+        onSelectCommunity(data.result.community.id);
+      }
       onRefresh();
     } catch (err: any) {
       setActionFeedback({ type: 'error', text: err?.message || 'Invalid or expired invite code.' });
@@ -330,21 +388,35 @@ export const MemberWorkspace: React.FC<MemberWorkspaceProps> = ({
 
   const handleCastVote = async (pollId: string, alternativeId: string) => {
     setActionFeedback(null);
+    const prevVote = optimisticVotes[pollId];
+    setOptimisticVotes((prev) => ({ ...prev, [pollId]: alternativeId }));
     try {
       await callApiAction('cast_vote', { pollId, alternativeId, userId: currentUser.id });
       setActionFeedback({ type: 'success', text: 'Vote recorded cleanly.' });
       onRefresh();
     } catch (err: any) {
+      setOptimisticVotes((prev) => {
+        const next = { ...prev };
+        if (prevVote) next[pollId] = prevVote;
+        else delete next[pollId];
+        return next;
+      });
       setActionFeedback({ type: 'error', text: err?.message || 'Failed to cast vote.' });
     }
   };
 
-  const handleToggleRsvp = async (eventId: string) => {
+  const handleToggleRsvp = async (eventId: string, currentHasRsvp: boolean) => {
     setActionFeedback(null);
+    setOptimisticRsvps((prev) => ({ ...prev, [eventId]: !currentHasRsvp }));
     try {
       await callApiAction('rsvp_event', { eventId, userId: currentUser.id });
       onRefresh();
     } catch (err: any) {
+      setOptimisticRsvps((prev) => {
+        const next = { ...prev };
+        delete next[eventId];
+        return next;
+      });
       setActionFeedback({ type: 'error', text: err?.message || 'Failed to update RSVP.' });
     }
   };
@@ -391,17 +463,14 @@ export const MemberWorkspace: React.FC<MemberWorkspaceProps> = ({
     setIsSubmitting(true);
     setActionFeedback(null);
     try {
-      await callApiAction('update_passport', {
+      await callApiAction('update_passport_and_privacy', {
         userId: currentUser.id,
         passport: {
           biography: editBio,
           skills: editSkills,
           portfolioLinks: editPortfolioLinks,
           isPublic: editIsPublic
-        }
-      });
-      await callApiAction('update_privacy', {
-        userId: currentUser.id,
+        },
         privacy: editPrivacy
       });
       setActionFeedback({ type: 'success', text: 'Member Passport & Privacy settings updated.' });
@@ -421,7 +490,7 @@ export const MemberWorkspace: React.FC<MemberWorkspaceProps> = ({
         targetUserId,
         skillName,
         endorserId: currentUser.id,
-        communityId: communities[0]?.id || 'comm_devforge'
+        communityId: currentCommunityId || communities[0]?.id || 'comm_devforge'
       });
       setActionFeedback({ type: 'success', text: `Endorsed "${skillName}"!` });
       onRefresh();
@@ -486,10 +555,17 @@ export const MemberWorkspace: React.FC<MemberWorkspaceProps> = ({
 
   const handleToggleChecklist = async (taskId: string, checklistId: string, completed: boolean) => {
     setActionFeedback(null);
+    const key = `${taskId}:${checklistId}`;
+    setOptimisticChecklist((prev) => ({ ...prev, [key]: completed }));
     try {
       await callApiAction('update_checklist', { taskId, checklistId, completed });
       onRefresh();
     } catch (err: any) {
+      setOptimisticChecklist((prev) => {
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      });
       setActionFeedback({ type: 'error', text: err?.message || 'Connection error updating checklist.' });
     }
   };
@@ -610,6 +686,20 @@ export const MemberWorkspace: React.FC<MemberWorkspaceProps> = ({
         </div>
 
         <div className="flex flex-wrap items-center gap-2 shrink-0">
+          {communities.length > 0 && onSelectCommunity && (
+            <select
+              aria-label={isRtl ? 'المجتمع الحالي' : 'Active Community'}
+              value={currentCommunityId || communities[0]?.id || ''}
+              onChange={(e) => onSelectCommunity(e.target.value)}
+              className="h-8 rounded-lg border border-slate-700 bg-slate-900 px-2.5 text-xs font-medium text-slate-200 focus:border-indigo-500 focus:outline-none max-w-[175px]"
+            >
+              {communities.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          )}
           <button
             type="button"
             onClick={() => setActiveSubTab('identity')}
@@ -802,6 +892,29 @@ export const MemberWorkspace: React.FC<MemberWorkspaceProps> = ({
       {/* SUBTAB 2: OPPORTUNITY FEED, CLAIMABLE BOUNTIES & INLINE QUICK OFFER */}
       {activeSubTab === 'feed' && (
         <div className="space-y-6">
+          {/* Quick Search Filter Bar */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-900/40 p-3">
+            <div className="relative flex-1">
+              <Search className="h-3.5 w-3.5 text-slate-400 absolute left-3 top-2.5" />
+              <input
+                type="text"
+                value={feedSearch}
+                onChange={(e) => setFeedSearch(e.target.value)}
+                placeholder={isRtl ? 'ابحث في المهام والفرص بالمهارة أو العنوان...' : 'Filter bounties & requests by skill or title...'}
+                className="w-full rounded-lg border border-slate-700 bg-slate-950 pl-9 pr-3 py-1.5 text-xs text-white placeholder-slate-500 focus:border-indigo-500 focus:outline-none"
+              />
+            </div>
+            {feedSearch && (
+              <button
+                type="button"
+                onClick={() => setFeedSearch('')}
+                className="text-xs text-slate-400 hover:text-white px-2"
+              >
+                {isRtl ? 'مسح البحث' : 'Clear'}
+              </button>
+            )}
+          </div>
+
           {/* Claimable Open Bounties */}
           <div className="space-y-3">
             <div className="flex items-center justify-between">
@@ -1059,7 +1172,13 @@ export const MemberWorkspace: React.FC<MemberWorkspaceProps> = ({
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {polls.map((poll) => {
-                  const totalVotes = poll.alternatives.reduce((acc, a) => acc + a.votes.length, 0);
+                  const optimisticChoice = optimisticVotes[poll.id];
+                  const adjustedAlts = poll.alternatives.map((alt) => {
+                    if (!optimisticChoice) return alt;
+                    const cleaned = alt.votes.filter((uid) => uid !== currentUser.id);
+                    return alt.id === optimisticChoice ? { ...alt, votes: [...cleaned, currentUser.id] } : { ...alt, votes: cleaned };
+                  });
+                  const totalVotes = adjustedAlts.reduce((acc, a) => acc + a.votes.length, 0);
                   return (
                     <div key={poll.id} className="rounded-xl border border-slate-800 bg-slate-900/50 p-4 space-y-3">
                       <div className="flex items-start justify-between gap-2">
@@ -1071,7 +1190,7 @@ export const MemberWorkspace: React.FC<MemberWorkspaceProps> = ({
                         </span>
                       </div>
                       <div className="space-y-2">
-                        {poll.alternatives.map((alt) => {
+                        {adjustedAlts.map((alt) => {
                           const voted = alt.votes.includes(currentUser.id);
                           const pct = totalVotes > 0 ? Math.round((alt.votes.length / totalVotes) * 100) : 0;
                           return (
@@ -1119,7 +1238,9 @@ export const MemberWorkspace: React.FC<MemberWorkspaceProps> = ({
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {events.map((evt) => {
-                  const hasRsvp = evt.rsvps.some((r) => r.userId === currentUser.id);
+                  const serverHasRsvp = evt.rsvps.some((r) => r.userId === currentUser.id);
+                  const hasRsvp = evt.id in optimisticRsvps ? optimisticRsvps[evt.id] : serverHasRsvp;
+                  const rsvpCount = evt.rsvps.length + (hasRsvp === serverHasRsvp ? 0 : hasRsvp ? 1 : -1);
                   const isConfirmed = evt.confirmedAttendees.some((a) => a.userId === currentUser.id);
                   return (
                     <div key={evt.id} className="rounded-xl border border-slate-800 bg-slate-900/50 p-4 space-y-3">
@@ -1144,11 +1265,11 @@ export const MemberWorkspace: React.FC<MemberWorkspaceProps> = ({
                       <p className="text-xs text-slate-300">{evt.description}</p>
                       <div className="flex items-center justify-between pt-2 border-t border-slate-800/80 text-xs">
                         <span className="font-mono text-[11px] text-slate-400 tabular-nums">
-                          {evt.rsvps.length} RSVPs · {evt.confirmedAttendees.length} Confirmed
+                          {Math.max(0, rsvpCount)} RSVPs · {evt.confirmedAttendees.length} Confirmed
                         </span>
                         <button
                           type="button"
-                          onClick={() => handleToggleRsvp(evt.id)}
+                          onClick={() => handleToggleRsvp(evt.id, hasRsvp)}
                           className={`rounded-md px-3 py-1 text-xs font-semibold transition-colors ${
                             hasRsvp
                               ? 'border border-emerald-500/40 bg-emerald-950/40 text-emerald-300 hover:bg-emerald-950'
@@ -1312,20 +1433,24 @@ export const MemberWorkspace: React.FC<MemberWorkspaceProps> = ({
                   <p className="text-xs text-slate-300">{task.description}</p>
 
                   <div className="space-y-1.5">
-                    {task.checklist.map((c) => (
-                      <div
-                        key={c.id}
-                        onClick={() => handleToggleChecklist(task.id, c.id, !c.completed)}
-                        className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer p-1 rounded hover:bg-slate-800/40"
-                      >
-                        {c.completed ? (
-                          <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
-                        ) : (
-                          <Circle className="h-3.5 w-3.5 text-slate-500" />
-                        )}
-                        <span className={c.completed ? 'line-through text-slate-500' : ''}>{c.item}</span>
-                      </div>
-                    ))}
+                    {task.checklist.map((c) => {
+                      const key = `${task.id}:${c.id}`;
+                      const isDone = key in optimisticChecklist ? optimisticChecklist[key] : c.completed;
+                      return (
+                        <div
+                          key={c.id}
+                          onClick={() => handleToggleChecklist(task.id, c.id, !isDone)}
+                          className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer p-1 rounded hover:bg-slate-800/40"
+                        >
+                          {isDone ? (
+                            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
+                          ) : (
+                            <Circle className="h-3.5 w-3.5 text-slate-500" />
+                          )}
+                          <span className={isDone ? 'line-through text-slate-500' : ''}>{c.item}</span>
+                        </div>
+                      );
+                    })}
                   </div>
 
                   {task.status !== 'completed' && (

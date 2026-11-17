@@ -2132,6 +2132,26 @@ export const dbOperations = {
       });
     }
 
+    // Notify contributor of review outcome
+    if (!db.notifications) db.notifications = [];
+    db.notifications.unshift({
+      id: `ntf_rev_${Date.now()}`,
+      userId: contribution.memberId,
+      communityId: contribution.communityId,
+      title:
+        decision === 'verified'
+          ? `Outcome Verified: ${contribution.title}`
+          : decision === 'rejected'
+          ? `Revision Requested: ${contribution.title}`
+          : `Dispute Opened: ${contribution.title}`,
+      message: reason || `Your deliverable was marked as ${decision}.`,
+      linkUrl: '/passport',
+      type: 'review',
+      read: false,
+      channelAttempts: { inApp: true, discord: false, telegram: false },
+      createdAt: new Date().toISOString()
+    });
+
     saveDatabase(db);
     return contribution;
   },
@@ -2724,23 +2744,54 @@ export const dbOperations = {
     const now = new Date().toISOString();
 
     if (platform === 'discord') {
-      comm.discordConfig = {
-        connected: false,
-        status: 'disconnected',
-        lastChecked: now
-      };
-      if (serverOrGroupId && comm.connectedDiscordServers) {
-        comm.connectedDiscordServers = comm.connectedDiscordServers.filter(s => s.serverId !== serverOrGroupId);
+      const targetId = serverOrGroupId || comm.discordConfig?.serverId;
+      if (comm.connectedDiscordServers) {
+        comm.connectedDiscordServers = targetId
+          ? comm.connectedDiscordServers.filter(s => s.serverId !== targetId)
+          : [];
       }
+      const nextServer = comm.connectedDiscordServers?.[0];
+      comm.discordConfig = nextServer
+        ? {
+            connected: true,
+            serverId: nextServer.serverId,
+            serverName: nextServer.serverName,
+            channelId: nextServer.channelId,
+            status: 'connected',
+            lastChecked: now
+          }
+        : {
+            connected: false,
+            serverId: '',
+            serverName: '',
+            channelId: '',
+            status: 'disconnected',
+            lastChecked: now
+          };
     } else {
-      comm.telegramConfig = {
-        connected: false,
-        status: 'disconnected',
-        lastChecked: now
-      };
-      if (serverOrGroupId && comm.connectedTelegramGroups) {
-        comm.connectedTelegramGroups = comm.connectedTelegramGroups.filter(g => g.groupId !== serverOrGroupId);
+      const targetId = serverOrGroupId || comm.telegramConfig?.groupId;
+      if (comm.connectedTelegramGroups) {
+        comm.connectedTelegramGroups = targetId
+          ? comm.connectedTelegramGroups.filter(g => g.groupId !== targetId)
+          : [];
       }
+      const nextGroup = comm.connectedTelegramGroups?.[0];
+      comm.telegramConfig = nextGroup
+        ? {
+            connected: true,
+            groupId: nextGroup.groupId,
+            groupTitle: nextGroup.groupTitle,
+            status: 'connected',
+            lastChecked: now
+          }
+        : {
+            connected: false,
+            groupId: '',
+            groupTitle: '',
+            channelId: '',
+            status: 'disconnected',
+            lastChecked: now
+          };
     }
 
     db.auditLogs.unshift({

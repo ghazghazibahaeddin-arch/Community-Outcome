@@ -1,9 +1,9 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { translations } from '@/lib/i18n';
 import { PlanTask, TaskHandoff, Intent, Community, User, Language } from '@/lib/types';
-import { CheckCircle2, Circle, ArrowRight, UserCheck, Shield, Plus, UploadCloud, FileText } from 'lucide-react';
+import { CheckCircle2, Circle, ArrowRight, UserCheck, Shield, Plus, UploadCloud } from 'lucide-react';
 
 interface QuestLoopSectionProps {
   tasks: PlanTask[];
@@ -30,6 +30,8 @@ export const QuestLoopSection: React.FC<QuestLoopSectionProps> = ({
 
   const [activeTab, setActiveTab] = useState<'tasks' | 'handoffs' | 'intents'>('tasks');
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(tasks[0]?.id || null);
+  const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [optimisticChecklist, setOptimisticChecklist] = useState<Record<string, boolean>>({});
 
   // Evidence submission state
   const [isSubmittingEvidence, setIsSubmittingEvidence] = useState(false);
@@ -38,7 +40,9 @@ export const QuestLoopSection: React.FC<QuestLoopSectionProps> = ({
 
   // Handoff form state
   const [isCreatingHandoff, setIsCreatingHandoff] = useState(false);
-  const [handoffNextOwner, setHandoffNextOwner] = useState(users[1]?.id || 'usr_alex');
+  const [handoffNextOwner, setHandoffNextOwner] = useState(
+    users.find((u) => u.id !== currentUser.id)?.id || users[0]?.id || ''
+  );
   const [handoffNotes, setHandoffNotes] = useState('');
 
   // Intent form state
@@ -46,39 +50,69 @@ export const QuestLoopSection: React.FC<QuestLoopSectionProps> = ({
   const [intentType, setIntentType] = useState<Intent['intentType']>('volunteer');
   const [intentTitle, setIntentTitle] = useState('');
 
-  const selectedTask = tasks.find((t) => t.id === selectedTaskId);
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setSelectedTaskId((prev) => (prev && tasks.some((tk) => tk.id === prev) ? prev : (tasks[0]?.id || null)));
+      setOptimisticChecklist({});
+      setFeedback(null);
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [community.id, tasks]);
+
+  const effectiveSelectedTaskId =
+    selectedTaskId && tasks.some((tk) => tk.id === selectedTaskId) ? selectedTaskId : (tasks[0]?.id || null);
+
+  const selectedTask = tasks.find((tk) => tk.id === effectiveSelectedTaskId);
 
   const handleToggleChecklist = async (taskId: string, checklistId: string, completed: boolean) => {
+    setFeedback(null);
+    const key = `${taskId}:${checklistId}`;
+    setOptimisticChecklist((prev) => ({ ...prev, [key]: completed }));
     try {
       const res = await fetch('/api/data', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
           action: 'update_checklist',
           payload: { taskId, checklistId, completed }
         })
       });
       const data = await res.json();
-      if (data.success) {
-        onRefresh();
+      if (!res.ok || !data.success) {
+        setOptimisticChecklist((prev) => {
+          const next = { ...prev };
+          delete next[key];
+          return next;
+        });
+        setFeedback({ type: 'error', text: data.error || 'Failed to update checklist.' });
+        return;
       }
-    } catch (err) {
-      console.error('Failed to update checklist:', err);
+      onRefresh();
+    } catch (err: any) {
+      setOptimisticChecklist((prev) => {
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      });
+      setFeedback({ type: 'error', text: err?.message || 'Network error updating checklist.' });
     }
   };
 
   const handleSubmitEvidence = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedTaskId || !evidenceUrl.trim()) return;
+    if (!effectiveSelectedTaskId || !evidenceUrl.trim()) return;
+    setFeedback(null);
 
     try {
       const res = await fetch('/api/data', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
           action: 'complete_task',
           payload: {
-            taskId: selectedTaskId,
+            taskId: effectiveSelectedTaskId,
             evidenceUrl,
             description: evidenceDesc,
             memberId: currentUser.id
@@ -86,30 +120,35 @@ export const QuestLoopSection: React.FC<QuestLoopSectionProps> = ({
         })
       });
       const data = await res.json();
-      if (data.success) {
-        setIsSubmittingEvidence(false);
-        setEvidenceUrl('');
-        setEvidenceDesc('');
-        onRefresh();
+      if (!res.ok || !data.success) {
+        setFeedback({ type: 'error', text: data.error || 'Failed to submit deliverable evidence.' });
+        return;
       }
-    } catch (err) {
-      console.error('Failed to submit evidence:', err);
+      setIsSubmittingEvidence(false);
+      setEvidenceUrl('');
+      setEvidenceDesc('');
+      setFeedback({ type: 'success', text: 'Deliverable submitted to the Contribution Ledger for review.' });
+      onRefresh();
+    } catch (err: any) {
+      setFeedback({ type: 'error', text: err?.message || 'Network error submitting deliverable.' });
     }
   };
 
   const handleCreateHandoff = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedTaskId) return;
+    if (!effectiveSelectedTaskId || !handoffNextOwner) return;
+    setFeedback(null);
 
     try {
       const res = await fetch('/api/data', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
           action: 'create_handoff',
           payload: {
             communityId: community.id,
-            taskId: selectedTaskId,
+            taskId: effectiveSelectedTaskId,
             previousOwnerId: currentUser.id,
             nextOwnerId: handoffNextOwner,
             contextNotes: handoffNotes,
@@ -118,43 +157,53 @@ export const QuestLoopSection: React.FC<QuestLoopSectionProps> = ({
         })
       });
       const data = await res.json();
-      if (data.success) {
-        setIsCreatingHandoff(false);
-        setHandoffNotes('');
-        onRefresh();
+      if (!res.ok || !data.success) {
+        setFeedback({ type: 'error', text: data.error || 'Failed to dispatch task handoff.' });
+        return;
       }
-    } catch (err) {
-      console.error('Failed to create handoff:', err);
+      setIsCreatingHandoff(false);
+      setHandoffNotes('');
+      setFeedback({ type: 'success', text: 'MoveSure task handoff dispatched.' });
+      onRefresh();
+    } catch (err: any) {
+      setFeedback({ type: 'error', text: err?.message || 'Network error dispatching handoff.' });
     }
   };
 
   const handleAcceptHandoff = async (handoffId: string) => {
+    setFeedback(null);
     try {
       const res = await fetch('/api/data', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
           action: 'accept_handoff',
           payload: { handoffId }
         })
       });
       const data = await res.json();
-      if (data.success) {
-        onRefresh();
+      if (!res.ok || !data.success) {
+        setFeedback({ type: 'error', text: data.error || 'Failed to accept task handoff.' });
+        return;
       }
-    } catch (err) {
-      console.error('Failed to accept handoff:', err);
+      setFeedback({ type: 'success', text: 'Task handoff accepted!' });
+      onRefresh();
+    } catch (err: any) {
+      setFeedback({ type: 'error', text: err?.message || 'Network error accepting handoff.' });
     }
   };
 
   const handleDeclareIntent = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!intentTitle.trim()) return;
+    setFeedback(null);
 
     try {
       const res = await fetch('/api/data', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
           action: 'declare_intent',
           payload: {
@@ -167,18 +216,35 @@ export const QuestLoopSection: React.FC<QuestLoopSectionProps> = ({
         })
       });
       const data = await res.json();
-      if (data.success) {
-        setIsDeclaringIntent(false);
-        setIntentTitle('');
-        onRefresh();
+      if (!res.ok || !data.success) {
+        setFeedback({ type: 'error', text: data.error || 'Failed to declare intent.' });
+        return;
       }
-    } catch (err) {
-      console.error('Failed to declare intent:', err);
+      setIsDeclaringIntent(false);
+      setIntentTitle('');
+      setFeedback({ type: 'success', text: 'Intent declared cleanly.' });
+      onRefresh();
+    } catch (err: any) {
+      setFeedback({ type: 'error', text: err?.message || 'Network error declaring intent.' });
     }
   };
 
   return (
     <div className="space-y-6">
+      {feedback && (
+        <div
+          className={`rounded-xl border p-3 text-xs flex items-center justify-between gap-2 ${
+            feedback.type === 'success'
+              ? 'border-emerald-500/40 bg-emerald-950/40 text-emerald-300'
+              : 'border-rose-500/40 bg-rose-950/40 text-rose-300'
+          }`}
+        >
+          <span>{feedback.text}</span>
+          <button type="button" onClick={() => setFeedback(null)} className="text-slate-400 hover:text-white px-1">
+            ✕
+          </button>
+        </div>
+      )}
       {/* Subnav: Tasks vs MoveSure Handoffs vs IntentReady */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-3">
         <div className="flex items-center gap-4 text-xs font-semibold">
@@ -220,7 +286,7 @@ export const QuestLoopSection: React.FC<QuestLoopSectionProps> = ({
               </div>
             ) : (
               tasks.map((task) => {
-                const isSelected = task.id === selectedTaskId;
+                const isSelected = task.id === effectiveSelectedTaskId;
                 const completedCount = task.checklist.filter((c) => c.completed).length;
                 return (
                   <div
@@ -306,22 +372,26 @@ export const QuestLoopSection: React.FC<QuestLoopSectionProps> = ({
                     Milestone Execution Checklist
                   </h4>
                   <div className="space-y-2">
-                    {selectedTask.checklist.map((item) => (
-                      <div
-                        key={item.id}
-                        onClick={() => handleToggleChecklist(selectedTask.id, item.id, !item.completed)}
-                        className="flex items-center gap-3 p-2.5 rounded-lg border border-slate-800 bg-slate-900/40 cursor-pointer hover:border-slate-700 transition-colors"
-                      >
-                        {item.completed ? (
-                          <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
-                        ) : (
-                          <Circle className="h-4 w-4 text-slate-500 shrink-0" />
-                        )}
-                        <span className={`text-xs ${item.completed ? 'line-through text-slate-500' : 'text-slate-200'}`}>
-                          {item.item}
-                        </span>
-                      </div>
-                    ))}
+                    {selectedTask.checklist.map((item) => {
+                      const key = `${selectedTask.id}:${item.id}`;
+                      const isDone = key in optimisticChecklist ? optimisticChecklist[key] : item.completed;
+                      return (
+                        <div
+                          key={item.id}
+                          onClick={() => handleToggleChecklist(selectedTask.id, item.id, !isDone)}
+                          className="flex items-center gap-3 p-2.5 rounded-lg border border-slate-800 bg-slate-900/40 cursor-pointer hover:border-slate-700 transition-colors"
+                        >
+                          {isDone ? (
+                            <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+                          ) : (
+                            <Circle className="h-4 w-4 text-slate-500 shrink-0" />
+                          )}
+                          <span className={`text-xs ${isDone ? 'line-through text-slate-500' : 'text-slate-200'}`}>
+                            {item.item}
+                          </span>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
 

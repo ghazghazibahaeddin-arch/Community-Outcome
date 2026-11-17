@@ -162,12 +162,14 @@ export const OwnerWorkspace: React.FC<OwnerWorkspaceProps> = ({
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
   // Role & Member Moderation State
-  const [selectedUserForRole, setSelectedUserForRole] = useState<string>(users[1]?.id || users[0]?.id || '');
+  const [selectedUserForRole, setSelectedUserForRole] = useState<string>(
+    users.find((u) => u.id !== community.ownerId)?.id || users[0]?.id || ''
+  );
   const [selectedRole, setSelectedRole] = useState<UserRole>('reviewer');
   const [roleError, setRoleError] = useState<string | null>(null);
   const [roleSuccess, setRoleSuccess] = useState<string | null>(null);
   const [memberSearch, setMemberSearch] = useState<string>('');
-  const [memberFilter, setMemberFilter] = useState<'all' | 'staff' | 'members' | 'linked' | 'moderated'>('all');
+  const [memberFilter, setMemberFilter] = useState<'all' | 'in_community' | 'staff' | 'members' | 'linked' | 'moderated'>('all');
   const [moderatingUserId, setModeratingUserId] = useState<string | null>(null);
   const [moderationType, setModerationType] = useState<'warn' | 'suspend' | 'reinstate' | 'remove'>('warn');
   const [moderationReason, setModerationReason] = useState<string>('');
@@ -399,11 +401,15 @@ export const OwnerWorkspace: React.FC<OwnerWorkspaceProps> = ({
     }
   };
 
-  const handleCopyInvite = async (invite: CommunityInviteCode) => {
+  const handleCopyInvite = async (invite: CommunityInviteCode, asLink = false) => {
     try {
+      const value =
+        asLink && typeof window !== 'undefined'
+          ? `${window.location.origin}/?invite=${encodeURIComponent(invite.code)}`
+          : invite.code;
       if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(invite.code);
-        setCopiedInviteId(invite.id);
+        await navigator.clipboard.writeText(value);
+        setCopiedInviteId(asLink ? `${invite.id}_link` : invite.id);
         setTimeout(() => setCopiedInviteId(null), 2000);
       }
     } catch {}
@@ -682,9 +688,15 @@ export const OwnerWorkspace: React.FC<OwnerWorkspaceProps> = ({
     downloadCsv(`${community.slug || community.id}-outcomes.csv`, headers, rows);
   };
 
+  // Count members belonging specifically to this community
+  const communityMembersCount = users.filter(
+    (u) => u.id === community.ownerId || Boolean(getMembershipForUser(u.id))
+  ).length;
+
   // Filtered Members for Member Directory
   const filteredMembers = users.filter((u) => {
     const mem = getMembershipForUser(u.id);
+    const inCommunity = u.id === community.ownerId || Boolean(mem);
     const role = getEffectiveRoleForUser(u);
     const matchesSearch =
       !memberSearch.trim() ||
@@ -693,8 +705,9 @@ export const OwnerWorkspace: React.FC<OwnerWorkspaceProps> = ({
       (u.identities?.discordUsername || '').toLowerCase().includes(memberSearch.toLowerCase()) ||
       (u.identities?.telegramUsername || '').toLowerCase().includes(memberSearch.toLowerCase());
     if (!matchesSearch) return false;
-    if (memberFilter === 'staff') return ['community_owner', 'admin', 'moderator', 'reviewer', 'task_manager'].includes(role);
-    if (memberFilter === 'members') return role === 'member' || role === 'expert';
+    if (memberFilter === 'in_community') return inCommunity;
+    if (memberFilter === 'staff') return inCommunity && ['community_owner', 'admin', 'moderator', 'reviewer', 'task_manager'].includes(role);
+    if (memberFilter === 'members') return inCommunity && (role === 'member' || role === 'expert');
     if (memberFilter === 'linked') return Boolean(u.identities?.discordId || u.identities?.telegramId);
     if (memberFilter === 'moderated') return mem?.moderationStatus === 'warned' || mem?.moderationStatus === 'suspended';
     return true;
@@ -774,7 +787,7 @@ export const OwnerWorkspace: React.FC<OwnerWorkspaceProps> = ({
           { id: 'reviews', label: `Reviews (${pendingContributions.length})` },
           { id: 'disputes', label: `Shield Disputes (${openDisputes.length})` },
           { id: 'events', label: `Events (${events.length})`, icon: Calendar },
-          { id: 'roles', label: `Members & Invites (${users.length})` },
+          { id: 'roles', label: `Members & Invites (${communityMembersCount})` },
           { id: 'config', label: 'Rules & Taxonomy' },
           { id: 'audit', label: 'Audit & Export' },
           { id: 'pricing', label: subscription?.tier === 'pro' ? 'Plans (PRO)' : 'Plans ($15/mo)', icon: Sparkles, highlight: 'amber' }
@@ -850,7 +863,7 @@ export const OwnerWorkspace: React.FC<OwnerWorkspaceProps> = ({
           {/* KPI Strip */}
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
             {[
-              { label: 'Active Members', value: memberships.filter(m => m.communityId === community.id).length || users.length, tone: 'text-white' },
+              { label: 'Active Members', value: communityMembersCount, tone: 'text-white' },
               { label: 'Pending Offers', value: pendingOffers.length, tone: pendingOffers.length > 0 ? 'text-amber-300' : 'text-white' },
               { label: 'Review Backlog', value: pendingContributions.length, tone: pendingContributions.length > 0 ? 'text-indigo-300' : 'text-white' },
               { label: 'Open Disputes', value: openDisputes.length, tone: openDisputes.length > 0 ? 'text-rose-400' : 'text-emerald-400' },
@@ -1808,7 +1821,8 @@ export const OwnerWorkspace: React.FC<OwnerWorkspaceProps> = ({
                   onChange={(e) => setMemberFilter(e.target.value as any)}
                   className="rounded-md border border-slate-700 bg-slate-950 px-2.5 py-1 text-xs text-slate-200"
                 >
-                  <option value="all">All Accounts</option>
+                  <option value="all">All Accounts ({users.length})</option>
+                  <option value="in_community">In {community.name} ({communityMembersCount})</option>
                   <option value="staff">Staff & Reviewers</option>
                   <option value="members">Members & Experts</option>
                   <option value="linked">Discord/TG Linked</option>
@@ -1820,6 +1834,7 @@ export const OwnerWorkspace: React.FC<OwnerWorkspaceProps> = ({
             <div className="divide-y divide-slate-800 rounded-lg border border-slate-800 overflow-hidden">
               {filteredMembers.map((u) => {
                 const mem = getMembershipForUser(u.id);
+                const inCommunity = u.id === community.ownerId || Boolean(mem);
                 const role = getEffectiveRoleForUser(u);
                 const modStatus = mem?.moderationStatus || 'active';
                 return (
@@ -1829,6 +1844,15 @@ export const OwnerWorkspace: React.FC<OwnerWorkspaceProps> = ({
                         <span className="font-semibold text-white">{u.name}</span>
                         <span className="font-mono text-[10px] uppercase bg-indigo-950 text-indigo-300 px-2 py-0.5 rounded border border-indigo-800/50">
                           {role.replace('_', ' ')}
+                        </span>
+                        <span
+                          className={`font-mono text-[10px] uppercase px-2 py-0.5 rounded border ${
+                            inCommunity
+                              ? 'bg-emerald-950/60 text-emerald-300 border-emerald-800/50'
+                              : 'bg-slate-800 text-slate-400 border-slate-700'
+                          }`}
+                        >
+                          {inCommunity ? 'In Community' : 'Platform Directory'}
                         </span>
                         {modStatus !== 'active' && (
                           <span className={`font-mono text-[10px] uppercase px-2 py-0.5 rounded ${
@@ -1942,14 +1966,22 @@ export const OwnerWorkspace: React.FC<OwnerWorkspaceProps> = ({
                         {inv.isRevoked && <span className="ml-2 text-rose-400 font-mono">(REVOKED)</span>}
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <button
                         type="button"
-                        onClick={() => handleCopyInvite(inv)}
+                        onClick={() => handleCopyInvite(inv, false)}
                         className="inline-flex items-center gap-1 rounded border border-slate-700 bg-slate-800 px-2.5 py-1 text-[11px] text-slate-200 hover:text-white"
                       >
                         {copiedInviteId === inv.id ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
-                        <span>{copiedInviteId === inv.id ? 'Copied' : 'Copy'}</span>
+                        <span>{copiedInviteId === inv.id ? 'Copied' : 'Copy Code'}</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleCopyInvite(inv, true)}
+                        className="inline-flex items-center gap-1 rounded border border-indigo-500/40 bg-indigo-500/10 px-2.5 py-1 text-[11px] text-indigo-300 hover:bg-indigo-500/20"
+                      >
+                        {copiedInviteId === `${inv.id}_link` ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
+                        <span>{copiedInviteId === `${inv.id}_link` ? 'Link Copied' : 'Copy Invite Link'}</span>
                       </button>
                       {!inv.isRevoked && (
                         <button
