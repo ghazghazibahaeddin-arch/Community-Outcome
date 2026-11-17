@@ -1,6 +1,12 @@
 // Community OS — Official Discord Interactions Endpoint with Cryptographic Verification
 import { NextRequest, NextResponse } from 'next/server';
-import { dbOperations, ensureDatabaseHydrated, getDatabase } from '@/lib/db/store';
+import {
+  dbOperations,
+  ensureDatabaseHydrated,
+  getCommunityHubSlug,
+  getDatabase,
+  persistDatabaseNow
+} from '@/lib/db/store';
 import { getVerifiedAppUrl } from '@/lib/services/securityConfig';
 import { getRuntimeEnv, CloudflareEnv } from '@/lib/env';
 
@@ -146,6 +152,18 @@ export async function POST(req: NextRequest, _context?: any) {
       const linkedUser = db.users.find((u) => u.identities?.discordId === discordUserId);
       const activeCreatorId = linkedUser ? linkedUser.id : 'usr_alex';
 
+      const hubSlug = getCommunityHubSlug(community, db.links);
+      const reqHelpSlug =
+        db.links.find((l) => l.communityId === community.id && l.linkType === 'link_9_help_request' && !l.isRevoked)
+          ?.slug || hubSlug;
+      const contribPortalSlug =
+        db.links.find(
+          (l) =>
+            l.communityId === community.id &&
+            (l.linkType === 'link_14_evidence' || l.linkType === 'link_1_ranking') &&
+            !l.isRevoked
+        )?.slug || hubSlug;
+
       // COMMAND: /help
       if (commandName === 'help') {
         return NextResponse.json({
@@ -170,7 +188,7 @@ export async function POST(req: NextRequest, _context?: any) {
 
       // COMMAND: /hub
       if (commandName === 'hub') {
-        const hubLink = `${appUrl}/l/${community.slug || community.id}-hub`;
+        const hubLink = `${appUrl}/l/${hubSlug}`;
         return NextResponse.json({
           type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
           data: {
@@ -186,7 +204,7 @@ export async function POST(req: NextRequest, _context?: any) {
           return NextResponse.json({
             type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
             data: {
-              content: `**${community.name} NeedSignal**: Zero open help requests currently pending.\nSubmit one using \`/help-request\` or via the Action Hub.`
+              content: `**${community.name} NeedSignal**: Zero open help requests currently pending.\nSubmit one using \`/help-request\` or via the Action Hub: ${appUrl}/l/${hubSlug}`
             }
           });
         }
@@ -199,7 +217,7 @@ export async function POST(req: NextRequest, _context?: any) {
         return NextResponse.json({
           type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
           data: {
-            content: `**Active NeedSignal Requests (${openReqs.length})**:\n${list}\n\nRespond or submit an offer at: ${appUrl}/l/devforge-request-help`
+            content: `**Active NeedSignal Requests (${openReqs.length})**:\n${list}\n\nRespond or submit an offer at: ${appUrl}/l/${reqHelpSlug}`
           }
         });
       }
@@ -221,6 +239,7 @@ export async function POST(req: NextRequest, _context?: any) {
           status: 'open',
           visibility: 'community'
         });
+        await persistDatabaseNow(env);
 
         return NextResponse.json({
           type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
@@ -231,7 +250,7 @@ export async function POST(req: NextRequest, _context?: any) {
               `• **Priority**: \`${newReq.priority.toUpperCase()}\`\n` +
               `• **Community**: ${community.name}\n` +
               `• **Status**: Open for member offers\n\n` +
-              `View and match specialists: ${appUrl}/l/devforge-request-help`
+              `View and match specialists: ${appUrl}/l/${reqHelpSlug}`
           }
         });
       }
@@ -256,7 +275,7 @@ export async function POST(req: NextRequest, _context?: any) {
         return NextResponse.json({
           type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
           data: {
-            content: `**Active QuestLoop Tasks (${commTasks.length})**:\n${taskList}\n\nTrack progress: ${appUrl}/l/${community.slug || community.id}-hub`
+            content: `**Active QuestLoop Tasks (${commTasks.length})**:\n${taskList}\n\nTrack progress: ${appUrl}/l/${hubSlug}`
           }
         });
       }
@@ -331,7 +350,7 @@ export async function POST(req: NextRequest, _context?: any) {
             content:
               `**Submit Deliverable Evidence (SourceTrail)**:\n` +
               `Complete your assigned QuestLoop deliverable with an inspectable URL (git commit, pull request, artifact link).\n` +
-              `Open contribution portal: ${appUrl}/l/devforge-contribution-ranking`
+              `Open contribution portal: ${appUrl}/l/${contribPortalSlug}`
           }
         });
       }
@@ -353,6 +372,7 @@ export async function POST(req: NextRequest, _context?: any) {
               }
             });
           }
+          await persistDatabaseNow(env);
 
           return NextResponse.json({
             type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
@@ -437,9 +457,10 @@ export async function POST(req: NextRequest, _context?: any) {
         db.communities[0];
 
       const linkedUser = db.users.find((u) => u.identities?.discordId === discordUserId);
+      const hubSlug = getCommunityHubSlug(community, db.links);
 
       if (customId === 'btn_hub') {
-        const hubLink = `${appUrl}/l/${community.slug || community.id}-hub`;
+        const hubLink = `${appUrl}/l/${hubSlug}`;
         return NextResponse.json({
           type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
           data: {
@@ -458,7 +479,7 @@ export async function POST(req: NextRequest, _context?: any) {
         return NextResponse.json({
           type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
           data: {
-            content: `**Active NeedSignal Requests (${openReqs.length})**:\n${list}\n\nSubmit assistance offers at: ${appUrl}/l/${community.slug || community.id}-hub`,
+            content: `**Active NeedSignal Requests (${openReqs.length})**:\n${list}\n\nSubmit assistance offers at: ${appUrl}/l/${hubSlug}`,
             flags: 64
           }
         });
@@ -473,7 +494,7 @@ export async function POST(req: NextRequest, _context?: any) {
         return NextResponse.json({
           type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
           data: {
-            content: `**Active QuestLoop Tasks (${commTasks.length})**:\n${taskList}\n\nTrack progress: ${appUrl}/l/${community.slug || community.id}-hub`,
+            content: `**Active QuestLoop Tasks (${commTasks.length})**:\n${taskList}\n\nTrack progress: ${appUrl}/l/${hubSlug}`,
             flags: 64
           }
         });

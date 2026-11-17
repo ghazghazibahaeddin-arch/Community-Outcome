@@ -1,6 +1,6 @@
 // Community OS — Publish In-Guild Interactive Menu Embed with Buttons
 import { NextRequest, NextResponse } from 'next/server';
-import { dbOperations, ensureDatabaseHydrated, getDatabase } from '@/lib/db/store';
+import { dbOperations, ensureDatabaseHydrated, getCommunityHubSlug, getDatabase, persistDatabaseNow } from '@/lib/db/store';
 import { getAuthenticatedUserFromRequest, getUserRoleInCommunity } from '@/lib/services/auth';
 import { getVerifiedAppUrl } from '@/lib/services/securityConfig';
 import { getRuntimeEnv, CloudflareEnv } from '@/lib/env';
@@ -32,7 +32,7 @@ export async function POST(req: NextRequest, _context?: any) {
 
     const targetChannelId = channelId?.trim() || community.discordConfig.channelId || 'ch_actions_main';
     const appUrl = getVerifiedAppUrl(env);
-    const hubLink = `${appUrl}/l/${community.slug || community.id}-hub`;
+    const hubLink = `${appUrl}/l/${getCommunityHubSlug(community, db.links)}`;
     const token = env.DISCORD_BOT_TOKEN;
 
     const payload = {
@@ -135,6 +135,7 @@ export async function POST(req: NextRequest, _context?: any) {
     }
 
     dbOperations.saveMenuMessage(communityId, 'discord', messageId, targetChannelId);
+    await persistDatabaseNow(env);
 
     return NextResponse.json({
       success: true,

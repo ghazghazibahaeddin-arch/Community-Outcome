@@ -129,6 +129,21 @@ function saveDb(data) {
   }
 }
 
+function getHubSlug(db, community, preferredLinkType = 'hub_multipurpose') {
+  if (!community) return 'devforge-hub';
+  const links = db?.links || [];
+  if (preferredLinkType !== 'hub_multipurpose') {
+    const specific = links.find(
+      (l) => l.communityId === community.id && l.linkType === preferredLinkType && !l.isRevoked
+    );
+    if (specific?.slug) return specific.slug;
+  }
+  const hub = links.find(
+    (l) => l.communityId === community.id && l.linkType === 'hub_multipurpose' && !l.isRevoked
+  );
+  return hub?.slug || `${community.slug || community.id}-hub`;
+}
+
 // ============================================================================
 // 1. TELEGRAM BOT ENGINE (Continuous Long-Polling)
 // ============================================================================
@@ -194,12 +209,13 @@ async function handleTelegramUpdate(update) {
       const openReqs = db.requests.filter(
         (r) => r.communityId === community.id && (r.status === 'open' || r.status === 'receiving_offers')
       );
+      const reqSlug = getHubSlug(db, community, 'request_help');
       const listText =
         openReqs.length === 0
           ? `*NeedSignal*: Zero open help requests currently in ${community.name}.`
           : `*Active NeedSignal Requests (${openReqs.length})*:\n` +
             openReqs.slice(0, 3).map((r) => `• *${r.title}* [${r.priority.toUpperCase()}]`).join('\n') +
-            `\n\nFull requests & offer portal: ${APP_URL}/l/devforge-request-help`;
+            `\n\nFull requests & offer portal: ${APP_URL}/l/${reqSlug}`;
 
       await sendTelegramMessage(cbChatId, listText);
       return;
@@ -207,12 +223,13 @@ async function handleTelegramUpdate(update) {
 
     if (cbData === 'menu_tasks') {
       const commTasks = db.tasks.filter((t) => t.communityId === community.id && t.status !== 'completed');
+      const hubSlug = getHubSlug(db, community);
       const taskText =
         commTasks.length === 0
           ? `*QuestLoop*: No pending tasks in ${community.name}.`
           : `*Active Deliverables (${commTasks.length})*:\n` +
             commTasks.slice(0, 3).map((t) => `• *${t.title}* [${t.status.toUpperCase()}]`).join('\n') +
-            `\n\nDeliverable portal: ${APP_URL}/l/${community.slug || community.id}-hub`;
+            `\n\nDeliverable portal: ${APP_URL}/l/${hubSlug}`;
 
       await sendTelegramMessage(cbChatId, taskText);
       return;
@@ -254,7 +271,7 @@ async function handleTelegramUpdate(update) {
     if (cbData === 'menu_hub') {
       await sendTelegramMessage(
         cbChatId,
-        `*${community.name} Action Hub*: ${APP_URL}/l/${community.slug || community.id}-hub`
+        `*${community.name} Action Hub*: ${APP_URL}/l/${getHubSlug(db, community)}`
       );
       return;
     }
@@ -326,7 +343,7 @@ async function handleTelegramUpdate(update) {
 
   // 3. /hub
   if (firstWord === '/hub') {
-    const hubLink = `${APP_URL}/l/${community.slug || community.id}-hub`;
+    const hubLink = `${APP_URL}/l/${getHubSlug(db, community)}`;
     await sendTelegramMessage(
       chatId,
       `*${community.name} Action Hub*:\n${hubLink}\n\nAccess structured requests, tasks, and verified outcomes directly.`
@@ -354,7 +371,7 @@ async function handleTelegramUpdate(update) {
 
     await sendTelegramMessage(
       chatId,
-      `*Active NeedSignal Requests (${openReqs.length})*:\n\n${list}\n\nSubmit an offer or review full details at: ${APP_URL}/l/devforge-request-help`
+      `*Active NeedSignal Requests (${openReqs.length})*:\n\n${list}\n\nSubmit an offer or review full details at: ${APP_URL}/l/${getHubSlug(db, community, 'request_help')}`
     );
     return;
   }
@@ -402,7 +419,7 @@ async function handleTelegramUpdate(update) {
       `• *Priority*: \`${newReq.priority.toUpperCase()}\`\n` +
       `• *Community*: ${community.name}\n` +
       `• *Status*: Open for member offers\n\n` +
-      `View in portal: ${APP_URL}/l/devforge-request-help`
+      `View in portal: ${APP_URL}/l/${getHubSlug(db, community, 'request_help')}`
     );
     return;
   }
@@ -422,7 +439,7 @@ async function handleTelegramUpdate(update) {
 
     await sendTelegramMessage(
       chatId,
-      `*Active QuestLoop Tasks (${commTasks.length})*:\n\n${taskList}\n\nTrack progress: ${APP_URL}/l/${community.slug || community.id}-hub`
+      `*Active QuestLoop Tasks (${commTasks.length})*:\n\n${taskList}\n\nTrack progress: ${APP_URL}/l/${getHubSlug(db, community)}`
     );
     return;
   }
@@ -477,7 +494,7 @@ async function handleTelegramUpdate(update) {
         chatId,
         `*Submit Deliverable Evidence (SourceTrail)*:\n\n` +
         `Usage: \`/contribution <task_id> | <evidence_url> | <description>\`\n` +
-        `Or visit the contribution portal directly:\n${APP_URL}/l/devforge-contribution-ranking`
+        `Or visit the contribution portal directly:\n${APP_URL}/l/${getHubSlug(db, community, 'contribution_portal')}`
       );
       return;
     }
@@ -519,7 +536,7 @@ async function handleTelegramUpdate(update) {
       `• *Task*: ${task.title}\n` +
       `• *Status*: Completed & Pending Community Peer Review\n` +
       `• *Evidence*: ${evidenceUrl}\n\n` +
-      `Track review status: ${APP_URL}/l/devforge-contribution-ranking`
+      `Track review status: ${APP_URL}/l/${getHubSlug(db, community, 'contribution_portal')}`
     );
     return;
   }
@@ -617,7 +634,7 @@ async function handleTelegramUpdate(update) {
         `• *Verified Chat ID*: \`${chatId}\`\n` +
         `• *Administrator*: @${telegramUsername || telegramUserId}\n` +
         `• *Status*: \`Connected & Verified\`\n\n` +
-        `*Web Platform*: ${APP_URL}/l/${targetComm.slug || targetComm.id}-hub`
+        `*Web Platform*: ${APP_URL}/l/${getHubSlug(db, targetComm)}`
       );
       return;
     }
@@ -793,7 +810,7 @@ async function handleDiscordInteraction(interaction) {
       await respondDiscordInteraction(interaction.id, interaction.token, {
         type: 4,
         data: {
-          content: `**${community.name} Action Hub**: ${APP_URL}/l/${community.slug || community.id}-hub\nAccess structured requests, tasks, and verified outcomes directly.`
+          content: `**${community.name} Action Hub**: ${APP_URL}/l/${getHubSlug(db, community)}\nAccess structured requests, tasks, and verified outcomes directly.`
         }
       });
       return;
@@ -809,7 +826,7 @@ async function handleDiscordInteraction(interaction) {
       await respondDiscordInteraction(interaction.id, interaction.token, {
         type: 4,
         data: {
-          content: `**Active NeedSignal Requests (${openReqs.length})**:\n${list}\n\nRespond or submit an offer at: ${APP_URL}/l/devforge-request-help`
+          content: `**Active NeedSignal Requests (${openReqs.length})**:\n${list}\n\nRespond or submit an offer at: ${APP_URL}/l/${getHubSlug(db, community, 'request_help')}`
         }
       });
       return;
@@ -845,7 +862,7 @@ async function handleDiscordInteraction(interaction) {
             `• **Priority**: \`${newReq.priority.toUpperCase()}\`\n` +
             `• **Community**: ${community.name}\n` +
             `• **Status**: Open for member offers\n\n` +
-            `View and match specialists: ${APP_URL}/l/devforge-request-help`
+            `View and match specialists: ${APP_URL}/l/${getHubSlug(db, community, 'request_help')}`
         }
       });
       return;
@@ -861,7 +878,7 @@ async function handleDiscordInteraction(interaction) {
       await respondDiscordInteraction(interaction.id, interaction.token, {
         type: 4,
         data: {
-          content: `**Active QuestLoop Tasks (${commTasks.length})**:\n${taskList}\n\nTrack progress: ${APP_URL}/l/${community.slug || community.id}-hub`
+          content: `**Active QuestLoop Tasks (${commTasks.length})**:\n${taskList}\n\nTrack progress: ${APP_URL}/l/${getHubSlug(db, community)}`
         }
       });
       return;
@@ -918,7 +935,7 @@ async function handleDiscordInteraction(interaction) {
           content:
             `**Submit Deliverable Evidence (SourceTrail)**:\n` +
             `Complete your assigned QuestLoop deliverable with an inspectable URL (git commit, pull request, artifact link).\n` +
-            `Open contribution portal: ${APP_URL}/l/devforge-contribution-ranking`
+            `Open contribution portal: ${APP_URL}/l/${getHubSlug(db, community, 'contribution_portal')}`
         }
       });
       return;
@@ -983,7 +1000,7 @@ async function handleDiscordInteraction(interaction) {
       await respondDiscordInteraction(interaction.id, interaction.token, {
         type: 4,
         data: {
-          content: `**${community.name} Action Hub**: ${APP_URL}/l/${community.slug || community.id}-hub\nBrowse structured requests, track deliverables, and verify community outcomes.`,
+          content: `**${community.name} Action Hub**: ${APP_URL}/l/${getHubSlug(db, community)}\nBrowse structured requests, track deliverables, and verify community outcomes.`,
           flags: 64
         }
       });
@@ -1000,7 +1017,7 @@ async function handleDiscordInteraction(interaction) {
       await respondDiscordInteraction(interaction.id, interaction.token, {
         type: 4,
         data: {
-          content: `**Active NeedSignal Requests (${openReqs.length})**:\n${list}\n\nSubmit assistance offers at: ${APP_URL}/l/devforge-request-help`,
+          content: `**Active NeedSignal Requests (${openReqs.length})**:\n${list}\n\nSubmit assistance offers at: ${APP_URL}/l/${getHubSlug(db, community, 'request_help')}`,
           flags: 64
         }
       });
@@ -1017,7 +1034,7 @@ async function handleDiscordInteraction(interaction) {
       await respondDiscordInteraction(interaction.id, interaction.token, {
         type: 4,
         data: {
-          content: `**Active QuestLoop Tasks (${commTasks.length})**:\n${taskList}\n\nTrack progress: ${APP_URL}/l/${community.slug || community.id}-hub`,
+          content: `**Active QuestLoop Tasks (${commTasks.length})**:\n${taskList}\n\nTrack progress: ${APP_URL}/l/${getHubSlug(db, community)}`,
           flags: 64
         }
       });

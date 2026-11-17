@@ -1106,6 +1106,18 @@ function getInitialSeedData(): DatabaseSchema {
       isRevoked: false,
       stats: { visits: 40, starts: 25, submissions: 14, completions: 10, verifiedOutcomes: 8 },
       createdAt: '2026-03-12T10:00:00Z'
+    },
+    {
+      id: 'lnk_18',
+      communityId: 'comm_civic',
+      linkType: 'hub_multipurpose',
+      slug: 'civic-relief-hub',
+      title: 'Civic Relief Collective Action Hub',
+      description: 'Unified hub for District 4 relief requests, volunteer coordination, and verified attendance.',
+      audience: 'public',
+      isRevoked: false,
+      stats: { visits: 74, starts: 31, submissions: 19, completions: 14, verifiedOutcomes: 11 },
+      createdAt: '2026-02-26T10:00:00Z'
     }
   ];
 
@@ -1392,7 +1404,7 @@ function getInitialSeedData(): DatabaseSchema {
 let cachedDb: DatabaseSchema | null = null;
 let lastHydratedAt = 0;
 let hydrationInFlight: Promise<DatabaseSchema> | null = null;
-const HYDRATION_TTL_MS = 15000;
+const HYDRATION_TTL_MS = 2000;
 
 function mergeById<T>(existing: T[] = [], incoming: T[] = [], idKey: string = 'id'): T[] {
   if (!Array.isArray(incoming) || incoming.length === 0) return existing;
@@ -1509,7 +1521,7 @@ export function getDatabase(): DatabaseSchema {
         cachedDb.authAccounts = seed.authAccounts;
         saveDatabase(cachedDb);
       }
-      if (cachedDb.links && cachedDb.links.length < 17) {
+      if (cachedDb.links && cachedDb.links.length < 18) {
         const seed = getInitialSeedData();
         for (const seedLink of seed.links) {
           if (!cachedDb.links.some(l => l.slug === seedLink.slug)) {
@@ -1525,6 +1537,31 @@ export function getDatabase(): DatabaseSchema {
   }
   cachedDb = normalizeDb(getInitialSeedData());
   return cachedDb;
+}
+
+export function getCommunityHubSlug(
+  community: Pick<Community, 'id' | 'slug'> | undefined,
+  linksList?: CommunityLink[]
+): string {
+  if (!community) return 'devforge-hub';
+  const links = linksList || getDatabase().links || [];
+  const activeHub = links.find(
+    (l) => l.communityId === community.id && l.linkType === 'hub_multipurpose' && !l.isRevoked
+  );
+  if (activeHub?.slug) return activeHub.slug;
+  return `${community.slug || community.id}-hub`;
+}
+
+export async function persistDatabaseNow(explicitEnv?: CloudflareEnv): Promise<void> {
+  if (!cachedDb) return;
+  if (isSupabaseConfigured(explicitEnv)) {
+    try {
+      await syncDatabaseToSupabase(cachedDb, explicitEnv);
+      lastHydratedAt = Date.now();
+    } catch (err: any) {
+      console.warn('[Supabase Immediate Sync Warning]:', err?.message || err);
+    }
+  }
 }
 
 export function saveDatabase(db: DatabaseSchema): void {

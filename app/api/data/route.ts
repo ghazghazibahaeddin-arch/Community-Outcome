@@ -1,6 +1,6 @@
 // Community OS — Central Data & Actions API Route with Server-Side Authorization
 import { NextRequest, NextResponse } from 'next/server';
-import { dbOperations, ensureDatabaseHydrated, getDatabase, saveDatabase } from '@/lib/db/store';
+import { dbOperations, ensureDatabaseHydrated, getDatabase, persistDatabaseNow, saveDatabase } from '@/lib/db/store';
 import { computeCommunityAnalytics } from '@/lib/services/analytics';
 import { runAllJourneyVerifications } from '@/lib/services/testingSuite';
 import { getAuthenticatedUserFromRequest, getUserRoleInCommunity } from '@/lib/services/auth';
@@ -760,6 +760,7 @@ export async function POST(req: NextRequest, _context?: any) {
         return NextResponse.json({ success: false, error: `Unknown action: ${action}` }, { status: 400 });
     }
 
+    await persistDatabaseNow(env);
     return NextResponse.json({ success: true, result, item: result });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);

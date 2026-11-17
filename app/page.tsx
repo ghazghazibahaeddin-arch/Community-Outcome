@@ -349,13 +349,14 @@ export default function HomePage() {
     } catch {}
   }, []);
 
-  const fetchData = React.useCallback(async (commId = currentCommunityId) => {
+  const fetchData = React.useCallback(async (commId = currentCommunityId, silent = false) => {
     const seq = ++fetchSeqRef.current;
-    setIsRefreshing(true);
+    if (!silent) setIsRefreshing(true);
     try {
       // Credentials: 'include' sends the HttpOnly, Secure SameSite=Lax cookie automatically
       const res = await fetch(`/api/data?communityId=${commId}`, {
-        credentials: 'include'
+        credentials: 'include',
+        cache: 'no-store'
       });
       const json = (await res.json()) as any;
       if (seq !== fetchSeqRef.current) return;
@@ -494,6 +495,22 @@ export default function HomePage() {
     }, 0);
     return () => clearTimeout(timer);
   }, [fetchData, currentCommunityId]);
+
+  // Synchronize changes made in Telegram / Discord / Action Hubs automatically in real time
+  useEffect(() => {
+    if (!authUser?.id) return;
+    const syncNow = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        fetchData(currentCommunityId, true);
+      }
+    };
+    const interval = setInterval(syncNow, 12000);
+    document.addEventListener('visibilitychange', syncNow);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', syncNow);
+    };
+  }, [authUser?.id, currentCommunityId, fetchData]);
 
   const handleSelectCommunity = (id: string) => {
     setCurrentCommunityId(id);

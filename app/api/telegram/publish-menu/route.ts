@@ -1,6 +1,6 @@
 // Community OS — Publish Interactive Menu to Telegram Group with Inline Keyboard
 import { NextRequest, NextResponse } from 'next/server';
-import { dbOperations, ensureDatabaseHydrated, getDatabase } from '@/lib/db/store';
+import { dbOperations, ensureDatabaseHydrated, getCommunityHubSlug, getDatabase, persistDatabaseNow } from '@/lib/db/store';
 import { getAuthenticatedUserFromRequest, getUserRoleInCommunity } from '@/lib/services/auth';
 import { getVerifiedAppUrl } from '@/lib/services/securityConfig';
 import { getRuntimeEnv, CloudflareEnv } from '@/lib/env';
@@ -39,7 +39,7 @@ export async function POST(req: NextRequest, _context?: any) {
     }
 
     const appUrl = getVerifiedAppUrl(env);
-    const hubLink = `${appUrl}/l/${community.slug || community.id}-hub`;
+    const hubLink = `${appUrl}/l/${getCommunityHubSlug(community, db.links)}`;
     const token = env.TELEGRAM_BOT_TOKEN;
 
     const safeCommunityName = String(community.name || 'Community')
@@ -128,6 +128,7 @@ export async function POST(req: NextRequest, _context?: any) {
     }
 
     dbOperations.saveMenuMessage(communityId, 'telegram', messageId, targetGroupId);
+    await persistDatabaseNow(env);
 
     return NextResponse.json({
       success: true,

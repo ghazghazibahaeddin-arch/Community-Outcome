@@ -1,6 +1,7 @@
 // Community OS — Telegram Bot Webhook Endpoint with Cryptographic Secret Token Verification
 import { NextRequest, NextResponse } from 'next/server';
 import { getRuntimeEnv } from '@/lib/env';
+import { persistDatabaseNow } from '@/lib/db/store';
 import { dispatchTelegramReply, processTelegramUpdate } from '@/lib/services/telegramBotProcessor';
 
 export async function POST(req: NextRequest, _context?: any) {
@@ -19,6 +20,7 @@ export async function POST(req: NextRequest, _context?: any) {
 
     const rawBody = (await req.json()) as any;
     const reply = await processTelegramUpdate(rawBody, env);
+    await persistDatabaseNow(env);
 
     // 2. Actively dispatch reply via Telegram Bot API when token is available
     // (More reliable than inline webhook HTTP reply on Cloudflare Workers/OpenNext, with HTML->plain auto-fallback)
