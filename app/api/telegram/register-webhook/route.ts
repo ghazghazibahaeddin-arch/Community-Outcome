@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ensureDatabaseHydrated, getDatabase } from '@/lib/db/store';
 import { getAuthenticatedUserFromRequest } from '@/lib/services/auth';
-import { getVerifiedAppUrl } from '@/lib/services/securityConfig';
+import { getVerifiedAppUrl, isAllowedOrigin } from '@/lib/services/securityConfig';
 import { getRuntimeEnv } from '@/lib/env';
 import { syncTelegramBotCommands } from '@/lib/services/telegramBotProcessor';
 
@@ -22,6 +22,7 @@ export async function GET(req: NextRequest, _context?: any) {
 
     return NextResponse.json({
       success: true,
+      expectedWebhookUrl: `${getVerifiedAppUrl(env)}/api/telegram/webhook`,
       webhookInfo: data.result || null
     });
   } catch (err: any) {
@@ -56,7 +57,8 @@ export async function POST(req: NextRequest, _context?: any) {
     }
 
     const body = ((await req.json().catch(() => ({}))) || {}) as { appUrl?: string; dropPending?: boolean };
-    const rawAppUrl = body.appUrl || getVerifiedAppUrl(env);
+    const candidateUrl = body.appUrl ? body.appUrl.trim().replace(/\/$/, '') : '';
+    const rawAppUrl = candidateUrl && isAllowedOrigin(candidateUrl) ? candidateUrl : getVerifiedAppUrl(env);
     const appUrl = rawAppUrl.trim().replace(/\/$/, '');
     const webhookUrl = `${appUrl}/api/telegram/webhook`;
 
@@ -82,12 +84,15 @@ export async function POST(req: NextRequest, _context?: any) {
     }
 
     const commandsSync = await syncTelegramBotCommands(token);
+    const infoRes = await fetch(`https://api.telegram.org/bot${token.trim()}/getWebhookInfo`).catch(() => null);
+    const infoData = infoRes ? ((await infoRes.json()) as any) : null;
 
     return NextResponse.json({
       success: true,
       message: 'Telegram Webhook & command menu registered successfully',
       webhookUrl,
       commandsSynced: commandsSync.ok,
+      webhookInfo: infoData?.result || null,
       telegramResponse: setResult
     });
   } catch (err: any) {

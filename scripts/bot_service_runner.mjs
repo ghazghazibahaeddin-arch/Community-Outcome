@@ -662,13 +662,23 @@ async function startTelegramPolling() {
     return;
   }
 
-  // Clear existing webhook to enable long-polling mode
+  const forcePolling = process.argv.includes('--force-polling');
   try {
+    const infoRes = await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/getWebhookInfo`);
+    const infoJson = await infoRes.json();
+    const activeUrl = infoJson?.result?.url || '';
+    if (activeUrl && !forcePolling) {
+      console.log(`[Telegram Poller] Preserving active production webhook: ${activeUrl}`);
+      console.log('[Telegram Poller] Pass --force-polling only if you intentionally want to override webhook mode.');
+      return;
+    }
+
+    // Clear existing webhook ONLY when none is active or --force-polling was explicitly requested
     const delRes = await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/deleteWebhook?drop_pending_updates=false`);
     const delJson = await delRes.json();
     console.log('[Telegram Poller] Webhook reset for long-polling:', delJson.ok ? 'SUCCESS' : delJson.description);
   } catch (err) {
-    console.error('[Telegram Poller] deleteWebhook error:', err.message);
+    console.error('[Telegram Poller] webhook check/delete error:', err.message);
   }
 
   telegramIsPolling = true;

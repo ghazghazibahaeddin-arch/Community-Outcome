@@ -56,6 +56,7 @@ export const CommunityConnectionCenter: React.FC<CommunityConnectionCenterProps>
   const [isPublishingTelegramMenu, setIsPublishingTelegramMenu] = useState(false);
   const [pinTelegramMenu, setPinTelegramMenu] = useState(true);
   const [telegramWebhookUrl, setTelegramWebhookUrl] = useState<string | null>(null);
+  const [telegramWebhookError, setTelegramWebhookError] = useState<string | null>(null);
   const [telegramPendingUpdates, setTelegramPendingUpdates] = useState<number | null>(null);
   const [telegramChallenge, setTelegramChallenge] = useState<{
     code: string;
@@ -106,6 +107,7 @@ export const CommunityConnectionCenter: React.FC<CommunityConnectionCenterProps>
         const tgData = await tgRes.json();
         if (active && tgData.success && tgData.webhookInfo) {
           setTelegramWebhookUrl(tgData.webhookInfo.url || null);
+          setTelegramWebhookError(tgData.webhookInfo.last_error_message || null);
           if (typeof tgData.webhookInfo.pending_update_count === 'number') {
             setTelegramPendingUpdates(tgData.webhookInfo.pending_update_count);
           }
@@ -262,23 +264,46 @@ export const CommunityConnectionCenter: React.FC<CommunityConnectionCenterProps>
       ]);
       const data = await verifyRes.json();
       const whData = await whRes.json();
-      if (whData.success && whData.webhookInfo) {
-        setTelegramWebhookUrl(whData.webhookInfo.url || null);
-        if (typeof whData.webhookInfo.pending_update_count === 'number') {
-          setTelegramPendingUpdates(whData.webhookInfo.pending_update_count);
-        }
-      }
+      const whUrl = whData?.webhookInfo?.url || data?.result?.webhookUrl || null;
+      const whError = whData?.webhookInfo?.last_error_message || data?.result?.lastErrorMessage || null;
+      const whPending =
+        typeof whData?.webhookInfo?.pending_update_count === 'number'
+          ? whData.webhookInfo.pending_update_count
+          : typeof data?.result?.pendingUpdateCount === 'number'
+          ? data.result.pendingUpdateCount
+          : null;
+
+      setTelegramWebhookUrl(whUrl);
+      setTelegramWebhookError(whError);
+      if (whPending !== null) setTelegramPendingUpdates(whPending);
+
       if (data.success && data.result) {
         setTelegramLiveCheck(data.result);
-        setTelegramStatusMsg({
-          type: data.result.status === 'connected' ? 'success' : 'info',
-          text:
-            data.result.status === 'connected'
-              ? isRtl
-                ? `بوت Telegram نشط! @${data.result.botUsername} (${data.result.botName}) متصل مع Webhook.`
-                : `Telegram Bot verified! @${data.result.botUsername} (${data.result.botName}) is online with webhook active.`
-              : data.result.details || 'Telegram bot check completed.'
-        });
+        if (whError) {
+          setTelegramStatusMsg({
+            type: 'error',
+            text: isRtl
+              ? `خطأ في Webhook تيلغرام: ${whError} — اضغط "مزامنة Webhook" لإعادة التسجيل.`
+              : `Telegram Webhook Error: ${whError} — Click "Sync Telegram Webhook" to repair.`
+          });
+        } else if (!whUrl) {
+          setTelegramStatusMsg({
+            type: 'info',
+            text: isRtl
+              ? `توكن البوت @${data.result.botUsername} سليم، لكن الـ Webhook غير مسجّل حالياً (الرسائل المعلقة: ${whPending ?? 0}). اضغط "مزامنة Webhook" لتفعيل الرد التلقائي.`
+              : `Bot @${data.result.botUsername} token is valid, but NO Webhook is registered yet (Pending: ${whPending ?? 0}). Click "Sync Telegram Webhook" to enable instant replies.`
+          });
+        } else {
+          setTelegramStatusMsg({
+            type: data.result.status === 'connected' ? 'success' : 'info',
+            text:
+              data.result.status === 'connected'
+                ? isRtl
+                  ? `بوت Telegram نشط! @${data.result.botUsername} متصل والـ Webhook فعّال على: ${whUrl}`
+                  : `Telegram Bot verified! @${data.result.botUsername} is online with webhook active at: ${whUrl}`
+                : data.result.details || 'Telegram bot check completed.'
+          });
+        }
       }
     } catch (err: any) {
       setTelegramStatusMsg({ type: 'error', text: `Verification failed: ${err.message}` });
@@ -307,6 +332,10 @@ export const CommunityConnectionCenter: React.FC<CommunityConnectionCenterProps>
         return;
       }
       setTelegramWebhookUrl(data.webhookUrl || null);
+      setTelegramWebhookError(data.webhookInfo?.last_error_message || null);
+      if (typeof data.webhookInfo?.pending_update_count === 'number') {
+        setTelegramPendingUpdates(data.webhookInfo.pending_update_count);
+      }
       setTelegramStatusMsg({
         type: 'success',
         text: isRtl
@@ -845,8 +874,8 @@ export const CommunityConnectionCenter: React.FC<CommunityConnectionCenterProps>
               <span className="text-sm font-bold text-white block">
                 @{telegramLiveCheck?.botUsername || 'CommunityOutcomeBot'}
               </span>
-              <span className="text-[11px] text-[#5dc5f7] font-mono block truncate">
-                Webhook: {telegramWebhookUrl || '/api/telegram/webhook'}
+              <span className={`text-[11px] font-mono block truncate ${telegramWebhookUrl && !telegramWebhookError ? 'text-emerald-400' : 'text-amber-400'}`}>
+                {telegramWebhookUrl ? `Webhook: ${telegramWebhookUrl}` : 'Webhook: Not Registered'}
               </span>
             </div>
 
@@ -862,11 +891,13 @@ export const CommunityConnectionCenter: React.FC<CommunityConnectionCenterProps>
 
             <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-4 space-y-1">
               <span className="text-[11px] font-mono text-slate-500 uppercase block">Group & Webhook State</span>
-              <span className={`text-sm font-bold font-mono block ${isTelegramConnected ? 'text-emerald-400' : 'text-amber-400'}`}>
-                {community.telegramConfig?.status || 'not_connected'}
+              <span className={`text-sm font-bold font-mono block ${telegramWebhookError ? 'text-rose-400' : telegramWebhookUrl ? 'text-emerald-400' : 'text-amber-400'}`}>
+                {telegramWebhookError ? 'webhook_error' : telegramWebhookUrl ? (community.telegramConfig?.status || 'webhook_active') : 'webhook_unset'}
               </span>
-              <span className="text-[11px] text-slate-400 font-mono block">
-                {telegramPendingUpdates !== null
+              <span className="text-[11px] text-slate-400 font-mono block truncate">
+                {telegramWebhookError
+                  ? `Err: ${telegramWebhookError}`
+                  : telegramPendingUpdates !== null
                   ? `Pending Queue: ${telegramPendingUpdates}`
                   : isTelegramConnected
                   ? 'Admin Verification: Active'
@@ -874,6 +905,37 @@ export const CommunityConnectionCenter: React.FC<CommunityConnectionCenterProps>
               </span>
             </div>
           </div>
+
+          {(!telegramWebhookUrl || telegramWebhookError) && (
+            <div className="p-4 rounded-xl border border-amber-500/40 bg-amber-950/30 text-xs text-amber-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-start gap-2.5">
+                <AlertTriangle className="h-4 w-4 text-amber-400 shrink-0 mt-0.5" />
+                <div>
+                  <div className="font-bold">
+                    {telegramWebhookError
+                      ? isRtl ? 'تم اكتشاف خطأ في Webhook تيلغرام' : 'Telegram Webhook Error Detected'
+                      : isRtl ? 'الـ Webhook غير مسجّل على تيلغرام حالياً' : 'Telegram Webhook Not Registered'}
+                  </div>
+                  <div className="text-amber-200/80 mt-0.5">
+                    {telegramWebhookError
+                      ? telegramWebhookError
+                      : isRtl
+                      ? 'لن يرد البوت تلقائياً على الأوامر في تيلغرام حتى تضغط "تفعيل Webhook الآن" لربطه بـ Cloudflare.'
+                      : 'The bot will not auto-reply in Telegram until you click "Sync Telegram Webhook" to bind Telegram to your Cloudflare API.'}
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={handleSyncTelegramWebhook}
+                disabled={isSyncingTelegramWebhook}
+                className="flex items-center gap-1.5 rounded-lg bg-amber-500 px-3.5 py-2 text-xs font-bold text-slate-950 hover:bg-amber-400 transition-colors whitespace-nowrap shrink-0 disabled:opacity-50"
+              >
+                <Wrench className={`h-3.5 w-3.5 ${isSyncingTelegramWebhook ? 'animate-spin' : ''}`} />
+                <span>{isRtl ? 'تفعيل Webhook الآن' : 'Activate Webhook Now'}</span>
+              </button>
+            </div>
+          )}
 
           {telegramStatusMsg && (
             <div

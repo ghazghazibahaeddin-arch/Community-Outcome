@@ -54,40 +54,94 @@ export async function syncTelegramBotCommands(token: string): Promise<{ ok: bool
   }
 }
 
-export async function dispatchTelegramReply(token: string, reply: TelegramReplyPayload): Promise<{ sent: boolean; error?: string }> {
+function stripHtmlToPlainText(html: string): string {
+  return html
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/?(?:b|strong|i|em|code|pre|u|s|a)(?:\s+[^>]*)?>/gi, '')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&rarr;/g, '->')
+    .replace(/&quot;/g, '"');
+}
+
+function clampTelegramText(text: string, maxLen = 4000): string {
+  if (text.length <= maxLen) return text;
+  return `${text.slice(0, maxLen - 24)}\n\n…(truncated)`;
+}
+
+export async function dispatchTelegramReply(
+  token: string,
+  reply: TelegramReplyPayload
+): Promise<{ sent: boolean; messageId?: number; error?: string }> {
   if (!token || reply.method !== 'sendMessage' || !reply.chat_id || !reply.text) {
     return { sent: false };
   }
+  const safeText = clampTelegramText(reply.text);
   try {
     const res = await fetch(`https://api.telegram.org/bot${token.trim()}/sendMessage`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         chat_id: reply.chat_id,
-        text: reply.text,
+        text: safeText,
         parse_mode: reply.parse_mode || 'HTML',
         ...(reply.reply_markup ? { reply_markup: reply.reply_markup } : {})
       })
     });
     const json = (await res.json()) as any;
-    return { sent: Boolean(json.ok), error: json.ok ? undefined : json.description };
+    if (json.ok) {
+      return { sent: true, messageId: json.result?.message_id };
+    }
+
+    // Auto-recover if HTML formatting or reply_markup rejected by Telegram
+    const errDesc = String(json.description || '');
+    if (
+      errDesc.includes('parse entities') ||
+      errDesc.includes('WEBPAGE_URL_INVALID') ||
+      errDesc.includes('Wrong HTTP URL') ||
+      errDesc.includes('inline keyboard')
+    ) {
+      const plainText = clampTelegramText(stripHtmlToPlainText(safeText));
+      const fallbackRes = await fetch(`https://api.telegram.org/bot${token.trim()}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: reply.chat_id,
+          text: plainText
+        })
+      });
+      const fallbackJson = (await fallbackRes.json()) as any;
+      if (fallbackJson.ok) {
+        return { sent: true, messageId: fallbackJson.result?.message_id };
+      }
+      return { sent: false, error: fallbackJson.description || errDesc };
+    }
+
+    return { sent: false, error: errDesc || 'Telegram API rejected sendMessage' };
   } catch (err: any) {
     return { sent: false, error: err?.message || 'Failed to send Telegram reply' };
   }
 }
 
 export async function processTelegramUpdate(rawBody: any, env: CloudflareEnv): Promise<TelegramReplyPayload> {
-  // 1. Deduplicate Telegram update retries via update_id
-  if (typeof rawBody?.update_id === 'number') {
-    if (recentUpdateIds.has(rawBody.update_id)) {
-      return { ok: true, duplicate: true };
-    }
-    recentUpdateIds.add(rawBody.update_id);
+  const updateId = typeof rawBody?.update_id === 'number' ? rawBody.update_id : null;
+  if (updateId !== null && recentUpdateIds.has(updateId)) {
+    return { ok: true, duplicate: true };
+  }
+
+  const reply = await buildTelegramReply(rawBody, env);
+  if (updateId !== null) {
+    recentUpdateIds.add(updateId);
     if (recentUpdateIds.size > MAX_RECENT_UPDATES) {
       const firstEntry = recentUpdateIds.values().next().value;
       if (firstEntry !== undefined) recentUpdateIds.delete(firstEntry);
     }
   }
+  return reply;
+}
+
+async function buildTelegramReply(rawBody: any, env: CloudflareEnv): Promise<TelegramReplyPayload> {
 
   // 2. Handle Inline Button Callback Queries
   if (rawBody?.callback_query) {
@@ -258,6 +312,22 @@ export async function processTelegramUpdate(rawBody: any, env: CloudflareEnv): P
   const isConnectDeepLink = firstWord === '/start' && argsString.toLowerCase() === 'connect';
 
   if ((firstWord === '/start' && !isConnectDeepLink) || firstWord === '/help') {
+    const hubLink = `${appUrl}/l/${community.slug || community.id}-hub`;
+    const isHttps = hubLink.startsWith('https://');
+    const quickButtons: any[][] = [
+      [
+        { text: '🆘 NeedSignal Requests', callback_data: 'menu_requests' },
+        { text: '📋 QuestLoop Tasks', callback_data: 'menu_tasks' }
+      ],
+      [
+        { text: '🎖️ My Passport', callback_data: 'menu_passport' },
+        { text: '⚡ Link Profile', callback_data: 'menu_connect' }
+      ]
+    ];
+    if (isHttps) {
+      quickButtons.unshift([{ text: `🚀 Open ${community.name} Action Hub`, url: hubLink }]);
+    }
+
     const text =
       `<b>Community OS — Telegram Command Center</b>\n` +
       `Operating on <b>${escapeHtml(community.name)}</b>\n\n` +
@@ -277,7 +347,8 @@ export async function processTelegramUpdate(rawBody: any, env: CloudflareEnv): P
       method: 'sendMessage',
       chat_id: chatId,
       text,
-      parse_mode: 'HTML'
+      parse_mode: 'HTML',
+      reply_markup: { inline_keyboard: quickButtons }
     };
   }
 
@@ -340,7 +411,7 @@ export async function processTelegramUpdate(rawBody: any, env: CloudflareEnv): P
       }
     }
 
-    const activeCreatorId = linkedUser ? linkedUser.id : 'usr_alex';
+    const activeCreatorId = linkedUser ? linkedUser.id : (db.users[0]?.id || 'usr_alex');
     const newReq = dbOperations.createRequest({
       communityId: community.id,
       creatorId: activeCreatorId,
@@ -495,7 +566,7 @@ export async function processTelegramUpdate(rawBody: any, env: CloudflareEnv): P
       task.id,
       evidenceUrl,
       summary,
-      linkedUser ? linkedUser.id : 'usr_alex'
+      linkedUser ? linkedUser.id : (db.users[0]?.id || 'usr_alex')
     );
     const newContribution = result?.contribution;
 

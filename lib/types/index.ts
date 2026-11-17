@@ -597,6 +597,10 @@ export interface IntegrationCheckResult {
   details: string;
   inviteUrl?: string;
   webhookUrl?: string;
+  webhookActive?: boolean;
+  pendingUpdateCount?: number;
+  lastErrorMessage?: string;
+  lastErrorDate?: number;
   checkedAt: string;
 }
 

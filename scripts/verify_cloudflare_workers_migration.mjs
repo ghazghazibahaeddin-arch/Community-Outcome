@@ -47,9 +47,12 @@ async function runCloudflareVerification() {
 
   // 3. Verify Telegram Webhook & Registration
   const tgWebhook = fs.readFileSync('app/api/telegram/webhook/route.ts', 'utf-8');
+  const tgProcessor = fs.readFileSync('lib/services/telegramBotProcessor.ts', 'utf-8');
   assert(
-    tgWebhook.includes('x-telegram-bot-api-secret-token') && tgWebhook.includes('recentUpdateIds'),
-    'Telegram Bot: Secure secret token verification and update_id deduplication active'
+    tgWebhook.includes('x-telegram-bot-api-secret-token') &&
+      tgWebhook.includes('dispatchTelegramReply') &&
+      tgProcessor.includes('recentUpdateIds'),
+    'Telegram Bot: Secure secret token verification, reply dispatch, and update_id deduplication active'
   );
   assert(
     fs.existsSync('app/api/telegram/register-webhook/route.ts') && fs.existsSync('scripts/register_telegram_webhook.mjs'),

@@ -1,7 +1,7 @@
 // Community OS — Telegram Bot Webhook Endpoint with Cryptographic Secret Token Verification
 import { NextRequest, NextResponse } from 'next/server';
 import { getRuntimeEnv } from '@/lib/env';
-import { processTelegramUpdate } from '@/lib/services/telegramBotProcessor';
+import { dispatchTelegramReply, processTelegramUpdate } from '@/lib/services/telegramBotProcessor';
 
 export async function POST(req: NextRequest, _context?: any) {
   const env = getRuntimeEnv(_context?.env || _context);
@@ -19,9 +19,23 @@ export async function POST(req: NextRequest, _context?: any) {
 
     const rawBody = (await req.json()) as any;
     const reply = await processTelegramUpdate(rawBody, env);
+
+    // 2. Actively dispatch reply via Telegram Bot API when token is available
+    // (More reliable than inline webhook HTTP reply on Cloudflare Workers/OpenNext, with HTML->plain auto-fallback)
+    const token = env.TELEGRAM_BOT_TOKEN;
+    if (token && reply.method === 'sendMessage' && !reply.duplicate) {
+      const dispatched = await dispatchTelegramReply(token, reply);
+      if (dispatched.sent) {
+        return NextResponse.json({ ok: true, dispatched: true, messageId: dispatched.messageId });
+      }
+      console.error('[Telegram Webhook] sendMessage dispatch failed:', dispatched.error || 'unknown error');
+      return NextResponse.json({ ok: true, dispatched: false, error: dispatched.error || 'dispatch_failed' });
+    }
+
     return NextResponse.json(reply);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
+    console.error('[Telegram Webhook Error]:', message);
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

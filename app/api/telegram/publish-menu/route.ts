@@ -52,17 +52,16 @@ export async function POST(req: NextRequest, _context?: any) {
       `Welcome to our decentralized community hub! Turn group messages into verified deliverables, collaborative tasks, and portable peer recognition.\n\n` +
       `Tap any interactive button below to access features directly:`;
 
+    const isHttps = hubLink.startsWith('https://');
     const inlineKeyboard = {
       inline_keyboard: [
+        ...(isHttps ? [[{ text: '🚀 Open Action Hub', url: hubLink }]] : []),
         [
-          { text: '🚀 Open Action Hub', url: hubLink },
-          { text: '🆘 NeedSignal Requests', callback_data: 'menu_requests' }
+          { text: '🆘 NeedSignal Requests', callback_data: 'menu_requests' },
+          { text: '📋 QuestLoop Tasks', callback_data: 'menu_tasks' }
         ],
         [
-          { text: '📋 QuestLoop Tasks', callback_data: 'menu_tasks' },
-          { text: '🎖️ My Passport', callback_data: 'menu_passport' }
-        ],
-        [
+          { text: '🎖️ My Passport', callback_data: 'menu_passport' },
           { text: '⚡ Link Community OS Profile', callback_data: 'menu_connect' }
         ]
       ]

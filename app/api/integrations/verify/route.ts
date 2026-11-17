@@ -99,26 +99,47 @@ export async function POST(req: NextRequest, _context?: any) {
         if (getMeJson.ok && getMeJson.result) {
           const bot = getMeJson.result;
 
-          // Check webhook info as well
+          // Check webhook info deeply so empty or failing webhooks are surfaced clearly
           let webhookDetails = 'Webhook status unverified';
+          let webhookUrl: string | undefined;
+          let webhookActive = false;
+          let pendingUpdateCount: number | undefined;
+          let lastErrorMessage: string | undefined;
+          let lastErrorDate: number | undefined;
           try {
             const whRes = await fetch(`https://api.telegram.org/bot${token.trim()}/getWebhookInfo`);
             const whJson = (await whRes.json()) as any;
-            if (whJson.ok) {
-              webhookDetails = whJson.result.url
-                ? `Webhook registered at: ${whJson.result.url}`
-                : 'No webhook registered (Bot is ready for webhook or polling)';
+            if (whJson.ok && whJson.result) {
+              const info = whJson.result;
+              webhookUrl = info.url || undefined;
+              pendingUpdateCount = typeof info.pending_update_count === 'number' ? info.pending_update_count : undefined;
+              lastErrorMessage = info.last_error_message || undefined;
+              lastErrorDate = typeof info.last_error_date === 'number' ? info.last_error_date : undefined;
+              webhookActive = Boolean(info.url) && !info.last_error_message;
+
+              if (!info.url) {
+                webhookDetails = `WARNING: No webhook registered (url is empty, pending: ${info.pending_update_count ?? 0}). Click "Sync Telegram Webhook" to activate automatic replies.`;
+              } else if (info.last_error_message) {
+                webhookDetails = `Webhook error on ${info.url}: ${info.last_error_message} (pending: ${info.pending_update_count ?? 0})`;
+              } else {
+                webhookDetails = `Webhook active at: ${info.url} (pending: ${info.pending_update_count ?? 0})`;
+              }
             }
           } catch {}
 
           const result: IntegrationCheckResult = {
             platform: 'telegram',
             configured: true,
-            status: 'connected',
+            status: lastErrorMessage ? 'error' : 'connected',
             botUsername: bot.username,
             botId: String(bot.id),
             botName: bot.first_name,
-            details: `Successfully authenticated with Telegram Bot API. Bot: @${bot.username} (${bot.first_name}). ${webhookDetails}`,
+            webhookUrl,
+            webhookActive,
+            pendingUpdateCount,
+            lastErrorMessage,
+            lastErrorDate,
+            details: `Authenticated with Telegram Bot API (@${bot.username}). ${webhookDetails}`,
             checkedAt
           };
           return NextResponse.json({ success: true, result });
