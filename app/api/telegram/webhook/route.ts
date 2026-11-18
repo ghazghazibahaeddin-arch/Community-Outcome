@@ -41,3 +41,13 @@ export async function POST(req: NextRequest, _context?: any) {
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
+
+export async function GET(_req: NextRequest, _context?: any) {
+  const env = getRuntimeEnv(_context?.env || _context);
+  return NextResponse.json({
+    status: 'online',
+    endpoint: 'Telegram Bot Webhook Endpoint',
+    botConfigured: Boolean(env.TELEGRAM_BOT_TOKEN),
+    webhookSecretConfigured: Boolean(env.TELEGRAM_WEBHOOK_SECRET)
+  });
+}

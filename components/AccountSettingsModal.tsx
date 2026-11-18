@@ -276,6 +276,7 @@ export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({
                 <div className="flex flex-wrap items-center gap-1.5 pt-1">
                   <a
                     href="/api/discord/connect?mode=user&redirect=true"
+                    target="_top"
                     className="text-[10px] font-semibold text-[#9aa8ff] bg-[#5865F2]/20 hover:bg-[#5865F2]/30 px-2.5 py-1 rounded border border-[#5865F2]/40 transition-colors"
                   >
                     {user.identities?.discordId ? (isRtl ? 'تبديل الحساب' : 'Re-link') : (isRtl ? 'ربط Discord' : 'Link Discord')}
@@ -317,6 +318,7 @@ export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({
                 <div className="flex flex-wrap items-center gap-1.5 pt-1">
                   <a
                     href="/api/auth/telegram/authorize?redirect=true"
+                    target="_top"
                     className="text-[10px] font-semibold text-[#5dc5f7] bg-[#229ED9]/20 hover:bg-[#229ED9]/30 px-2.5 py-1 rounded border border-[#229ED9]/40 transition-colors"
                   >
                     {user.identities?.telegramId ? (isRtl ? 'تبديل الحساب' : 'Re-link') : (isRtl ? 'ربط Telegram' : 'Link Telegram')}

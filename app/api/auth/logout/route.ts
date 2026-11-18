@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { ensureDatabaseHydrated } from '@/lib/db/store';
+import { ensureDatabaseHydrated, persistDatabaseNow } from '@/lib/db/store';
+import { deleteSessionFromSupabase } from '@/lib/db/supabase';
 import { getRuntimeEnv } from '@/lib/env';
 import { destroySession, clearSessionCookie, SESSION_COOKIE_NAME } from '@/lib/services/auth';
 
@@ -13,7 +14,9 @@ export async function POST(req: NextRequest, _context?: any) {
     const token = cookieToken || headerToken;
 
     if (token) {
-      destroySession(token);
+      destroySession(token, env);
+      await deleteSessionFromSupabase(token, env);
+      await persistDatabaseNow(env);
     }
 
     const res = NextResponse.json({ success: true, message: 'Logged out successfully' });

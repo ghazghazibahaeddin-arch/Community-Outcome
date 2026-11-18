@@ -1,6 +1,7 @@
 // Community OS — Telegram Bot Live Polling & Command Sync Endpoint
 // Allows Telegram bot to respond in real-time in local/sandbox dev when webhook URL is unset.
 import { NextRequest, NextResponse } from 'next/server';
+import { persistDatabaseNow } from '@/lib/db/store';
 import { getRuntimeEnv } from '@/lib/env';
 import {
   dispatchTelegramReply,
@@ -110,6 +111,10 @@ export async function POST(req: NextRequest, _context?: any) {
       globalPollState.__tgPollOffset = maxUpdateId + 1;
       // Acknowledge offset with Telegram so old messages aren't re-fetched
       await fetch(`https://api.telegram.org/bot${token.trim()}/getUpdates?offset=${globalPollState.__tgPollOffset}&limit=1&timeout=0`).catch(() => {});
+    }
+
+    if (processedCount > 0) {
+      await persistDatabaseNow(env);
     }
 
     return NextResponse.json({

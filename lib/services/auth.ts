@@ -3,7 +3,7 @@ import crypto from 'crypto';
 import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import { getDatabase, saveDatabase } from '@/lib/db/store';
-import { deleteSessionFromSupabase, isSupabaseConfigured } from '@/lib/db/supabase';
+import { deleteSessionFromSupabase, deleteUserSessionsFromSupabase, isSupabaseConfigured } from '@/lib/db/supabase';
 import { AuthAccount, AuthSession, User, UserRole, DevEmail } from '@/lib/types';
 import { getCloudflareExecutionContext, getRuntimeEnv, CloudflareEnv } from '../env';
 
@@ -300,13 +300,13 @@ export function getUserBySession(token: string): User | null {
 /**
  * Invalidate a session (Logout)
  */
-export function destroySession(token: string): boolean {
+export function destroySession(token: string, explicitEnv?: CloudflareEnv): boolean {
   if (!token) return false;
   const db = getDatabase();
   if (!db.sessions) return false;
 
-  if (isSupabaseConfigured()) {
-    const p = deleteSessionFromSupabase(token).catch(() => {});
+  if (isSupabaseConfigured(explicitEnv)) {
+    const p = deleteSessionFromSupabase(token, explicitEnv).catch(() => {});
     const cfCtx = getCloudflareExecutionContext();
     if (cfCtx?.waitUntil) {
       cfCtx.waitUntil(p);
@@ -325,9 +325,16 @@ export function destroySession(token: string): boolean {
 /**
  * Invalidate all sessions for a user (e.g. after password reset)
  */
-export function destroyAllUserSessions(userId: string): void {
+export function destroyAllUserSessions(userId: string, explicitEnv?: CloudflareEnv): void {
   const db = getDatabase();
   if (!db.sessions) return;
+  if (isSupabaseConfigured(explicitEnv)) {
+    const p = deleteUserSessionsFromSupabase(userId, explicitEnv).catch(() => {});
+    const cfCtx = getCloudflareExecutionContext();
+    if (cfCtx?.waitUntil) {
+      cfCtx.waitUntil(p);
+    }
+  }
   db.sessions = db.sessions.filter((s) => s.userId !== userId);
   saveDatabase(db);
 }
@@ -406,7 +413,11 @@ export function requestPasswordReset(
 /**
  * Verify token and set new password
  */
-export function resetPassword(token: string, newPassword: string): { success: boolean; error?: string } {
+export function resetPassword(
+  token: string,
+  newPassword: string,
+  explicitEnv?: CloudflareEnv
+): { success: boolean; error?: string } {
   if (!token || token.trim() === '') {
     return { success: false, error: 'Invalid or missing reset token' };
   }
@@ -437,7 +448,7 @@ export function resetPassword(token: string, newPassword: string): { success: bo
   account.updatedAt = now;
 
   // Invalidate all existing sessions
-  destroyAllUserSessions(account.id);
+  destroyAllUserSessions(account.id, explicitEnv);
 
   saveDatabase(db);
   return { success: true };

@@ -336,6 +336,33 @@ async function buildTelegramReply(rawBody: any, env: CloudflareEnv): Promise<Tel
         };
       }
 
+      if (targetReq.status === 'in_progress' || targetReq.status === 'completed') {
+        await answerCallback(token, cb.id, 'Request already assigned');
+        return {
+          method: 'sendMessage',
+          chat_id: cbChatId,
+          text:
+            `ℹ️ <b>Request Already In Progress</b>\n\n` +
+            `<b>${escapeHtml(targetReq.title)}</b> has already been assigned to a contributor and is no longer accepting new offers.`,
+          parse_mode: 'HTML',
+          reply_markup: { inline_keyboard: buildNavFooter(hubLink, 'menu_requests') }
+        };
+      }
+
+      const isSuspended = db.memberships?.some(
+        (m) => m.communityId === targetReq.communityId && m.userId === linkedUser.id && m.moderationStatus === 'suspended'
+      );
+      if (isSuspended) {
+        await answerCallback(token, cb.id, 'Membership suspended');
+        return {
+          method: 'sendMessage',
+          chat_id: cbChatId,
+          text: `⛔ Your membership in <b>${escapeHtml(community.name)}</b> is currently suspended.`,
+          parse_mode: 'HTML',
+          reply_markup: { inline_keyboard: buildNavFooter(hubLink) }
+        };
+      }
+
       const existingOffer = db.offers.find(
         (o) => o.requestId === targetReq.id && o.memberId === linkedUser.id && o.status !== 'declined'
       );
@@ -554,6 +581,38 @@ async function buildTelegramReply(rawBody: any, env: CloudflareEnv): Promise<Tel
           text: `Link your Telegram account first via <code>/connect OS-XXXX</code> to submit deliverables.`,
           parse_mode: 'HTML',
           reply_markup: { inline_keyboard: buildNavFooter(hubLink) }
+        };
+      }
+
+      const targetTask = db.tasks.find((t) => t.id === taskId);
+      if (!targetTask) {
+        await answerCallback(token, cb.id, 'Task not found');
+        return {
+          method: 'sendMessage',
+          chat_id: cbChatId,
+          text: `Task <code>${escapeHtml(taskId)}</code> was not found.`,
+          parse_mode: 'HTML',
+          reply_markup: { inline_keyboard: buildNavFooter(hubLink, 'menu_mytasks') }
+        };
+      }
+      if (targetTask.status === 'completed') {
+        await answerCallback(token, cb.id, 'Already completed!');
+        return {
+          method: 'sendMessage',
+          chat_id: cbChatId,
+          text: `✅ <b>Already Delivered</b>\n\nTask <b>${escapeHtml(targetTask.title)}</b> was already marked as completed.`,
+          parse_mode: 'HTML',
+          reply_markup: { inline_keyboard: buildNavFooter(hubLink, 'menu_mytasks') }
+        };
+      }
+      if (targetTask.assigneeId && targetTask.assigneeId !== linkedUser.id) {
+        await answerCallback(token, cb.id, 'Assigned to another member');
+        return {
+          method: 'sendMessage',
+          chat_id: cbChatId,
+          text: `⛔ This task is assigned to another contributor.`,
+          parse_mode: 'HTML',
+          reply_markup: { inline_keyboard: buildNavFooter(hubLink, 'menu_tasks') }
         };
       }
 
@@ -796,6 +855,20 @@ async function buildTelegramReply(rawBody: any, env: CloudflareEnv): Promise<Tel
     }
 
     const activeCreatorId = linkedUser ? linkedUser.id : (db.users[0]?.id || 'usr_alex');
+    if (
+      linkedUser &&
+      db.memberships?.some(
+        (m) => m.communityId === community.id && m.userId === linkedUser.id && m.moderationStatus === 'suspended'
+      )
+    ) {
+      return {
+        method: 'sendMessage',
+        chat_id: chatId,
+        text: `⛔ Suspended members cannot create help requests in <b>${escapeHtml(community.name)}</b>.`,
+        parse_mode: 'HTML',
+        reply_markup: { inline_keyboard: buildNavFooter(hubLink) }
+      };
+    }
     const newReq = dbOperations.createRequest({
       communityId: community.id,
       creatorId: activeCreatorId,
@@ -983,12 +1056,31 @@ async function buildTelegramReply(rawBody: any, env: CloudflareEnv): Promise<Tel
         reply_markup: { inline_keyboard: buildNavFooter(hubLink, 'menu_tasks') }
       };
     }
+    if (task.status === 'completed') {
+      return {
+        method: 'sendMessage',
+        chat_id: chatId,
+        text: `✅ Task <b>${escapeHtml(task.title)}</b> was already completed and submitted for review.`,
+        parse_mode: 'HTML',
+        reply_markup: { inline_keyboard: buildNavFooter(hubLink, 'menu_mytasks') }
+      };
+    }
+    const actorUserId = linkedUser ? linkedUser.id : (db.users[0]?.id || 'usr_alex');
+    if (task.assigneeId && task.assigneeId !== actorUserId) {
+      return {
+        method: 'sendMessage',
+        chat_id: chatId,
+        text: `⛔ Task <code>${escapeHtml(task.id)}</code> is assigned to another contributor.`,
+        parse_mode: 'HTML',
+        reply_markup: { inline_keyboard: buildNavFooter(hubLink, 'menu_tasks') }
+      };
+    }
 
     const result = dbOperations.completeTaskWithEvidence(
       task.id,
       evidenceUrl,
       summary,
-      linkedUser ? linkedUser.id : (db.users[0]?.id || 'usr_alex')
+      actorUserId
     );
     const newContribution = result?.contribution;
 

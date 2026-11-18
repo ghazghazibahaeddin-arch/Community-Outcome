@@ -266,6 +266,7 @@ export const OnboardingChoiceModal: React.FC<OnboardingChoiceModalProps> = ({
             ) : (
               <a
                 href="/api/discord/connect?mode=user&redirect=true"
+                target="_top"
                 className="inline-flex items-center gap-1.5 rounded-lg border border-[#5865F2]/50 bg-[#5865F2]/15 hover:bg-[#5865F2]/25 px-3 py-1.5 text-xs font-semibold text-[#9aa8ff] transition-all"
               >
                 <Bot className="h-3.5 w-3.5" />
@@ -281,6 +282,7 @@ export const OnboardingChoiceModal: React.FC<OnboardingChoiceModalProps> = ({
             ) : (
               <a
                 href="/api/auth/telegram/authorize?redirect=true"
+                target="_top"
                 className="inline-flex items-center gap-1.5 rounded-lg border border-[#229ED9]/50 bg-[#229ED9]/15 hover:bg-[#229ED9]/25 px-3 py-1.5 text-xs font-semibold text-[#5dc5f7] transition-all"
               >
                 <Send className="h-3.5 w-3.5" />

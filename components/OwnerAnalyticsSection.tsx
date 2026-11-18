@@ -30,13 +30,17 @@ export const OwnerAnalyticsSection: React.FC<OwnerAnalyticsSectionProps> = ({
 
   const [activeSubTab, setActiveSubTab] = useState<'analytics' | 'recovery' | 'agentKits'>('analytics');
   const [executingAgentId, setExecutingAgentId] = useState<string | null>(null);
+  const [sendingRecoveryId, setSendingRecoveryId] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   const handleRunAgentKit = async (agentKitId: string) => {
     setExecutingAgentId(agentKitId);
+    setFeedback(null);
     try {
       const res = await fetch('/api/data', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
           action: 'execute_agent_kit',
           payload: {
@@ -46,22 +50,72 @@ export const OwnerAnalyticsSection: React.FC<OwnerAnalyticsSectionProps> = ({
         })
       });
       const data = await res.json();
-      if (data.success) {
-        onRefresh();
+      if (!res.ok || !data.success) {
+        setFeedback({ type: 'error', text: data.error || 'Failed to execute workflow kit.' });
+        return;
       }
-    } catch (err) {
-      console.error('Failed to run agent kit:', err);
+      setFeedback({ type: 'success', text: 'Automation workflow evaluated and audit log updated.' });
+      onRefresh();
+    } catch (err: any) {
+      setFeedback({ type: 'error', text: err?.message || 'Network error running workflow kit.' });
     } finally {
       setExecutingAgentId(null);
     }
   };
 
+  const handleSendRecoveryPrompt = async (targetUserId: string, targetName: string) => {
+    setSendingRecoveryId(targetUserId);
+    setFeedback(null);
+    try {
+      const res = await fetch('/api/data', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          action: 'send_recovery_prompt',
+          payload: {
+            communityId: community.id,
+            targetUserId
+          }
+        })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        setFeedback({ type: 'error', text: data.error || 'Failed to send re-engagement prompt.' });
+        return;
+      }
+      setFeedback({
+        type: 'success',
+        text: `Sent gentle re-engagement invitation and open resource notification to ${targetName}.`
+      });
+      onRefresh();
+    } catch (err: any) {
+      setFeedback({ type: 'error', text: err?.message || 'Network error sending recovery prompt.' });
+    } finally {
+      setSendingRecoveryId(null);
+    }
+  };
+
   return (
     <div className="space-y-6">
+      {feedback && (
+        <div
+          className={`rounded-xl border p-3 text-xs flex items-center justify-between gap-2 ${
+            feedback.type === 'success'
+              ? 'border-emerald-500/40 bg-emerald-950/40 text-emerald-300'
+              : 'border-rose-500/40 bg-rose-950/40 text-rose-300'
+          }`}
+        >
+          <span>{feedback.text}</span>
+          <button type="button" onClick={() => setFeedback(null)} className="text-slate-400 hover:text-white px-1">✕</button>
+        </div>
+      )}
+
       {/* Subnav */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-3">
         <div className="flex items-center gap-4 text-xs font-semibold">
           <button
+            type="button"
             onClick={() => setActiveSubTab('analytics')}
             className={`pb-2 transition-colors ${
               activeSubTab === 'analytics' ? 'border-b-2 border-indigo-500 text-indigo-400' : 'text-slate-400 hover:text-white'
@@ -70,6 +124,7 @@ export const OwnerAnalyticsSection: React.FC<OwnerAnalyticsSectionProps> = ({
             Outcome Analytics (Owner-4)
           </button>
           <button
+            type="button"
             onClick={() => setActiveSubTab('recovery')}
             className={`pb-2 transition-colors ${
               activeSubTab === 'recovery' ? 'border-b-2 border-indigo-500 text-indigo-400' : 'text-slate-400 hover:text-white'
@@ -78,6 +133,7 @@ export const OwnerAnalyticsSection: React.FC<OwnerAnalyticsSectionProps> = ({
             Member Recovery (Owner-6) ({recoveryCandidates.length})
           </button>
           <button
+            type="button"
             onClick={() => setActiveSubTab('agentKits')}
             className={`pb-2 transition-colors ${
               activeSubTab === 'agentKits' ? 'border-b-2 border-indigo-500 text-indigo-400' : 'text-slate-400 hover:text-white'
@@ -231,11 +287,13 @@ export const OwnerAnalyticsSection: React.FC<OwnerAnalyticsSectionProps> = ({
                     <span className="text-white">{cand.totalContributions} verified</span>
                   </div>
                   <button
-                    onClick={() => alert(`Sent gentle invitation and recommended resource link to ${cand.user?.name}.`)}
-                    className="flex items-center gap-1.5 rounded-md border border-indigo-700 bg-indigo-950/40 px-3 py-1.5 text-xs font-semibold text-indigo-300 hover:bg-indigo-900/60"
+                    type="button"
+                    disabled={!cand.user?.id || sendingRecoveryId === cand.user?.id}
+                    onClick={() => cand.user?.id && handleSendRecoveryPrompt(cand.user.id, cand.user.name || 'member')}
+                    className="flex items-center gap-1.5 rounded-md border border-indigo-700 bg-indigo-950/40 px-3 py-1.5 text-xs font-semibold text-indigo-300 hover:bg-indigo-900/60 disabled:opacity-50"
                   >
                     <HeartHandshake className="h-3.5 w-3.5" />
-                    <span>Send Re-engagement Prompt</span>
+                    <span>{sendingRecoveryId === cand.user?.id ? 'Sending...' : 'Send Re-engagement Prompt'}</span>
                   </button>
                 </div>
               </div>
@@ -275,6 +333,7 @@ export const OwnerAnalyticsSection: React.FC<OwnerAnalyticsSectionProps> = ({
                   </div>
 
                   <button
+                    type="button"
                     onClick={() => handleRunAgentKit(kit.id)}
                     disabled={executingAgentId === kit.id}
                     className="flex items-center gap-1.5 rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-500 disabled:opacity-50"

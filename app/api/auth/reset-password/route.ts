@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { ensureDatabaseHydrated } from '@/lib/db/store';
+import { ensureDatabaseHydrated, persistDatabaseNow } from '@/lib/db/store';
 import { getRuntimeEnv } from '@/lib/env';
 import { resetPassword } from '@/lib/services/auth';
 
@@ -17,10 +17,11 @@ export async function POST(req: NextRequest, _context?: any) {
     }
 
     await ensureDatabaseHydrated(env);
-    const result = resetPassword(token, newPassword);
+    const result = resetPassword(token, newPassword, env);
     if (!result.success) {
       return NextResponse.json({ success: false, error: result.error }, { status: 400 });
     }
+    await persistDatabaseNow(env);
 
     return NextResponse.json({
       success: true,

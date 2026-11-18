@@ -230,6 +230,7 @@ export const Header: React.FC<HeaderProps> = ({
                 ) : (
                   <a
                     href={`/api/discord/connect?mode=user&redirect=true&intent=${workspaceMode === 'owner' ? 'owner' : 'member'}`}
+                    target="_top"
                     title={isRtl ? 'إضافة وربط حساب Discord' : 'Add & Link your Discord account'}
                     className="flex items-center gap-1 rounded-md border border-[#5865F2]/50 bg-[#5865F2]/15 hover:bg-[#5865F2]/25 px-2 py-0.5 text-[11px] font-semibold text-[#9aa8ff] transition-colors whitespace-nowrap"
                   >
@@ -251,6 +252,7 @@ export const Header: React.FC<HeaderProps> = ({
                 ) : (
                   <a
                     href={`/api/auth/telegram/authorize?redirect=true&intent=${workspaceMode === 'owner' ? 'owner' : 'member'}`}
+                    target="_top"
                     title={isRtl ? 'إضافة وربط حساب Telegram' : 'Add & Link your Telegram account'}
                     className="flex items-center gap-1 rounded-md border border-[#229ED9]/50 bg-[#229ED9]/15 hover:bg-[#229ED9]/25 px-2 py-0.5 text-[11px] font-semibold text-[#5dc5f7] transition-colors whitespace-nowrap"
                   >
@@ -260,6 +262,7 @@ export const Header: React.FC<HeaderProps> = ({
                 )}
 
                 <button
+                  type="button"
                   onClick={onOpenAccountSettings}
                   title="Account & Linked Profiles Settings"
                   className="flex items-center gap-1.5 bg-slate-900/90 hover:bg-slate-800/90 border border-slate-700/80 rounded-md px-2 py-0.5 transition-colors cursor-pointer"
@@ -272,6 +275,7 @@ export const Header: React.FC<HeaderProps> = ({
                   <Settings className="h-3 w-3 text-slate-400 ml-0.5" />
                 </button>
                 <button
+                  type="button"
                   onClick={onSignOut}
                   title="Sign out of your account"
                   className="flex items-center gap-1 text-[11px] font-medium text-slate-400 hover:text-rose-300 transition-colors"

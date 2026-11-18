@@ -60,15 +60,20 @@ export const LinkManagerSection: React.FC<LinkManagerSectionProps> = ({
   const [linkDesc, setLinkDesc] = useState('');
   const [linkSlug, setLinkSlug] = useState('');
   const [linkAudience, setLinkAudience] = useState<CommunityLink['audience']>('public');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   const handleCreateLink = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!linkTitle.trim() || !linkSlug.trim()) return;
+    setFeedback(null);
+    setIsSubmitting(true);
 
     try {
       const res = await fetch('/api/data', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
           action: 'create_link',
           payload: {
@@ -82,47 +87,78 @@ export const LinkManagerSection: React.FC<LinkManagerSectionProps> = ({
         })
       });
       const data = await res.json();
-      if (data.success) {
-        setIsCreatingLink(false);
-        setLinkTitle('');
-        setLinkDesc('');
-        setLinkSlug('');
-        onRefresh();
+      if (!res.ok || !data.success) {
+        setFeedback({ type: 'error', text: data.error || 'Failed to create action link.' });
+        return;
       }
-    } catch (err) {
-      console.error('Failed to create link:', err);
+      setIsCreatingLink(false);
+      setLinkTitle('');
+      setLinkDesc('');
+      setLinkSlug('');
+      setFeedback({ type: 'success', text: `Action link /l/${data.result?.slug || ''} created cleanly.` });
+      onRefresh();
+    } catch (err: any) {
+      setFeedback({ type: 'error', text: err?.message || 'Network error creating action link.' });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   const handleRevoke = async (linkId: string) => {
+    setFeedback(null);
     try {
       const res = await fetch('/api/data', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
           action: 'revoke_link',
           payload: { linkId }
         })
       });
       const data = await res.json();
-      if (data.success) {
-        onRefresh();
+      if (!res.ok || !data.success) {
+        setFeedback({ type: 'error', text: data.error || 'Failed to revoke action link.' });
+        return;
       }
-    } catch (err) {
-      console.error('Failed to revoke link:', err);
+      setFeedback({ type: 'success', text: 'Action link revoked.' });
+      onRefresh();
+    } catch (err: any) {
+      setFeedback({ type: 'error', text: err?.message || 'Network error revoking link.' });
     }
   };
 
-  const handleCopy = (slug: string) => {
+  const handleCopy = async (slug: string) => {
     const origin = typeof window !== 'undefined' ? window.location.origin : 'https://community-outcome.ghazghazibahaeddin.workers.dev';
     const url = `${origin}/l/${slug}`;
-    navigator.clipboard.writeText(url);
-    setCopiedSlug(slug);
-    setTimeout(() => setCopiedSlug(null), 2500);
+    try {
+      if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(url);
+        setCopiedSlug(slug);
+        setTimeout(() => setCopiedSlug(null), 2500);
+      } else {
+        setFeedback({ type: 'error', text: `Copy URL manually: ${url}` });
+      }
+    } catch {
+      setFeedback({ type: 'error', text: `Clipboard restricted. Share URL: ${url}` });
+    }
   };
 
   return (
     <div className="space-y-6">
+      {feedback && (
+        <div
+          className={`rounded-xl border p-3 text-xs flex items-center justify-between gap-2 ${
+            feedback.type === 'success'
+              ? 'border-emerald-500/40 bg-emerald-950/40 text-emerald-300'
+              : 'border-rose-500/40 bg-rose-950/40 text-rose-300'
+          }`}
+        >
+          <span>{feedback.text}</span>
+          <button type="button" onClick={() => setFeedback(null)} className="text-slate-400 hover:text-white px-1">✕</button>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-3">
         <div>
@@ -135,6 +171,7 @@ export const LinkManagerSection: React.FC<LinkManagerSectionProps> = ({
         </div>
 
         <button
+          type="button"
           onClick={() => setIsCreatingLink(true)}
           className="flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-indigo-500 shrink-0"
         >
@@ -240,9 +277,10 @@ export const LinkManagerSection: React.FC<LinkManagerSectionProps> = ({
             </button>
             <button
               type="submit"
-              className="rounded-md bg-indigo-600 px-4 py-1.5 text-xs font-semibold text-white hover:bg-indigo-500"
+              disabled={isSubmitting}
+              className="rounded-md bg-indigo-600 px-4 py-1.5 text-xs font-semibold text-white hover:bg-indigo-500 disabled:opacity-50"
             >
-              Generate Link
+              {isSubmitting ? 'Generating...' : 'Generate Link'}
             </button>
           </div>
         </form>
@@ -284,6 +322,7 @@ export const LinkManagerSection: React.FC<LinkManagerSectionProps> = ({
 
                 <div className="flex items-center gap-2 shrink-0">
                   <button
+                    type="button"
                     onClick={() => handleCopy(link.slug)}
                     className="flex items-center gap-1 rounded-md border border-slate-700 bg-slate-800 px-2.5 py-1.5 text-xs text-slate-200 hover:text-white transition-colors"
                   >
@@ -293,6 +332,7 @@ export const LinkManagerSection: React.FC<LinkManagerSectionProps> = ({
 
                   {!link.isRevoked && (
                     <button
+                      type="button"
                       onClick={() => handleRevoke(link.id)}
                       title="Revoke Link"
                       className="flex h-7 w-7 items-center justify-center rounded-md border border-slate-800 bg-slate-900 text-slate-500 hover:text-rose-400 transition-colors"

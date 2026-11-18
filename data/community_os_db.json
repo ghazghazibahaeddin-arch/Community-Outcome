@@ -1730,29 +1730,14 @@
       "tier": "free",
       "status": "active",
       "provider": "manual",
-      "currentPeriodStart": "2026-11-17T18:01:45.401Z",
-      "currentPeriodEnd": "2027-11-17T18:01:45.401Z",
+      "currentPeriodStart": "2026-11-18T22:16:15.038Z",
+      "currentPeriodEnd": "2027-11-18T22:16:15.038Z",
       "cancelAtPeriodEnd": false,
       "amountUsd": 0,
       "currency": "USD",
       "billingInterval": "month",
-      "createdAt": "2026-11-17T18:01:45.401Z",
-      "updatedAt": "2026-11-17T18:01:45.401Z"
-    },
-    {
-      "id": "sub_free_comm_devforge",
-      "communityId": "comm_devforge",
-      "tier": "free",
-      "status": "active",
-      "provider": "manual",
-      "currentPeriodStart": "2026-11-17T18:02:07.823Z",
-      "currentPeriodEnd": "2027-11-17T18:02:07.823Z",
-      "cancelAtPeriodEnd": false,
-      "amountUsd": 0,
-      "currency": "USD",
-      "billingInterval": "month",
-      "createdAt": "2026-11-17T18:02:07.823Z",
-      "updatedAt": "2026-11-17T18:02:07.823Z"
+      "createdAt": "2026-11-18T22:16:15.038Z",
+      "updatedAt": "2026-11-18T22:16:15.038Z"
     }
   ]
 }

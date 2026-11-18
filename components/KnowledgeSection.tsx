@@ -35,15 +35,20 @@ export const KnowledgeSection: React.FC<KnowledgeSectionProps> = ({
   const [newSourceTitle, setNewSourceTitle] = useState('');
   const [newSourceUrl, setNewSourceUrl] = useState('');
   const [supersededContent, setSupersededContent] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   const handlePublish = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTitle.trim() || !newContent.trim()) return;
+    setFeedback(null);
+    setIsSubmitting(true);
 
     try {
       const res = await fetch('/api/data', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
           action: 'publish_knowledge',
           payload: {
@@ -58,27 +63,35 @@ export const KnowledgeSection: React.FC<KnowledgeSectionProps> = ({
         })
       });
       const data = await res.json();
-      if (data.success) {
-        setIsPublishing(false);
-        setNewTitle('');
-        setNewContent('');
-        setNewSourceTitle('');
-        setNewSourceUrl('');
-        onRefresh();
+      if (!res.ok || !data.success) {
+        setFeedback({ type: 'error', text: data.error || 'Failed to publish knowledge article.' });
+        return;
       }
-    } catch (err) {
-      console.error('Failed to publish knowledge:', err);
+      setIsPublishing(false);
+      setNewTitle('');
+      setNewContent('');
+      setNewSourceTitle('');
+      setNewSourceUrl('');
+      setFeedback({ type: 'success', text: 'Knowledge article published cleanly.' });
+      onRefresh();
+    } catch (err: any) {
+      setFeedback({ type: 'error', text: err?.message || 'Network error publishing knowledge.' });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   const handleSupersede = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!supersedingArticleId || !supersededContent.trim()) return;
+    setFeedback(null);
+    setIsSubmitting(true);
 
     try {
       const res = await fetch('/api/data', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
           action: 'supersede_knowledge',
           payload: {
@@ -89,22 +102,41 @@ export const KnowledgeSection: React.FC<KnowledgeSectionProps> = ({
         })
       });
       const data = await res.json();
-      if (data.success) {
-        setSupersedingArticleId(null);
-        setSupersededContent('');
-        onRefresh();
+      if (!res.ok || !data.success) {
+        setFeedback({ type: 'error', text: data.error || 'Failed to supersede article.' });
+        return;
       }
-    } catch (err) {
-      console.error('Failed to supersede article:', err);
+      setSupersedingArticleId(null);
+      setSupersededContent('');
+      setFeedback({ type: 'success', text: 'Knowledge revision published and prior version superseded.' });
+      onRefresh();
+    } catch (err: any) {
+      setFeedback({ type: 'error', text: err?.message || 'Network error superseding article.' });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   return (
     <div className="space-y-6">
+      {feedback && (
+        <div
+          className={`rounded-xl border p-3 text-xs flex items-center justify-between gap-2 ${
+            feedback.type === 'success'
+              ? 'border-emerald-500/40 bg-emerald-950/40 text-emerald-300'
+              : 'border-rose-500/40 bg-rose-950/40 text-rose-300'
+          }`}
+        >
+          <span>{feedback.text}</span>
+          <button type="button" onClick={() => setFeedback(null)} className="text-slate-400 hover:text-white px-1">✕</button>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-3">
         <div className="flex items-center gap-4 text-xs font-semibold">
           <button
+            type="button"
             onClick={() => setActiveSubTab('articles')}
             className={`pb-2 transition-colors ${
               activeSubTab === 'articles' ? 'border-b-2 border-indigo-500 text-indigo-400' : 'text-slate-400 hover:text-white'
@@ -113,6 +145,7 @@ export const KnowledgeSection: React.FC<KnowledgeSectionProps> = ({
             Knowledge Articles ({knowledge.length})
           </button>
           <button
+            type="button"
             onClick={() => setActiveSubTab('sourceCards')}
             className={`pb-2 transition-colors ${
               activeSubTab === 'sourceCards' ? 'border-b-2 border-indigo-500 text-indigo-400' : 'text-slate-400 hover:text-white'
@@ -124,6 +157,7 @@ export const KnowledgeSection: React.FC<KnowledgeSectionProps> = ({
 
         {activeSubTab === 'articles' && (
           <button
+            type="button"
             onClick={() => setIsPublishing(true)}
             className="flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-500 shrink-0"
           >
@@ -208,9 +242,10 @@ export const KnowledgeSection: React.FC<KnowledgeSectionProps> = ({
                 </button>
                 <button
                   type="submit"
-                  className="rounded-md bg-indigo-600 px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-indigo-500"
+                  disabled={isSubmitting}
+                  className="rounded-md bg-indigo-600 px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-indigo-500 disabled:opacity-50"
                 >
-                  Publish Article
+                  {isSubmitting ? 'Publishing...' : 'Publish Article'}
                 </button>
               </div>
             </form>
@@ -244,9 +279,10 @@ export const KnowledgeSection: React.FC<KnowledgeSectionProps> = ({
                 </button>
                 <button
                   type="submit"
-                  className="rounded-md bg-indigo-600 px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-indigo-500"
+                  disabled={isSubmitting}
+                  className="rounded-md bg-indigo-600 px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-indigo-500 disabled:opacity-50"
                 >
-                  Publish New Version
+                  {isSubmitting ? 'Publishing...' : 'Publish New Version'}
                 </button>
               </div>
             </form>
@@ -312,6 +348,7 @@ export const KnowledgeSection: React.FC<KnowledgeSectionProps> = ({
                 {k.status === 'current' && (
                   <div className="flex justify-end pt-2 border-t border-slate-800">
                     <button
+                      type="button"
                       onClick={() => {
                         setSupersedingArticleId(k.id);
                         setSupersededContent(k.content);

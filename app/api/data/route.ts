@@ -226,15 +226,40 @@ export async function POST(req: NextRequest, _context?: any) {
         break;
       }
 
-      case 'update_checklist':
-        result = dbOperations.updateTaskChecklist(payload.taskId, payload.checklistId, payload.completed);
+      case 'update_checklist': {
+        const actorId = authUser?.id || payload.memberId || payload.userId || 'usr_alex';
+        const targetTask = db.tasks.find(t => t.id === payload.taskId);
+        if (!targetTask) {
+          return NextResponse.json({ success: false, error: 'Task not found' }, { status: 404 });
+        }
+        if (isUserSuspendedInCommunity(actorId, targetTask.communityId)) {
+          return NextResponse.json({ success: false, error: 'Suspended members cannot update task checklists.' }, { status: 403 });
+        }
+        const role = getUserRoleInCommunity(actorId, targetTask.communityId);
+        const isStaff = ['platform_admin', 'community_owner', 'admin', 'task_manager', 'moderator'].includes(role);
+        if (targetTask.assigneeId && targetTask.assigneeId !== actorId && !isStaff) {
+          return NextResponse.json({ success: false, error: 'Unauthorized: only the assignee or community staff can update this checklist' }, { status: 403 });
+        }
+        result = dbOperations.updateTaskChecklist(payload.taskId, payload.checklistId, Boolean(payload.completed));
         break;
+      }
 
       case 'complete_task': {
         const memberId = authUser?.id || payload.memberId || 'usr_alex';
         const targetTask = db.tasks.find(t => t.id === payload.taskId);
-        if (targetTask && isUserSuspendedInCommunity(memberId, targetTask.communityId)) {
+        if (!targetTask) {
+          return NextResponse.json({ success: false, error: 'Task not found' }, { status: 404 });
+        }
+        if (targetTask.status === 'completed') {
+          return NextResponse.json({ success: false, error: 'Task has already been completed and submitted for review.' }, { status: 409 });
+        }
+        if (isUserSuspendedInCommunity(memberId, targetTask.communityId)) {
           return NextResponse.json({ success: false, error: 'Suspended members cannot submit deliverables in this community.' }, { status: 403 });
+        }
+        const role = getUserRoleInCommunity(memberId, targetTask.communityId);
+        const isStaff = ['platform_admin', 'community_owner', 'admin', 'task_manager'].includes(role);
+        if (targetTask.assigneeId && targetTask.assigneeId !== memberId && !isStaff) {
+          return NextResponse.json({ success: false, error: 'Unauthorized: only the task assignee or community staff can complete this task.' }, { status: 403 });
         }
         result = dbOperations.completeTaskWithEvidence(payload.taskId, payload.evidenceUrl, payload.description, memberId);
         break;
@@ -263,6 +288,9 @@ export async function POST(req: NextRequest, _context?: any) {
 
       case 'file_dispute': {
         const filedById = authUser?.id || payload.filedById || 'usr_tariq';
+        if (isUserSuspendedInCommunity(filedById, payload.communityId)) {
+          return NextResponse.json({ success: false, error: 'Suspended members cannot file disputes in this community.' }, { status: 403 });
+        }
         result = dbOperations.fileDispute({ ...payload, filedById });
         break;
       }
@@ -281,7 +309,30 @@ export async function POST(req: NextRequest, _context?: any) {
 
       case 'create_poll': {
         const creatorId = authUser?.id || payload.creatorId || 'usr_sarah';
+        if (isUserSuspendedInCommunity(creatorId, payload.communityId)) {
+          return NextResponse.json({ success: false, error: 'Suspended members cannot create polls in this community.' }, { status: 403 });
+        }
         result = dbOperations.createPoll({ ...payload, creatorId });
+        break;
+      }
+
+      case 'create_commitment': {
+        const committedById = authUser?.id || payload.committedById || 'usr_alex';
+        const commId = payload.communityId || 'comm_devforge';
+        if (isUserSuspendedInCommunity(committedById, commId)) {
+          return NextResponse.json({ success: false, error: 'Suspended members cannot create commitments in this community.' }, { status: 403 });
+        }
+        if (!String(payload.agreedWhat || '').trim()) {
+          return NextResponse.json({ success: false, error: 'Commitment agreement description is required.' }, { status: 400 });
+        }
+        result = dbOperations.createCommitment({
+          communityId: commId,
+          agreedWhat: String(payload.agreedWhat),
+          committedById,
+          expectingDeliveryId: payload.expectingDeliveryId || 'usr_sarah',
+          deadline: payload.deadline,
+          relatedRequestId: payload.relatedRequestId
+        });
         break;
       }
 
@@ -313,7 +364,18 @@ export async function POST(req: NextRequest, _context?: any) {
         if (!['platform_admin', 'community_owner', 'admin', 'moderator'].includes(role)) {
           return NextResponse.json({ success: false, error: 'Unauthorized: only community owners or staff can create action links' }, { status: 403 });
         }
-        result = dbOperations.createLink(payload);
+        if (!String(payload.title || '').trim() || !String(payload.slug || '').trim()) {
+          return NextResponse.json({ success: false, error: 'Link title and slug are required' }, { status: 400 });
+        }
+        result = dbOperations.createLink({
+          communityId: commId,
+          linkType: payload.linkType || 'link_9_help_request',
+          slug: String(payload.slug),
+          title: String(payload.title).trim(),
+          description: String(payload.description || '').trim(),
+          audience: payload.audience || 'public',
+          expiresAt: payload.expiresAt
+        });
         break;
       }
 
@@ -394,9 +456,20 @@ export async function POST(req: NextRequest, _context?: any) {
         result = dbOperations.createHandoff(payload);
         break;
 
-      case 'accept_handoff':
+      case 'accept_handoff': {
+        const actorId = authUser?.id || payload.actorId || 'usr_sarah';
+        const handoff = db.handoffs.find(h => h.id === payload.handoffId);
+        if (!handoff) {
+          return NextResponse.json({ success: false, error: 'Handoff not found' }, { status: 404 });
+        }
+        const role = getUserRoleInCommunity(actorId, handoff.communityId);
+        const isStaff = ['platform_admin', 'community_owner', 'admin', 'task_manager'].includes(role);
+        if (actorId !== handoff.nextOwnerId && !isStaff) {
+          return NextResponse.json({ success: false, error: 'Unauthorized: only the incoming owner or community staff can accept this handoff' }, { status: 403 });
+        }
         result = dbOperations.acceptHandoff(payload.handoffId);
         break;
+      }
 
       case 'declare_intent': {
         const memberId = authUser?.id || payload.memberId || 'usr_alex';
@@ -408,9 +481,36 @@ export async function POST(req: NextRequest, _context?: any) {
         result = dbOperations.bookAppointment(payload);
         break;
 
-      case 'execute_agent_kit':
+      case 'execute_agent_kit': {
+        const actorId = authUser?.id || payload.actorId || 'usr_sarah';
+        const kit = db.agentKits.find(a => a.id === payload.agentKitId);
+        if (!kit) {
+          return NextResponse.json({ success: false, error: 'Agent workflow kit not found' }, { status: 404 });
+        }
+        const role = getUserRoleInCommunity(actorId, kit.communityId);
+        if (!['platform_admin', 'community_owner', 'admin', 'moderator', 'task_manager'].includes(role)) {
+          return NextResponse.json({ success: false, error: 'Unauthorized: only community staff can run automation kits' }, { status: 403 });
+        }
         result = dbOperations.executeAgentKit(payload.agentKitId, payload.outcomeDesc);
         break;
+      }
+
+      case 'send_recovery_prompt': {
+        const actorId = authUser?.id || payload.actorId || 'usr_sarah';
+        const commId = payload.communityId || 'comm_devforge';
+        const role = getUserRoleInCommunity(actorId, commId);
+        if (!['platform_admin', 'community_owner', 'admin', 'moderator'].includes(role)) {
+          return NextResponse.json({ success: false, error: 'Unauthorized: only community owners or moderators can send recovery prompts' }, { status: 403 });
+        }
+        if (!payload.targetUserId) {
+          return NextResponse.json({ success: false, error: 'targetUserId is required' }, { status: 400 });
+        }
+        result = dbOperations.sendRecoveryPrompt(commId, payload.targetUserId, actorId);
+        if (!result) {
+          return NextResponse.json({ success: false, error: 'Target user not found' }, { status: 404 });
+        }
+        break;
+      }
 
       case 'simulate_discord_command':
         result = dbOperations.runDiscordCommandSimulation(payload.commandName, payload.role, payload.inputParams);
@@ -420,17 +520,41 @@ export async function POST(req: NextRequest, _context?: any) {
         result = runAllJourneyVerifications();
         break;
 
-      case 'set_data_mode':
+      case 'set_data_mode': {
+        const actorId = authUser?.id || payload.actorId || '';
+        const commId = payload.communityId || 'comm_devforge';
+        const role = actorId ? getUserRoleInCommunity(actorId, commId) : 'guest';
+        const isAnyOwner = Boolean(actorId && db.communities.some(c => c.ownerId === actorId));
+        if (!isAnyOwner && !['platform_admin', 'community_owner', 'admin'].includes(role)) {
+          return NextResponse.json({ success: false, error: 'Unauthorized: only community owners or admins can change platform data mode' }, { status: 403 });
+        }
         result = dbOperations.setDataMode(payload.mode);
         break;
+      }
 
-      case 'reset_to_clean_production':
+      case 'reset_to_clean_production': {
+        const actorId = authUser?.id || payload.actorId || '';
+        const commId = payload.communityId || 'comm_devforge';
+        const role = actorId ? getUserRoleInCommunity(actorId, commId) : 'guest';
+        const isAnyOwner = Boolean(actorId && db.communities.some(c => c.ownerId === actorId));
+        if (!isAnyOwner && !['platform_admin', 'community_owner', 'admin'].includes(role)) {
+          return NextResponse.json({ success: false, error: 'Unauthorized: only community owners or admins can reset workspace data' }, { status: 403 });
+        }
         result = dbOperations.resetToCleanProduction(payload.communityId);
         break;
+      }
 
-      case 'restore_demo_seed':
+      case 'restore_demo_seed': {
+        const actorId = authUser?.id || payload.actorId || '';
+        const commId = payload.communityId || 'comm_devforge';
+        const role = actorId ? getUserRoleInCommunity(actorId, commId) : 'guest';
+        const isAnyOwner = Boolean(actorId && db.communities.some(c => c.ownerId === actorId));
+        if (!isAnyOwner && !['platform_admin', 'community_owner', 'admin'].includes(role)) {
+          return NextResponse.json({ success: false, error: 'Unauthorized: only community owners or admins can restore demo seed' }, { status: 403 });
+        }
         result = dbOperations.restoreDemoSeed();
         break;
+      }
 
       case 'create_identity_challenge': {
         const targetUserId = authUser?.id || payload.userId || 'usr_sarah';
@@ -448,7 +572,7 @@ export async function POST(req: NextRequest, _context?: any) {
         if (!['platform_admin', 'community_owner', 'admin'].includes(role)) {
           return NextResponse.json({ success: false, error: 'Unauthorized: only community owners can manage member roles' }, { status: 403 });
         }
-        result = dbOperations.updateCommunityMemberRole(payload.communityId, payload.userId, payload.role);
+        result = dbOperations.updateCommunityMemberRole(payload.communityId, payload.userId, payload.role, actorId);
         break;
       }
 
@@ -520,7 +644,7 @@ export async function POST(req: NextRequest, _context?: any) {
           return NextResponse.json({ success: false, error: 'User not found' }, { status: 404 });
         }
         if (payload.name) targetUser.name = payload.name;
-        if (payload.bio) {
+        if (payload.bio !== undefined) {
           targetUser.bio = payload.bio;
           if (targetUser.passport) targetUser.passport.biography = payload.bio;
         }
@@ -600,6 +724,24 @@ export async function POST(req: NextRequest, _context?: any) {
         const userId = authUser?.id || payload.userId;
         if (!userId) {
           return NextResponse.json({ success: false, error: 'Authentication required to redeem invite code' }, { status: 401 });
+        }
+        const normalizedCode = String(payload.code || '').trim().toUpperCase();
+        const inv = (db.inviteCodes || []).find(i => i.code.toUpperCase() === normalizedCode);
+        if (inv) {
+          if (isUserSuspendedInCommunity(userId, inv.communityId)) {
+            return NextResponse.json({ success: false, error: 'Your membership in this community is currently suspended.' }, { status: 403 });
+          }
+          const alreadyMember = db.memberships?.some(m => m.communityId === inv.communityId && m.userId === userId);
+          if (!alreadyMember) {
+            const limitCheck = verifyCommunityEntitlement(inv.communityId, 'member_limit');
+            if (!limitCheck.allowed) {
+              return NextResponse.json({
+                success: false,
+                error: limitCheck.reason,
+                upgradeUrl: limitCheck.upgradeUrl
+              }, { status: 403 });
+            }
+          }
         }
         const redeemed = dbOperations.redeemInviteCode(String(payload.code || ''), userId);
         if (!redeemed.success) {
@@ -743,9 +885,15 @@ export async function POST(req: NextRequest, _context?: any) {
         break;
       }
 
-      case 'mark_notification_read':
-        result = dbOperations.markNotificationRead(payload.notificationId || payload.notifId);
+      case 'mark_notification_read': {
+        const notifId = payload.notificationId || payload.notifId;
+        const notif = db.notifications.find(n => n.id === notifId);
+        if (notif && authUser && notif.userId !== authUser.id && authUser.platformRole !== 'platform_admin') {
+          return NextResponse.json({ success: false, error: 'Unauthorized: cannot mark another user notification read' }, { status: 403 });
+        }
+        result = dbOperations.markNotificationRead(notifId);
         break;
+      }
 
       case 'mark_all_notifications_read': {
         const targetUserId = authUser?.id || payload.userId;

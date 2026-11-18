@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { ensureDatabaseHydrated, getDatabase, saveDatabase } from '@/lib/db/store';
+import { ensureDatabaseHydrated, getDatabase, persistDatabaseNow, saveDatabase } from '@/lib/db/store';
 import {
   createSession,
   getAuthenticatedUserFromRequest,
@@ -123,6 +123,7 @@ export async function GET(req: NextRequest, _context?: any) {
       if (username) userToUpdate.identities.telegramUsername = username;
       userToUpdate.identities.linkedAt = new Date().toISOString();
       saveDatabase(db);
+      await persistDatabaseNow(env);
 
       const targetQuery =
         intent === 'owner'
@@ -197,6 +198,7 @@ export async function GET(req: NextRequest, _context?: any) {
 
   // Create persistent session
   const session = createSession(user.id, req.headers.get('user-agent') || undefined);
+  await persistDatabaseNow(env);
   const ownsAnyCommunity = (db.communities || []).some((c) => c.ownerId === user!.id);
   const targetTab = intent === 'owner' ? 'owner' : 'member';
   const onboardingParam = intent === 'owner' && !ownsAnyCommunity ? '&onboarding=owner' : '';

@@ -263,7 +263,9 @@ export default function HomePage() {
         'provider',
         'account_updated',
         'connected',
-        'discord_status'
+        'discord_status',
+        'discord_error',
+        'auth_error'
       ];
       let urlChanged = false;
       for (const k of transientKeys) {
@@ -516,11 +518,18 @@ export default function HomePage() {
     setCurrentCommunityId(id);
     const targetComm = communities.find((c) => c.id === id);
     if (targetComm && authUser) {
-      const isOwner = targetComm.ownerId === authUser.id || authUser.platformRole === 'platform_admin';
-      const newRole = isOwner ? 'community_owner' : 'member';
+      const mem = memberships.find((m) => m.communityId === id && m.userId === authUser.id);
+      const isPlatformAdmin = authUser.platformRole === 'platform_admin';
+      const isOwner = targetComm.ownerId === authUser.id || isPlatformAdmin;
+      const newRole: UserRole = isPlatformAdmin
+        ? 'platform_admin'
+        : targetComm.ownerId === authUser.id
+        ? 'community_owner'
+        : mem?.role || 'member';
       setCurrentUserRole(newRole);
-      // Auto-switch away from Owner Workspace if user is not an owner in this community
-      if (!isOwner && workspaceMode === 'owner') {
+      // Auto-switch away from Owner Workspace if user has no governance role in this community
+      const hasGovernanceAccess = isOwner || ['admin', 'moderator', 'reviewer', 'task_manager'].includes(newRole);
+      if (!hasGovernanceAccess && workspaceMode === 'owner') {
         setWorkspaceMode('member');
       }
     }
@@ -783,12 +792,13 @@ export default function HomePage() {
       />
 
       {/* Main Content Viewport (Adapts to Desktop / Auto / Mobile Preview) */}
+      <div className={deviceMode === 'desktop' ? 'w-full overflow-x-auto' : 'w-full'}>
       <main
         className={`min-h-[calc(100vh-140px)] ${
           deviceMode === 'mobile'
             ? 'max-w-md mx-auto border-x border-slate-800/80 shadow-2xl pb-24'
             : deviceMode === 'desktop'
-            ? 'min-w-[960px] pb-8'
+            ? 'min-w-[960px] pb-16 lg:pb-8'
             : 'pb-20 md:pb-8'
         }`}
       >
@@ -1334,6 +1344,7 @@ export default function HomePage() {
           </div>
         )}
       </main>
+      </div>
 
       {/* Create Community Onboarding Modal */}
       <CreateCommunityModal
@@ -1386,6 +1397,31 @@ export default function HomePage() {
         onSelectRole={handleOnboardingSelect}
         onClose={() => setIsOnboardingOpen(false)}
       />
+
+      {/* Mobile Recovery Strip when Desktop Preview is forced on small screens */}
+      {deviceMode === 'desktop' && (
+        <div className="fixed bottom-0 left-0 right-0 z-40 flex h-12 items-center justify-between border-t border-slate-800 bg-[#090d16]/95 px-4 backdrop-blur-md lg:hidden">
+          <span className="text-[11px] text-slate-400">
+            {lang === 'ar' ? 'معاينة سطح المكتب مفعلة' : 'Desktop preview active'}
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setDeviceMode('auto')}
+              className="min-h-[34px] rounded-md bg-indigo-600 px-3 text-[11px] font-semibold text-white hover:bg-indigo-500"
+            >
+              {lang === 'ar' ? 'عودة للتلقائي' : 'Back to Auto'}
+            </button>
+            <button
+              type="button"
+              onClick={() => setWorkspaceMode('devices')}
+              className="min-h-[34px] rounded-md border border-slate-700 bg-slate-800 px-3 text-[11px] font-semibold text-slate-200 hover:text-white"
+            >
+              {lang === 'ar' ? 'الأجهزة' : 'Devices'}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Mobile Bottom Thumb Navigation Bar (Respects <=15% sticky height, min-h-[44px] targets) */}
       <nav

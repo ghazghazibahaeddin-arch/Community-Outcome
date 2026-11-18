@@ -662,6 +662,7 @@ export const MemberWorkspace: React.FC<MemberWorkspaceProps> = ({
           ) : (
             <a
               href="/api/discord/connect?mode=user&redirect=true"
+              target="_top"
               className="inline-flex items-center gap-1.5 rounded-lg border border-[#5865F2]/50 bg-[#5865F2]/15 hover:bg-[#5865F2]/25 px-2.5 py-1 text-xs font-semibold text-[#9aa8ff] transition-colors whitespace-nowrap"
             >
               <Bot className="h-3.5 w-3.5" />
@@ -677,6 +678,7 @@ export const MemberWorkspace: React.FC<MemberWorkspaceProps> = ({
           ) : (
             <a
               href="/api/auth/telegram/authorize?redirect=true"
+              target="_top"
               className="inline-flex items-center gap-1.5 rounded-lg border border-[#229ED9]/50 bg-[#229ED9]/15 hover:bg-[#229ED9]/25 px-2.5 py-1 text-xs font-semibold text-[#5dc5f7] transition-colors whitespace-nowrap"
             >
               <Send className="h-3.5 w-3.5" />
@@ -1832,6 +1834,7 @@ export const MemberWorkspace: React.FC<MemberWorkspaceProps> = ({
                   <div className="flex flex-wrap items-center gap-2">
                     <a
                       href="/api/discord/connect?mode=user&redirect=true"
+                      target="_top"
                       className="inline-flex items-center gap-1.5 rounded-lg border border-[#5865F2]/40 bg-[#5865F2]/15 hover:bg-[#5865F2]/25 px-3 py-1.5 text-xs font-semibold text-[#9aa8ff] transition-all"
                     >
                       <Bot className="h-3.5 w-3.5" />
@@ -1878,6 +1881,7 @@ export const MemberWorkspace: React.FC<MemberWorkspaceProps> = ({
                   </p>
                   <a
                     href="/api/discord/connect?mode=user&redirect=true"
+                    target="_top"
                     className="inline-flex items-center gap-2 rounded-lg bg-[#5865F2] hover:bg-[#4956e0] px-4 py-2 text-xs font-bold text-white transition-all shadow"
                   >
                     <Bot className="h-4 w-4" />
@@ -1985,6 +1989,7 @@ export const MemberWorkspace: React.FC<MemberWorkspaceProps> = ({
                   <div className="flex flex-wrap items-center gap-2">
                     <a
                       href="/api/auth/telegram/authorize?redirect=true"
+                      target="_top"
                       className="inline-flex items-center gap-1.5 rounded-lg border border-[#229ED9]/40 bg-[#229ED9]/15 hover:bg-[#229ED9]/25 px-3 py-1.5 text-xs font-semibold text-[#5dc5f7] transition-all"
                     >
                       <Send className="h-3.5 w-3.5" />
@@ -2032,6 +2037,7 @@ export const MemberWorkspace: React.FC<MemberWorkspaceProps> = ({
                   <div className="flex flex-wrap items-center gap-2">
                     <a
                       href="/api/auth/telegram/authorize?redirect=true"
+                      target="_top"
                       className="inline-flex items-center gap-2 rounded-lg bg-[#229ED9] hover:bg-[#1e8ec3] px-4 py-2 text-xs font-bold text-white transition-all shadow"
                     >
                       <Send className="h-4 w-4" />

@@ -263,6 +263,7 @@ export interface ExecutionPlan {
 export interface PlanTask {
   id: string;
   planId?: string;
+  requestId?: string;
   communityId: string;
   title: string;
   description: string;

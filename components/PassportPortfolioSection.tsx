@@ -478,6 +478,7 @@ export const PassportPortfolioSection: React.FC<PassportPortfolioSectionProps> =
                   </button>
                   <a
                     href="/api/discord/connect?mode=user&redirect=true"
+                    target="_top"
                     className="rounded-md border border-[#5865F2]/40 bg-[#5865F2]/10 px-3 py-1.5 text-xs font-semibold text-[#8ea1ff] hover:bg-[#5865F2]/20"
                   >
                     Link with Discord OAuth
@@ -507,6 +508,7 @@ export const PassportPortfolioSection: React.FC<PassportPortfolioSectionProps> =
                   </button>
                   <a
                     href="/api/auth/telegram/authorize?redirect=true"
+                    target="_top"
                     className="rounded-md border border-[#229ED9]/40 bg-[#229ED9]/10 px-3 py-1.5 text-xs font-semibold text-[#54bbf0] hover:bg-[#229ED9]/20"
                   >
                     Link with Telegram OIDC

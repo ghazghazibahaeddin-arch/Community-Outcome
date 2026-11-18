@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createOrGetReferral, trackReferralEvent } from '@/lib/services/subscriptionService';
-import { ensureDatabaseHydrated } from '@/lib/db/store';
+import { ensureDatabaseHydrated, persistDatabaseNow } from '@/lib/db/store';
 import { getAuthenticatedUserFromRequest } from '@/lib/services/auth';
 import { getVerifiedAppUrl } from '@/lib/services/securityConfig';
 import { getRuntimeEnv } from '@/lib/env';
@@ -24,6 +24,7 @@ export async function GET(req: NextRequest, _context?: any) {
     if (!result.success || !result.referral) {
       return NextResponse.json({ success: false, error: 'Referral code not found' }, { status: 404 });
     }
+    await persistDatabaseNow(env);
 
     const appUrl = getVerifiedAppUrl(env);
     const ref = result.referral;
@@ -76,6 +77,7 @@ export async function POST(req: NextRequest, _context?: any) {
       targetType,
       targetId
     });
+    await persistDatabaseNow(env);
 
     const appUrl = getVerifiedAppUrl(env);
     let shareUrl = `${appUrl}/?ref=${referral.referralCode}&communityId=${communityId}`;

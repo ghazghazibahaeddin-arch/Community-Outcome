@@ -199,7 +199,9 @@ export async function POST(req: NextRequest, _context?: any) {
 
       // COMMAND: /requests
       if (commandName === 'requests') {
-        const openReqs = db.requests.filter((r) => r.communityId === community.id && r.status === 'open');
+        const openReqs = db.requests.filter(
+          (r) => r.communityId === community.id && (r.status === 'open' || r.status === 'receiving_offers')
+        );
         if (openReqs.length === 0) {
           return NextResponse.json({
             type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
@@ -471,7 +473,9 @@ export async function POST(req: NextRequest, _context?: any) {
       }
 
       if (customId === 'btn_requests') {
-        const openReqs = db.requests.filter((r) => r.communityId === community.id && r.status === 'open');
+        const openReqs = db.requests.filter(
+          (r) => r.communityId === community.id && (r.status === 'open' || r.status === 'receiving_offers')
+        );
         const list = openReqs.length === 0
           ? 'Zero open help requests currently pending.'
           : openReqs.slice(0, 3).map(r => `• **${r.title}** [${r.priority.toUpperCase()}]`).join('\n');

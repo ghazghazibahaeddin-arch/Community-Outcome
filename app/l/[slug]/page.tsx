@@ -521,6 +521,7 @@ export default function ActionLinkPage() {
               <div className="flex flex-wrap items-center gap-2">
                 <a
                   href="/api/auth/telegram/authorize?redirect=true"
+                  target="_top"
                   className="inline-flex items-center gap-1.5 rounded-md bg-sky-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-sky-500 transition-colors"
                 >
                   <Link2 className="h-3.5 w-3.5" />
@@ -528,6 +529,7 @@ export default function ActionLinkPage() {
                 </a>
                 <a
                   href="/api/discord/connect?mode=user&redirect=true"
+                  target="_top"
                   className="inline-flex items-center gap-1.5 rounded-md border border-indigo-500/40 bg-indigo-600/20 px-3 py-1.5 text-xs font-semibold text-indigo-200 hover:bg-indigo-600/30 transition-colors"
                 >
                   <ExternalLink className="h-3.5 w-3.5" />

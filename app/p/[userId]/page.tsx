@@ -35,7 +35,7 @@ export default function PublicPassportPage() {
 
     const fetchProfile = async () => {
       try {
-        const res = await fetch('/api/data');
+        const res = await fetch('/api/data?communityId=all', { cache: 'no-store' });
         const json = (await res.json()) as any;
         if (json.success && json.data) {
           const found = (json.data.users || []).find((u: User) => u.id === userId);
@@ -98,6 +98,7 @@ export default function PublicPassportPage() {
             This member passport does not exist or has been made private by its owner.
           </p>
           <button
+            type="button"
             onClick={() => router.push('/')}
             className="rounded-lg bg-indigo-600 px-4 py-2 text-xs font-semibold text-white hover:bg-indigo-500"
           >
@@ -123,6 +124,7 @@ export default function PublicPassportPage() {
             In compliance with Community OS Section 13 Privacy Invariants, the owner of this passport has disabled public discovery.
           </p>
           <button
+            type="button"
             onClick={() => router.push('/')}
             className="rounded-lg bg-indigo-600 px-4 py-2 text-xs font-semibold text-white hover:bg-indigo-500"
           >
@@ -142,6 +144,7 @@ export default function PublicPassportPage() {
       <header className="border-b border-slate-800/80 bg-slate-950/80 backdrop-blur-md px-4 py-3 sticky top-0 z-50">
         <div className="max-w-4xl mx-auto flex items-center justify-between">
           <button
+            type="button"
             onClick={() => router.push('/')}
             className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-white transition-colors"
           >
@@ -151,6 +154,7 @@ export default function PublicPassportPage() {
 
           <div className="flex items-center gap-2">
             <button
+              type="button"
               onClick={handleShare}
               className="flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:bg-slate-700 transition-all"
             >

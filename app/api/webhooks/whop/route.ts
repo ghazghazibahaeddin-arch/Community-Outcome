@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { ensureDatabaseHydrated } from '@/lib/db/store';
+import { ensureDatabaseHydrated, persistDatabaseNow } from '@/lib/db/store';
 import { verifyWhopWebhook, processVerifiedPaymentEvent } from '@/lib/services/paymentService';
 import { getRuntimeEnv } from '@/lib/env';
 
@@ -30,6 +30,7 @@ export async function POST(req: NextRequest, _context?: any) {
     if (!processResult.success) {
       return NextResponse.json({ success: false, error: processResult.message }, { status: 400 });
     }
+    await persistDatabaseNow(env);
 
     return NextResponse.json({
       success: true,

@@ -1406,6 +1406,27 @@ let lastHydratedAt = 0;
 let hydrationInFlight: Promise<DatabaseSchema> | null = null;
 const HYDRATION_TTL_MS = 2000;
 
+const SPARSE_ARRAY_KEYS = new Set(['checklist', 'evidenceIds', 'rules']);
+const SPARSE_SCALAR_KEYS = new Set([
+  'assignedOfferId',
+  'assignedMemberId',
+  'statusNotes',
+  'allowedCommunityIds',
+  'moderationStatus',
+  'moderationNote',
+  'warningsCount',
+  'onboardingStatus',
+  'category',
+  'expectedOutput',
+  'outputExpected',
+  'acceptanceCriteria',
+  'rewardRecognition',
+  'experienceDescription',
+  'availability',
+  'estimatedHours',
+  'requestId'
+]);
+
 function mergeById<T>(existing: T[] = [], incoming: T[] = [], idKey: string = 'id'): T[] {
   if (!Array.isArray(incoming) || incoming.length === 0) return existing;
   const map = new Map<string, T>();
@@ -1415,7 +1436,33 @@ function mergeById<T>(existing: T[] = [], incoming: T[] = [], idKey: string = 'i
   }
   for (const item of incoming) {
     const key = String((item as any)?.[idKey] ?? '');
-    if (key) map.set(key, item);
+    if (!key) continue;
+    const prev = map.get(key) as Record<string, any> | undefined;
+    if (!prev) {
+      map.set(key, item);
+      continue;
+    }
+    const merged: Record<string, any> = { ...prev, ...(item as Record<string, any>) };
+    for (const k of SPARSE_ARRAY_KEYS) {
+      if (Array.isArray(prev[k]) && prev[k].length > 0 && (!Array.isArray(merged[k]) || merged[k].length === 0)) {
+        merged[k] = prev[k];
+      }
+    }
+    for (const k of SPARSE_SCALAR_KEYS) {
+      const incVal = (item as Record<string, any>)[k];
+      if (
+        prev[k] !== undefined &&
+        prev[k] !== null &&
+        (incVal === undefined ||
+          incVal === null ||
+          (k === 'onboardingStatus' && incVal === 'first_action_completed') ||
+          (k === 'category' && incVal === 'General') ||
+          (k === 'experienceDescription' && incVal === 'Synced from Community OS repository'))
+      ) {
+        merged[k] = prev[k];
+      }
+    }
+    map.set(key, merged as T);
   }
   return Array.from(map.values());
 }
@@ -1449,6 +1496,7 @@ export async function ensureDatabaseHydrated(explicitEnv?: CloudflareEnv, force 
         if (remote.communities?.length) db.communities = mergeById(db.communities, remote.communities, 'id');
         if (remote.memberships?.length) db.memberships = mergeById(db.memberships, remote.memberships, 'id');
         if (remote.requests?.length) db.requests = mergeById(db.requests, remote.requests, 'id');
+        if (remote.offers?.length) db.offers = mergeById(db.offers, remote.offers, 'id');
         if (remote.tasks?.length) db.tasks = mergeById(db.tasks, remote.tasks, 'id');
         if (remote.contributions?.length) db.contributions = mergeById(db.contributions, remote.contributions, 'id');
         if (remote.subscriptions?.length) db.subscriptions = mergeById(db.subscriptions || [], remote.subscriptions, 'id');
@@ -1457,6 +1505,7 @@ export async function ensureDatabaseHydrated(explicitEnv?: CloudflareEnv, force 
         if (remote.groupConnectionChallenges?.length) {
           db.groupConnectionChallenges = mergeById(db.groupConnectionChallenges || [], remote.groupConnectionChallenges, 'id');
         }
+        if (remote.auditLogs?.length) db.auditLogs = mergeById(db.auditLogs || [], remote.auditLogs, 'id');
         lastHydratedAt = Date.now();
       }
     } catch (err: any) {
@@ -1812,6 +1861,7 @@ export const dbOperations = {
     const newTask: PlanTask = {
       id: `tsk_${Date.now()}`,
       communityId: offer.communityId,
+      requestId: req?.id,
       title: req ? `Deliver: ${req.title}` : 'Accepted Assistance Deliverable',
       description: offer.proposedHelp,
       expectedOutput: 'Completed work with attached verifiable evidence.',
@@ -1847,18 +1897,27 @@ export const dbOperations = {
     };
     db.commitments.unshift(newCommitment);
 
-    // Notify requester
+    // Notify helper whose offer was accepted (and record audit log)
     db.notifications.unshift({
       id: `notif_${Date.now()}`,
-      userId: req?.creatorId || offer.memberId,
+      userId: offer.memberId,
       communityId: offer.communityId,
-      title: 'Offer Accepted',
-      message: `Offer accepted and task tsk_${newTask.id} created.`,
+      title: 'Offer Accepted & Task Assigned',
+      message: `Your offer for "${req?.title || 'Help Request'}" was accepted! Task ${newTask.id} is now in your active tasks.`,
       linkUrl: '/tasks',
       type: 'task',
       read: false,
       channelAttempts: { inApp: true, discord: true, telegram: true },
       createdAt: new Date().toISOString()
+    });
+
+    db.auditLogs.unshift({
+      id: `aud_${Date.now()}`,
+      communityId: offer.communityId,
+      actorId: req?.creatorId || offer.memberId,
+      action: 'offer_accepted',
+      details: `Accepted offer ${offer.id} from ${offer.memberId}; created task ${newTask.id}`,
+      timestamp: new Date().toISOString()
     });
 
     saveDatabase(db);
@@ -2003,7 +2062,7 @@ export const dbOperations = {
   completeTaskWithEvidence: (taskId: string, evidenceUrl: string, description: string, memberId: string) => {
     const db = getDatabase();
     const task = db.tasks.find(t => t.id === taskId);
-    if (!task) return null;
+    if (!task || task.status === 'completed') return null;
     task.status = 'completed';
 
     // Create contribution in Contribution Ledger
@@ -2033,14 +2092,40 @@ export const dbOperations = {
     db.contributions.unshift(newContribution);
     task.evidenceIds.push(newContribution.id);
 
-    // Fulfill corresponding commitment if exists
-    const commitment = db.commitments.find(c => c.committedById === memberId && c.status === 'active');
+    // Fulfill corresponding commitment (preferring exact request/task match)
+    const commitment =
+      db.commitments.find(
+        c =>
+          c.committedById === memberId &&
+          c.status === 'active' &&
+          ((task.requestId && c.relatedRequestId === task.requestId) ||
+            task.title.toLowerCase().includes(c.agreedWhat.toLowerCase()) ||
+            c.agreedWhat.toLowerCase().includes(task.title.replace(/^Deliver:\s*/i, '').toLowerCase()))
+      ) ||
+      db.commitments.find(c => c.committedById === memberId && c.communityId === task.communityId && c.status === 'active');
     if (commitment) {
       commitment.status = 'fulfilled';
       commitment.history.push({
         timestamp: new Date().toISOString(),
         note: `Fulfillment submitted via contribution ${newContribution.id}`,
         authorId: memberId
+      });
+    }
+
+    // Notify community owner when a member completes a deliverable
+    const comm = db.communities.find(c => c.id === task.communityId);
+    if (comm?.ownerId && comm.ownerId !== memberId) {
+      db.notifications.unshift({
+        id: `notif_${Date.now()}`,
+        userId: comm.ownerId,
+        communityId: task.communityId,
+        title: 'Task Deliverable Ready for Review',
+        message: `Task "${task.title}" was marked completed with evidence (${newContribution.id}).`,
+        linkUrl: '/contributions',
+        type: 'review',
+        read: false,
+        channelAttempts: { inApp: true, discord: true, telegram: true },
+        createdAt: new Date().toISOString()
       });
     }
 
@@ -2131,32 +2216,37 @@ export const dbOperations = {
     if (decision === 'verified') {
       contribution.secondPartyConfirmed = true;
 
-      // Auto-create Portable Outcome Record
-      const newOutcome: OutcomeRecord = {
-        id: `out_${Date.now()}`,
-        communityId: contribution.communityId,
-        objective: contribution.title,
-        participatingMemberIds: [contribution.memberId, reviewerId],
-        deliveredResult: contribution.description,
-        confirmationStatus: 'verified',
-        evidenceUrls: contribution.evidence.map(e => e.url),
-        date: new Date().toISOString().split('T')[0],
-        shareable: true
-      };
-      db.outcomes.unshift(newOutcome);
+      // Auto-create Portable Outcome Record (avoid duplicates if already minted)
+      const alreadyHasOutcome = db.outcomes.some(
+        o => o.communityId === contribution.communityId && o.objective === contribution.title && o.participatingMemberIds.includes(contribution.memberId)
+      );
+      if (!alreadyHasOutcome) {
+        const newOutcome: OutcomeRecord = {
+          id: `out_${Date.now()}`,
+          communityId: contribution.communityId,
+          objective: contribution.title,
+          participatingMemberIds: [contribution.memberId, reviewerId],
+          deliveredResult: contribution.description,
+          confirmationStatus: 'verified',
+          evidenceUrls: contribution.evidence.map(e => e.url),
+          date: new Date().toISOString().split('T')[0],
+          shareable: true
+        };
+        db.outcomes.unshift(newOutcome);
 
-      // Add to member's portfolio items
-      const newPortfolioItem: OutcomePortfolioItem = {
-        id: `port_${Date.now()}`,
-        userId: contribution.memberId,
-        outcomeRecordId: newOutcome.id,
-        title: contribution.title,
-        roleDescription: 'Verified Contributor',
-        communityName: db.communities.find(c => c.id === contribution.communityId)?.name || 'Community OS',
-        featured: true,
-        isPublic: true
-      };
-      db.portfolioItems.unshift(newPortfolioItem);
+        // Add to member's portfolio items
+        const newPortfolioItem: OutcomePortfolioItem = {
+          id: `port_${Date.now()}`,
+          userId: contribution.memberId,
+          outcomeRecordId: newOutcome.id,
+          title: contribution.title,
+          roleDescription: 'Verified Contributor',
+          communityName: db.communities.find(c => c.id === contribution.communityId)?.name || 'Community OS',
+          featured: true,
+          isPublic: true
+        };
+        db.portfolioItems.unshift(newPortfolioItem);
+      }
 
       // Audit Log
       db.auditLogs.unshift({
@@ -2165,6 +2255,37 @@ export const dbOperations = {
         actorId: reviewerId,
         action: 'contribution_verified',
         details: `Verified contribution "${contribution.title}" for member ${contribution.memberId}`,
+        timestamp: new Date().toISOString()
+      });
+    } else if (decision === 'disputed') {
+      const hasOpenDispute = db.disputes.some(
+        d => d.contributionId === contribution.id && d.status === 'open'
+      );
+      if (!hasOpenDispute) {
+        db.disputes.unshift({
+          id: `disp_${Date.now()}`,
+          communityId: contribution.communityId,
+          contributionId: contribution.id,
+          filedById: reviewerId,
+          reason: reason || 'Reviewer flagged contribution for Community Shield audit',
+          evidenceLinks: contribution.evidence.map(e => e.url),
+          status: 'open',
+          auditTrail: [
+            {
+              timestamp: new Date().toISOString(),
+              action: 'Dispute opened during contribution review.',
+              actorId: reviewerId
+            }
+          ],
+          createdAt: new Date().toISOString()
+        });
+      }
+      db.auditLogs.unshift({
+        id: `aud_${Date.now()}`,
+        communityId: contribution.communityId,
+        actorId: reviewerId,
+        action: 'contribution_disputed',
+        details: `Flagged contribution "${contribution.title}" for dispute audit`,
         timestamp: new Date().toISOString()
       });
     }
@@ -2218,6 +2339,32 @@ export const dbOperations = {
       cnt.reviewStatus = 'disputed';
     }
 
+    const comm = db.communities.find(c => c.id === disp.communityId);
+    if (!db.notifications) db.notifications = [];
+    if (comm?.ownerId && comm.ownerId !== disp.filedById) {
+      db.notifications.unshift({
+        id: `ntf_dsp_new_${Date.now()}`,
+        userId: comm.ownerId,
+        communityId: disp.communityId,
+        title: 'New Community Shield Dispute Filed',
+        message: `Dispute opened on contribution ${disp.contributionId}: ${disp.reason}`,
+        linkUrl: '/trust',
+        type: 'dispute',
+        read: false,
+        channelAttempts: { inApp: true, discord: false, telegram: false },
+        createdAt: newDispute.createdAt
+      });
+    }
+
+    db.auditLogs.unshift({
+      id: `aud_${Date.now()}`,
+      communityId: disp.communityId,
+      actorId: disp.filedById,
+      action: 'dispute_filed',
+      details: `Filed dispute ${newDispute.id} on contribution ${disp.contributionId}`,
+      timestamp: newDispute.createdAt
+    });
+
     saveDatabase(db);
     return newDispute;
   },
@@ -2233,6 +2380,73 @@ export const dbOperations = {
       action: `Dispute ${decision}: ${resolution}`,
       actorId: reviewerId
     });
+
+    // Synchronize linked Contribution status when dispute resolves
+    const cnt = db.contributions.find(c => c.id === disp.contributionId);
+    if (cnt && decision === 'resolved' && cnt.reviewStatus === 'disputed') {
+      const lowerRes = (resolution || '').toLowerCase();
+      const shouldReject = lowerRes.includes('reject') || lowerRes.includes('upheld rejection') || lowerRes.includes('invalid');
+      cnt.reviewStatus = shouldReject ? 'rejected' : 'verified';
+      cnt.reviewerId = reviewerId;
+      cnt.decisionReason = resolution;
+      if (!shouldReject) {
+        cnt.secondPartyConfirmed = true;
+        const alreadyHasOutcome = db.outcomes.some(
+          o => o.communityId === cnt.communityId && o.objective === cnt.title && o.participatingMemberIds.includes(cnt.memberId)
+        );
+        if (!alreadyHasOutcome) {
+          const newOutcome: OutcomeRecord = {
+            id: `out_${Date.now()}`,
+            communityId: cnt.communityId,
+            objective: cnt.title,
+            participatingMemberIds: [cnt.memberId, reviewerId],
+            deliveredResult: cnt.description,
+            confirmationStatus: 'verified',
+            evidenceUrls: cnt.evidence.map(e => e.url),
+            date: new Date().toISOString().split('T')[0],
+            shareable: true
+          };
+          db.outcomes.unshift(newOutcome);
+          db.portfolioItems.unshift({
+            id: `port_${Date.now()}`,
+            userId: cnt.memberId,
+            outcomeRecordId: newOutcome.id,
+            title: cnt.title,
+            roleDescription: 'Verified Contributor',
+            communityName: db.communities.find(c => c.id === cnt.communityId)?.name || 'Community OS',
+            featured: true,
+            isPublic: true
+          });
+        }
+      }
+    }
+
+    if (!db.notifications) db.notifications = [];
+    const recipientIds = Array.from(new Set([disp.filedById, cnt?.memberId].filter(Boolean) as string[]));
+    recipientIds.forEach((uid, idx) => {
+      db.notifications.unshift({
+        id: `ntf_dsp_res_${Date.now()}_${idx}`,
+        userId: uid,
+        communityId: disp.communityId,
+        title: `Dispute ${decision === 'resolved' ? 'Resolved' : 'Appealed'}`,
+        message: resolution || `Dispute ${disp.id} has been marked as ${decision}.`,
+        linkUrl: '/trust',
+        type: 'dispute',
+        read: false,
+        channelAttempts: { inApp: true, discord: false, telegram: false },
+        createdAt: new Date().toISOString()
+      });
+    });
+
+    db.auditLogs.unshift({
+      id: `aud_${Date.now()}`,
+      communityId: disp.communityId,
+      actorId: reviewerId,
+      action: `dispute_${decision}`,
+      details: `Dispute ${disp.id} marked ${decision}: ${resolution}`,
+      timestamp: new Date().toISOString()
+    });
+
     saveDatabase(db);
     return disp;
   },
@@ -2293,8 +2507,17 @@ export const dbOperations = {
   },
   createLink: (link: Omit<CommunityLink, 'id' | 'createdAt' | 'stats' | 'isRevoked'>) => {
     const db = getDatabase();
+    const baseSlug =
+      String(link.slug || '')
+        .toLowerCase()
+        .trim()
+        .replace(/[^a-z0-9-]+/g, '-')
+        .replace(/^-+|-+$/g, '') || `link-${Date.now()}`;
+    const hasCollision = db.links.some(l => l.slug.toLowerCase() === baseSlug && !l.isRevoked);
+    const finalSlug = hasCollision ? `${baseSlug}-${Date.now().toString().slice(-4)}` : baseSlug;
     const newLink: CommunityLink = {
       ...link,
+      slug: finalSlug,
       id: `lnk_${Date.now()}`,
       isRevoked: false,
       stats: { visits: 0, starts: 0, submissions: 0, completions: 0, verifiedOutcomes: 0 },
@@ -2623,7 +2846,7 @@ export const dbOperations = {
   },
 
   // Community Role Management (Part 3.1)
-  updateCommunityMemberRole: (communityId: string, userId: string, role: UserRole) => {
+  updateCommunityMemberRole: (communityId: string, userId: string, role: UserRole, actorId = 'usr_sarah') => {
     const db = getDatabase();
     let membership = db.memberships.find(m => m.communityId === communityId && m.userId === userId);
     if (!membership) {
@@ -2642,7 +2865,7 @@ export const dbOperations = {
     db.auditLogs.unshift({
       id: `aud_${Date.now()}`,
       communityId,
-      actorId: 'usr_sarah',
+      actorId,
       action: 'role_updated',
       details: `Updated role for user ${userId} to ${role}`,
       timestamp: new Date().toISOString()
@@ -3502,6 +3725,93 @@ export const dbOperations = {
     });
     saveDatabase(db);
     return { updated };
+  },
+
+  createCommitment: (input: {
+    communityId: string;
+    agreedWhat: string;
+    committedById: string;
+    expectingDeliveryId: string;
+    deadline?: string;
+    relatedRequestId?: string;
+  }) => {
+    const db = getDatabase();
+    const nowIso = new Date().toISOString();
+    const newCommitment: Commitment = {
+      id: `com_${Date.now()}`,
+      communityId: input.communityId,
+      agreedWhat: input.agreedWhat.trim(),
+      committedById: input.committedById,
+      expectingDeliveryId: input.expectingDeliveryId,
+      relatedRequestId: input.relatedRequestId,
+      deadline: input.deadline || new Date(Date.now() + 7 * 86400000).toISOString(),
+      status: 'active',
+      history: [
+        { timestamp: nowIso, note: 'Formal commitment logged.', authorId: input.committedById }
+      ],
+      createdAt: nowIso
+    };
+    db.commitments.unshift(newCommitment);
+
+    if (input.expectingDeliveryId && input.expectingDeliveryId !== input.committedById) {
+      db.notifications.unshift({
+        id: `ntf_com_${Date.now()}`,
+        userId: input.expectingDeliveryId,
+        communityId: input.communityId,
+        title: 'New PromiseGraph Commitment Logged',
+        message: `${input.committedById} committed to: "${newCommitment.agreedWhat}"`,
+        linkUrl: '/polls',
+        type: 'task',
+        read: false,
+        channelAttempts: { inApp: true, discord: false, telegram: false },
+        createdAt: nowIso
+      });
+    }
+
+    db.auditLogs.unshift({
+      id: `aud_${Date.now()}`,
+      communityId: input.communityId,
+      actorId: input.committedById,
+      action: 'commitment_created',
+      details: `Logged explicit commitment: "${newCommitment.agreedWhat}"`,
+      timestamp: nowIso
+    });
+
+    saveDatabase(db);
+    return newCommitment;
+  },
+
+  sendRecoveryPrompt: (communityId: string, targetUserId: string, actorId: string) => {
+    const db = getDatabase();
+    const comm = db.communities.find(c => c.id === communityId);
+    const targetUser = db.users.find(u => u.id === targetUserId);
+    if (!targetUser) return null;
+    const nowIso = new Date().toISOString();
+    const notif: NotificationItem = {
+      id: `ntf_rec_${Date.now()}`,
+      userId: targetUserId,
+      communityId,
+      title: `We'd love your help in ${comm?.name || 'the community'}`,
+      message: 'A community organizer shared open NeedSignal requests and QuestLoop bounties matching your verified skills.',
+      linkUrl: '/requests',
+      type: 'request',
+      read: false,
+      channelAttempts: { inApp: true, discord: false, telegram: false },
+      createdAt: nowIso
+    };
+    db.notifications.unshift(notif);
+
+    db.auditLogs.unshift({
+      id: `aud_${Date.now()}`,
+      communityId,
+      actorId,
+      action: 'recovery_prompt_sent',
+      details: `Sent gentle re-engagement prompt to ${targetUser.name} (${targetUserId})`,
+      timestamp: nowIso
+    });
+
+    saveDatabase(db);
+    return notif;
   }
 };
 

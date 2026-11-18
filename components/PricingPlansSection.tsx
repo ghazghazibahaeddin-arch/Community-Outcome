@@ -68,12 +68,18 @@ export const PricingPlansSection: React.FC<PricingPlansSectionProps> = ({
   const telegramUsed = entitlements?.currentUsage?.telegramGroupsCount ?? (community.telegramConfig?.connected ? 1 : 0);
   const telegramMax = entitlements?.maxTelegramGroups ?? (isPro ? 5 : 1);
 
-  const handleCopyInvite = () => {
+  const handleCopyInvite = async () => {
     if (typeof window !== 'undefined') {
       const inviteUrl = `${window.location.origin}/?ref=comm_${community.slug}&communityId=${community.id}`;
-      navigator.clipboard.writeText(inviteUrl);
-      setCopiedLink(true);
-      setTimeout(() => setCopiedLink(false), 2500);
+      try {
+        if (navigator.clipboard?.writeText) {
+          await navigator.clipboard.writeText(inviteUrl);
+          setCopiedLink(true);
+          setTimeout(() => setCopiedLink(false), 2500);
+        }
+      } catch {
+        setBillingStatusNote(`Share link: ${inviteUrl}`);
+      }
     }
   };
 

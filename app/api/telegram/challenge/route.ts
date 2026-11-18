@@ -1,6 +1,6 @@
 // Community OS — Telegram Group Connection Challenge Generator
 import { NextRequest, NextResponse } from 'next/server';
-import { dbOperations, ensureDatabaseHydrated, getDatabase } from '@/lib/db/store';
+import { dbOperations, ensureDatabaseHydrated, getDatabase, persistDatabaseNow } from '@/lib/db/store';
 import { getAuthenticatedUserFromRequest, getUserRoleInCommunity } from '@/lib/services/auth';
 import { getRuntimeEnv, CloudflareEnv } from '@/lib/env';
 
@@ -43,6 +43,7 @@ export async function POST(req: NextRequest, _context?: any) {
     }
 
     const challenge = dbOperations.createGroupConnectionChallenge(communityId, actorId, 'telegram');
+    await persistDatabaseNow(env);
 
     return NextResponse.json({
       success: true,

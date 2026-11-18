@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { ensureDatabaseHydrated } from '@/lib/db/store';
+import { ensureDatabaseHydrated, persistDatabaseNow } from '@/lib/db/store';
 import { requestPasswordReset } from '@/lib/services/auth';
 import { getRuntimeEnv } from '@/lib/env';
 
@@ -16,6 +16,7 @@ export async function POST(req: NextRequest, _context?: any) {
     await ensureDatabaseHydrated(env);
     const appUrl = env.APP_URL || `${req.nextUrl.protocol}//${req.nextUrl.host}`;
     const result = requestPasswordReset(email, appUrl, env);
+    await persistDatabaseNow(env);
 
     return NextResponse.json(result);
   } catch (err: unknown) {

@@ -1,6 +1,6 @@
 // Community OS — Discord OAuth Installation & Identity Callback Route
 import { NextRequest, NextResponse } from 'next/server';
-import { dbOperations, ensureDatabaseHydrated, getDatabase, saveDatabase } from '@/lib/db/store';
+import { dbOperations, ensureDatabaseHydrated, getDatabase, persistDatabaseNow, saveDatabase } from '@/lib/db/store';
 import { createSession, getAuthenticatedUserFromRequest, setSessionCookie } from '@/lib/services/auth';
 import { getDiscordRedirectUri, getVerifiedAppUrl } from '@/lib/services/securityConfig';
 import { User } from '@/lib/types';
@@ -112,6 +112,7 @@ export async function GET(req: NextRequest, _context?: any) {
         u.identities.discordUsername = discordUser.username;
         u.identities.linkedAt = new Date().toISOString();
         saveDatabase(db);
+        await persistDatabaseNow(env);
       }
       const targetQuery =
         intent === 'owner'
@@ -181,6 +182,7 @@ export async function GET(req: NextRequest, _context?: any) {
     // Create session and set cookie with SameSite=Lax
     // Note: No session token is placed into the URL query parameters
     const session = createSession(user.id, req.headers.get('user-agent') || undefined);
+    await persistDatabaseNow(env);
     const ownsAnyCommunity = (db.communities || []).some((c) => c.ownerId === user!.id);
     const targetTab = intent === 'owner' ? 'owner' : 'member';
     const onboardingParam = intent === 'owner' && !ownsAnyCommunity ? '&onboarding=owner' : '';
@@ -229,6 +231,7 @@ export async function GET(req: NextRequest, _context?: any) {
       'default',
       defaultPermissions
     );
+    await persistDatabaseNow(env);
 
     const redirectUrl = `${appUrl}/?tab=owner&connected_platform=discord&guild_id=${encodeURIComponent(guildId)}&guild_name=${encodeURIComponent(serverName)}&status=success`;
     const res = NextResponse.redirect(redirectUrl);

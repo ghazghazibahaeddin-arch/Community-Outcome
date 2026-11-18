@@ -1,6 +1,6 @@
 // Community OS — Real Discord Server Connection & Verification Handler
 import { NextRequest, NextResponse } from 'next/server';
-import { dbOperations, ensureDatabaseHydrated } from '@/lib/db/store';
+import { dbOperations, ensureDatabaseHydrated, persistDatabaseNow } from '@/lib/db/store';
 import { getAuthenticatedUserFromRequest, getUserRoleInCommunity } from '@/lib/services/auth';
 import { getDiscordRedirectUri, getVerifiedAppUrl } from '@/lib/services/securityConfig';
 import { verifyCommunityEntitlement } from '@/lib/services/subscriptionService';
@@ -155,6 +155,7 @@ export async function POST(req: NextRequest, _context?: any) {
       channelId?.trim() || 'default',
       permissions
     );
+    await persistDatabaseNow(env);
 
     return NextResponse.json({
       success: true,

@@ -1,5 +1,5 @@
 // Community OS — End-to-End User Journey Verification Test Suite
-import { dbOperations, getDatabase } from '../db/store';
+import { dbOperations, getDatabase, saveDatabase } from '../db/store';
 
 export interface JourneyTestResult {
   journeyCode: string;
@@ -332,6 +332,9 @@ export function runAllJourneyVerifications(): JourneyTestResult[] {
     });
     dbOperations.revokeLink(dummyLink.id);
     const eventResult = dbOperations.recordLinkEvent(dummyLink.id, 'visit');
+    // Remove ephemeral test link so running diagnostics never pollutes Link Manager
+    db.links = db.links.filter(l => l.id !== dummyLink.id);
+    saveDatabase(db);
 
     const s1 = !leakCheck;
     const s2 = eventResult === null; // Rejected because link is revoked

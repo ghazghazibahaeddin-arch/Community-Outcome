@@ -46,6 +46,7 @@ export const IntegrationsSection: React.FC<IntegrationsSectionProps> = ({
       const res = await fetch('/api/integrations/verify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
           platform,
           customToken: customToken.trim() || undefined,
@@ -55,6 +56,14 @@ export const IntegrationsSection: React.FC<IntegrationsSectionProps> = ({
       const data = await res.json();
       if (data.success && data.result) {
         setLiveCheckResult(data.result);
+      } else {
+        setLiveCheckResult({
+          platform,
+          configured: false,
+          status: 'error',
+          details: data.error || `Verification failed (HTTP ${res.status}).`,
+          checkedAt: new Date().toISOString()
+        });
       }
     } catch (err: any) {
       setLiveCheckResult({
@@ -76,6 +85,7 @@ export const IntegrationsSection: React.FC<IntegrationsSectionProps> = ({
       const res = await fetch('/api/data', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
           action: 'simulate_discord_command',
           payload: {
@@ -86,12 +96,14 @@ export const IntegrationsSection: React.FC<IntegrationsSectionProps> = ({
         })
       });
       const data = await res.json();
-      if (data.success) {
+      if (res.ok && data.success) {
         setSimulationResult(data.result.actualResult);
         onRefresh();
+      } else {
+        setSimulationResult(data.error || `Command simulation failed (HTTP ${res.status}).`);
       }
-    } catch (err) {
-      console.error('Failed to simulate discord command:', err);
+    } catch (err: any) {
+      setSimulationResult(err?.message || 'Failed to execute simulated command.');
     } finally {
       setIsSimulating(false);
     }
@@ -126,6 +138,7 @@ export const IntegrationsSection: React.FC<IntegrationsSectionProps> = ({
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-3">
         <div className="flex items-center gap-4 text-xs font-semibold">
           <button
+            type="button"
             onClick={() => {
               setActivePlatform('discord');
               setLiveCheckResult(null);
@@ -137,6 +150,7 @@ export const IntegrationsSection: React.FC<IntegrationsSectionProps> = ({
             Discord Gateway Center (DC-1 through DC-7)
           </button>
           <button
+            type="button"
             onClick={() => {
               setActivePlatform('telegram');
               setLiveCheckResult(null);
@@ -196,6 +210,7 @@ export const IntegrationsSection: React.FC<IntegrationsSectionProps> = ({
                 </h3>
               </div>
               <button
+                type="button"
                 onClick={() => handleVerifyLiveApi('discord')}
                 disabled={isVerifyingApi}
                 className="flex items-center gap-1.5 rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-500 disabled:opacity-50"
@@ -301,6 +316,7 @@ export const IntegrationsSection: React.FC<IntegrationsSectionProps> = ({
                     className="w-full rounded-md border border-slate-700 bg-slate-800 px-2.5 py-1.5 text-xs text-white font-mono"
                   />
                   <button
+                    type="button"
                     onClick={handleRunDiscordCommand}
                     disabled={isSimulating}
                     className="flex items-center gap-1.5 rounded-md bg-indigo-600 px-4 py-1.5 text-xs font-semibold text-white hover:bg-indigo-500 shrink-0 disabled:opacity-50"
@@ -386,6 +402,7 @@ export const IntegrationsSection: React.FC<IntegrationsSectionProps> = ({
                 </h3>
               </div>
               <button
+                type="button"
                 onClick={() => handleVerifyLiveApi('telegram')}
                 disabled={isVerifyingApi}
                 className="flex items-center gap-1.5 rounded-md bg-sky-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-sky-500 disabled:opacity-50"

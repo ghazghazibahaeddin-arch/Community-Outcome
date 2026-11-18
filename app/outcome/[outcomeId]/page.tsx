@@ -33,7 +33,7 @@ export default function PublicOutcomePage() {
 
     const fetchOutcome = async () => {
       try {
-        const res = await fetch('/api/data');
+        const res = await fetch('/api/data?communityId=all', { cache: 'no-store' });
         const json = (await res.json()) as any;
         if (json.success && json.data) {
           const found = (json.data.outcomes || []).find((o: OutcomeRecord) => o.id === outcomeId);
@@ -89,6 +89,7 @@ export default function PublicOutcomePage() {
             This outcome record does not exist or has been removed.
           </p>
           <button
+            type="button"
             onClick={() => router.push('/')}
             className="rounded-lg bg-indigo-600 px-4 py-2 text-xs font-semibold text-white hover:bg-indigo-500"
           >
@@ -105,6 +106,7 @@ export default function PublicOutcomePage() {
       <header className="border-b border-slate-800/80 bg-slate-950/80 backdrop-blur-md px-4 py-3 sticky top-0 z-50">
         <div className="max-w-4xl mx-auto flex items-center justify-between">
           <button
+            type="button"
             onClick={() => router.push('/')}
             className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-white transition-colors"
           >
@@ -113,6 +115,7 @@ export default function PublicOutcomePage() {
           </button>
 
           <button
+            type="button"
             onClick={handleShare}
             className="flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:bg-slate-700 transition-all"
           >
@@ -222,6 +225,7 @@ export default function PublicOutcomePage() {
               Want to contribute to outcomes like this or start your own community?
             </div>
             <button
+              type="button"
               onClick={() => router.push('/')}
               className="rounded-lg bg-indigo-600 hover:bg-indigo-500 px-4 py-2 text-xs font-semibold text-white transition-all text-center"
             >

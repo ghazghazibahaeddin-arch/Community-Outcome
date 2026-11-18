@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { ensureDatabaseHydrated, persistDatabaseNow } from '@/lib/db/store';
 import { verifyGumroadWebhook, processVerifiedPaymentEvent } from '@/lib/services/paymentService';
-import { getRuntimeEnv, CloudflareEnv } from '@/lib/env';
+import { getRuntimeEnv } from '@/lib/env';
 
 /**
  * POST /api/webhooks/gumroad
@@ -23,10 +24,12 @@ export async function POST(req: NextRequest, _context?: any) {
       );
     }
 
+    await ensureDatabaseHydrated(env);
     const processResult = processVerifiedPaymentEvent(verification);
     if (!processResult.success) {
       return NextResponse.json({ success: false, error: processResult.message }, { status: 400 });
     }
+    await persistDatabaseNow(env);
 
     return NextResponse.json({ success: true, message: processResult.message });
   } catch (err: unknown) {

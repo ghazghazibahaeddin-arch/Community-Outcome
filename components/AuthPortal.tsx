@@ -583,6 +583,7 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({
 
                 <a
                   href={telegramAuthHref}
+                  target="_top"
                   className="w-full flex items-center justify-center gap-2 rounded-lg bg-[#229ED9] hover:bg-[#1e8ec3] py-3 text-xs font-bold text-white shadow-lg shadow-sky-900/30 transition-all"
                 >
                   <Send className="h-4 w-4" />
@@ -632,6 +633,7 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({
 
                 <a
                   href={discordAuthHref}
+                  target="_top"
                   className="w-full flex items-center justify-center gap-2 rounded-lg bg-[#5865F2] hover:bg-[#4c58e2] py-3 text-xs font-bold text-white shadow-lg shadow-indigo-900/30 transition-all"
                 >
                   <Bot className="h-4 w-4" />

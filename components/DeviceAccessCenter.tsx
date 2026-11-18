@@ -318,7 +318,7 @@ export const DeviceAccessCenter: React.FC<DeviceAccessCenterProps> = ({
                     {isRtl ? '1. ربط سريع من الهاتف بكود /connect' : '1. 1-Tap Mobile Bot Link Code'}
                   </div>
                   <div className="text-slate-400 mt-0.5">
-                    {isRtl ? 'ولّد كوداً فورياً والصقه في محادثة @CommunityOutcomebot أو Discord.' : 'Generate a 15-min code and paste it directly inside Telegram or Discord mobile app.'}
+                    {isRtl ? 'ولّد كوداً فورياً والصقه في محادثة @CommunityOutcomeBot أو Discord.' : 'Generate a 15-min code and paste it directly inside Telegram or Discord mobile app.'}
                   </div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">

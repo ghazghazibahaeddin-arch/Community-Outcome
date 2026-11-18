@@ -144,7 +144,17 @@ export function verifyCommunityEntitlement(
       return { allowed: true, currentTier: entitlements.tier };
     }
 
-    case 'telegram_group_connect':
+    case 'telegram_group_connect': {
+      if (candidateId) {
+        const db = getDatabase();
+        const comm = db.communities?.find((c) => c.id === communityId);
+        const isAlreadyConnected =
+          comm?.telegramConfig?.groupId === candidateId ||
+          comm?.connectedTelegramGroups?.some((g) => g.groupId === candidateId);
+        if (isAlreadyConnected) {
+          return { allowed: true, currentTier: entitlements.tier };
+        }
+      }
       if (entitlements.currentUsage.telegramGroupsCount >= entitlements.maxTelegramGroups) {
         return {
           allowed: false,
@@ -156,6 +166,7 @@ export function verifyCommunityEntitlement(
         };
       }
       return { allowed: true, currentTier: entitlements.tier };
+    }
 
     case 'member_limit':
       if (entitlements.currentUsage.membersCount >= entitlements.maxMonthlyActiveMembers) {

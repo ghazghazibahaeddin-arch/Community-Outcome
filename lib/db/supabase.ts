@@ -62,6 +62,16 @@ export async function deleteSessionFromSupabase(token: string, explicitEnv?: Clo
   }
 }
 
+export async function deleteUserSessionsFromSupabase(userId: string, explicitEnv?: CloudflareEnv): Promise<void> {
+  const client = getSupabaseClient(explicitEnv);
+  if (!client || !userId) return;
+  try {
+    await client.from('auth_sessions').delete().eq('user_id', userId);
+  } catch (err: any) {
+    console.warn('[Supabase User Sessions Delete Warning]:', err?.message || err);
+  }
+}
+
 /**
  * Sync in-memory/JSON store with Supabase PostgreSQL
  */
@@ -189,6 +199,28 @@ export async function syncDatabaseToSupabase(dbData: any, explicitEnv?: Cloudfla
       const { error } = await client.from('requests').upsert(reqsToUpsert, { onConflict: 'id' });
       if (error) console.warn('[Supabase Sync] Requests upsert warning:', error.message);
       else count += reqsToUpsert.length;
+    }
+
+    // 4b. Sync Offers (requires valid request_id and specialist_id foreign keys)
+    if (Array.isArray(dbData.offers) && dbData.offers.length > 0) {
+      const requestIds = new Set((dbData.requests || []).map((r: any) => r.id));
+      const userIds = new Set((dbData.users || []).map((u: any) => u.id));
+      const offersToUpsert = dbData.offers
+        .filter((o: any) => requestIds.has(o.requestId) && userIds.has(o.memberId))
+        .map((o: any) => ({
+          id: o.id,
+          request_id: o.requestId,
+          specialist_id: o.memberId,
+          proposal: o.proposedHelp || 'Helper offer submitted',
+          skills_offered: Array.isArray(o.skills) ? o.skills : [],
+          status: o.status || 'pending',
+          created_at: o.createdAt || new Date().toISOString()
+        }));
+      if (offersToUpsert.length > 0) {
+        const { error } = await client.from('offers').upsert(offersToUpsert, { onConflict: 'id' });
+        if (error) console.warn('[Supabase Sync] Offers upsert warning:', error.message);
+        else count += offersToUpsert.length;
+      }
     }
 
     // 5. Sync Tasks
@@ -321,6 +353,20 @@ export async function syncDatabaseToSupabase(dbData: any, explicitEnv?: Cloudfla
       }
     }
 
+    if (Array.isArray(dbData.auditLogs) && dbData.auditLogs.length > 0) {
+      const auditToUpsert = dbData.auditLogs.slice(0, 200).map((a: any) => ({
+        id: a.id,
+        community_id: a.communityId || null,
+        actor_id: a.actorId || null,
+        action: a.action || 'event',
+        details: a.details || null,
+        timestamp: a.timestamp || new Date().toISOString()
+      }));
+      const { error } = await client.from('audit_logs').upsert(auditToUpsert, { onConflict: 'id' });
+      if (error) console.warn('[Supabase Sync] Audit logs upsert warning:', error.message);
+      else count += auditToUpsert.length;
+    }
+
     return { success: true, syncedCount: count };
   } catch (err: any) {
     console.error('[Supabase Sync] Error during sync:', err.message);
@@ -343,12 +389,14 @@ export async function hydrateDatabaseFromSupabase(explicitEnv?: CloudflareEnv): 
       commsRes,
       memsRes,
       reqsRes,
+      offersRes,
       tasksRes,
       contribsRes,
       subsRes,
       refsRes,
       idChallengesRes,
-      grpChallengesRes
+      grpChallengesRes,
+      auditLogsRes
     ] = await Promise.all([
       client.from('users').select('*'),
       client.from('auth_accounts').select('*'),
@@ -356,12 +404,14 @@ export async function hydrateDatabaseFromSupabase(explicitEnv?: CloudflareEnv): 
       client.from('communities').select('*'),
       client.from('memberships').select('*'),
       client.from('requests').select('*'),
+      client.from('offers').select('*'),
       client.from('tasks').select('*'),
       client.from('contributions').select('*'),
       client.from('subscriptions').select('*'),
       client.from('referrals').select('*'),
       client.from('identity_challenges').select('*'),
-      client.from('group_connection_challenges').select('*')
+      client.from('group_connection_challenges').select('*'),
+      client.from('audit_logs').select('*').order('timestamp', { ascending: false }).limit(200)
     ]);
 
     if (usersRes.error || commsRes.error) {
@@ -428,20 +478,38 @@ export async function hydrateDatabaseFromSupabase(explicitEnv?: CloudflareEnv): 
       onboardingStatus: 'first_action_completed'
     }));
 
-    const requests = (reqsRes.data || []).map((r: any) => ({
-      id: r.id,
-      communityId: r.community_id,
-      creatorId: r.creator_id,
-      title: r.title,
-      description: r.description || '',
-      category: r.category || 'cat_core',
-      skillsRequired: r.skills_required || [],
-      priority: r.priority || 'medium',
-      deadline: r.deadline,
-      status: r.status || 'open',
-      visibility: r.visibility || 'community',
-      createdAt: r.created_at,
-      updatedAt: r.created_at
+    const reqCommunityMap = new Map<string, string>();
+    const requests = (reqsRes.data || []).map((r: any) => {
+      reqCommunityMap.set(r.id, r.community_id);
+      return {
+        id: r.id,
+        communityId: r.community_id,
+        creatorId: r.creator_id,
+        title: r.title,
+        description: r.description || '',
+        category: r.category || 'cat_core',
+        skillsRequired: r.skills_required || [],
+        priority: r.priority || 'medium',
+        deadline: r.deadline,
+        status: r.status || 'open',
+        visibility: r.visibility || 'community',
+        createdAt: r.created_at,
+        updatedAt: r.created_at
+      };
+    });
+
+    const offers = (offersRes.data || []).map((o: any) => ({
+      id: o.id,
+      requestId: o.request_id,
+      communityId: reqCommunityMap.get(o.request_id) || 'comm_devforge',
+      memberId: o.specialist_id,
+      proposedHelp: o.proposal || '',
+      skills: Array.isArray(o.skills_offered) ? o.skills_offered : [],
+      experienceDescription: 'Synced from Community OS repository',
+      availability: 'Available',
+      estimatedHours: 4,
+      status: o.status || 'pending',
+      createdAt: o.created_at
     }));
 
     const tasks = (tasksRes.data || []).map((t: any) => ({
@@ -533,6 +601,15 @@ export async function hydrateDatabaseFromSupabase(explicitEnv?: CloudflareEnv): 
       expiresAt: ch.expires_at
     }));
 
+    const auditLogs = (auditLogsRes.data || []).map((a: any) => ({
+      id: a.id,
+      communityId: a.community_id || 'comm_devforge',
+      actorId: a.actor_id || 'system',
+      action: a.action,
+      details: a.details || '',
+      timestamp: a.timestamp
+    }));
+
     return {
       users,
       authAccounts,
@@ -540,12 +617,14 @@ export async function hydrateDatabaseFromSupabase(explicitEnv?: CloudflareEnv): 
       communities,
       memberships,
       requests,
+      offers,
       tasks,
       contributions,
       subscriptions,
       referrals,
       identityChallenges,
-      groupConnectionChallenges
+      groupConnectionChallenges,
+      auditLogs
     };
   } catch (err: any) {
     console.error('[Supabase Hydrate Exception]:', err.message);

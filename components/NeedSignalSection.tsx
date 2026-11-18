@@ -191,6 +191,30 @@ export const NeedSignalSection: React.FC<NeedSignalSectionProps> = ({
     }
   };
 
+  const handleDeclineOffer = async (offerId: string) => {
+    setFeedback(null);
+    try {
+      const res = await fetch('/api/data', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          action: 'decline_offer',
+          payload: { offerId }
+        })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        setFeedback({ type: 'error', text: data.error || 'Failed to decline offer.' });
+        return;
+      }
+      setFeedback({ type: 'success', text: 'Offer declined and contributor notified.' });
+      onRefresh();
+    } catch (err: any) {
+      setFeedback({ type: 'error', text: err?.message || 'Network error declining offer.' });
+    }
+  };
+
   return (
     <div className="space-y-6">
       {feedback && (
@@ -470,16 +494,26 @@ export const NeedSignalSection: React.FC<NeedSignalSectionProps> = ({
                           {off.proposedHelp}
                         </p>
 
-                        {off.status === 'pending' && selectedRequest.status !== 'in_progress' && (
-                          <div className="mt-3 flex justify-end">
+                        {off.status === 'pending' && selectedRequest.status !== 'in_progress' && selectedRequest.status !== 'completed' && (
+                          <div className="mt-3 flex flex-wrap justify-end gap-2">
                             {canAcceptOffers ? (
-                              <button
-                                onClick={() => handleAcceptOffer(off.id)}
-                                className="flex items-center gap-1.5 rounded-md bg-emerald-600 px-3 py-1 text-xs font-semibold text-white hover:bg-emerald-500 transition-colors"
-                              >
-                                <CheckCircle className="h-3 w-3" />
-                                <span>{t.matchOffer.acceptOffer}</span>
-                              </button>
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeclineOffer(off.id)}
+                                  className="rounded-md border border-slate-700 bg-slate-800 px-3 py-1 text-xs font-semibold text-slate-300 hover:bg-slate-700 transition-colors"
+                                >
+                                  {lang === 'ar' ? 'رفض العرض' : 'Decline'}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleAcceptOffer(off.id)}
+                                  className="flex items-center gap-1.5 rounded-md bg-emerald-600 px-3 py-1 text-xs font-semibold text-white hover:bg-emerald-500 transition-colors"
+                                >
+                                  <CheckCircle className="h-3 w-3" />
+                                  <span>{t.matchOffer.acceptOffer}</span>
+                                </button>
+                              </>
                             ) : (
                               <span className="text-[11px] font-mono text-slate-400">
                                 {lang === 'ar' ? 'بانتظار موافقة صاحب الطلب أو المالك' : 'Awaiting requester/owner approval'}

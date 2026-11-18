@@ -43,41 +43,54 @@ export const Poll2PlanSection: React.FC<Poll2PlanSectionProps> = ({
   const [agreedWhat, setAgreedWhat] = useState('');
   const [expectingDelivery, setExpectingDelivery] = useState(users[0]?.id || 'usr_sarah');
   const [commitmentDeadline, setCommitmentDeadline] = useState('2026-11-20');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   const handleVote = async (pollId: string, alternativeId: string) => {
+    setFeedback(null);
     try {
       const res = await fetch('/api/data', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
           action: 'cast_vote',
           payload: { pollId, alternativeId, userId: currentUser.id }
         })
       });
       const data = await res.json();
-      if (data.success) {
-        onRefresh();
+      if (!res.ok || !data.success) {
+        setFeedback({ type: 'error', text: data.error || 'Failed to record vote.' });
+        return;
       }
-    } catch (err) {
-      console.error('Failed to vote:', err);
+      setFeedback({ type: 'success', text: 'Vote recorded.' });
+      onRefresh();
+    } catch (err: any) {
+      setFeedback({ type: 'error', text: err?.message || 'Network error recording vote.' });
     }
   };
 
   const handleCreatePoll = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!pollQuestion.trim()) return;
+    setFeedback(null);
 
     const alts = pollAlternatives
       .split(',')
       .map((s, idx) => ({ id: `alt_${idx + 1}_${Date.now()}`, text: s.trim(), votes: [] }))
       .filter((a) => a.text.length > 0);
 
-    if (alts.length < 2) return;
+    if (alts.length < 2) {
+      setFeedback({ type: 'error', text: 'Please enter at least 2 comma-separated alternatives.' });
+      return;
+    }
 
+    setIsSubmitting(true);
     try {
       const res = await fetch('/api/data', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
           action: 'create_poll',
           payload: {
@@ -89,25 +102,33 @@ export const Poll2PlanSection: React.FC<Poll2PlanSectionProps> = ({
         })
       });
       const data = await res.json();
-      if (data.success) {
-        setIsCreatingPoll(false);
-        setPollQuestion('');
-        setPollAlternatives('');
-        onRefresh();
+      if (!res.ok || !data.success) {
+        setFeedback({ type: 'error', text: data.error || 'Failed to launch decision poll.' });
+        return;
       }
-    } catch (err) {
-      console.error('Failed to create poll:', err);
+      setIsCreatingPoll(false);
+      setPollQuestion('');
+      setPollAlternatives('');
+      setFeedback({ type: 'success', text: 'Decision poll launched cleanly.' });
+      onRefresh();
+    } catch (err: any) {
+      setFeedback({ type: 'error', text: err?.message || 'Network error launching poll.' });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   const handleConvertToPlan = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!convertingPollId || !planTitle.trim()) return;
+    setFeedback(null);
+    setIsSubmitting(true);
 
     try {
       const res = await fetch('/api/data', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
           action: 'convert_poll_to_plan',
           payload: {
@@ -119,25 +140,33 @@ export const Poll2PlanSection: React.FC<Poll2PlanSectionProps> = ({
         })
       });
       const data = await res.json();
-      if (data.success) {
-        setConvertingPollId(null);
-        setPlanTitle('');
-        setPlanOutcome('');
-        onRefresh();
+      if (!res.ok || !data.success) {
+        setFeedback({ type: 'error', text: data.error || 'Failed to convert poll into execution plan.' });
+        return;
       }
-    } catch (err) {
-      console.error('Failed to convert poll to plan:', err);
+      setConvertingPollId(null);
+      setPlanTitle('');
+      setPlanOutcome('');
+      setFeedback({ type: 'success', text: 'Poll closed and QuestLoop execution plan created!' });
+      onRefresh();
+    } catch (err: any) {
+      setFeedback({ type: 'error', text: err?.message || 'Network error converting poll to plan.' });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   const handleCreateCommitment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!agreedWhat.trim()) return;
+    setFeedback(null);
+    setIsSubmitting(true);
 
     try {
       const res = await fetch('/api/data', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
           action: 'create_commitment',
           payload: {
@@ -152,22 +181,41 @@ export const Poll2PlanSection: React.FC<Poll2PlanSectionProps> = ({
         })
       });
       const data = await res.json();
-      if (data.success) {
-        setIsCreatingCommitment(false);
-        setAgreedWhat('');
-        onRefresh();
+      if (!res.ok || !data.success) {
+        setFeedback({ type: 'error', text: data.error || 'Failed to log commitment.' });
+        return;
       }
-    } catch (err) {
-      console.error('Failed to create commitment:', err);
+      setIsCreatingCommitment(false);
+      setAgreedWhat('');
+      setFeedback({ type: 'success', text: 'Explicit commitment logged in PromiseGraph!' });
+      onRefresh();
+    } catch (err: any) {
+      setFeedback({ type: 'error', text: err?.message || 'Network error logging commitment.' });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   return (
     <div className="space-y-6">
+      {feedback && (
+        <div
+          className={`rounded-xl border p-3 text-xs flex items-center justify-between gap-2 ${
+            feedback.type === 'success'
+              ? 'border-emerald-500/40 bg-emerald-950/40 text-emerald-300'
+              : 'border-rose-500/40 bg-rose-950/40 text-rose-300'
+          }`}
+        >
+          <span>{feedback.text}</span>
+          <button type="button" onClick={() => setFeedback(null)} className="text-slate-400 hover:text-white px-1">✕</button>
+        </div>
+      )}
+
       {/* Tab Switcher */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-3">
         <div className="flex items-center gap-4 text-xs font-semibold">
           <button
+            type="button"
             onClick={() => setActiveSubTab('polls')}
             className={`pb-2 transition-colors ${
               activeSubTab === 'polls' ? 'border-b-2 border-indigo-500 text-indigo-400' : 'text-slate-400 hover:text-white'
@@ -176,6 +224,7 @@ export const Poll2PlanSection: React.FC<Poll2PlanSectionProps> = ({
             Poll2Plan Decisions ({polls.length})
           </button>
           <button
+            type="button"
             onClick={() => setActiveSubTab('commitments')}
             className={`pb-2 transition-colors ${
               activeSubTab === 'commitments' ? 'border-b-2 border-indigo-500 text-indigo-400' : 'text-slate-400 hover:text-white'
@@ -187,6 +236,7 @@ export const Poll2PlanSection: React.FC<Poll2PlanSectionProps> = ({
 
         {activeSubTab === 'polls' ? (
           <button
+            type="button"
             onClick={() => setIsCreatingPoll(true)}
             className="flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-500 shrink-0"
           >
@@ -195,6 +245,7 @@ export const Poll2PlanSection: React.FC<Poll2PlanSectionProps> = ({
           </button>
         ) : (
           <button
+            type="button"
             onClick={() => setIsCreatingCommitment(true)}
             className="flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-500 shrink-0"
           >
@@ -246,9 +297,10 @@ export const Poll2PlanSection: React.FC<Poll2PlanSectionProps> = ({
                 </button>
                 <button
                   type="submit"
-                  className="rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-500"
+                  disabled={isSubmitting}
+                  className="rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-500 disabled:opacity-50"
                 >
-                  Launch Poll
+                  {isSubmitting ? 'Saving...' : 'Launch Poll'}
                 </button>
               </div>
             </form>
@@ -295,9 +347,10 @@ export const Poll2PlanSection: React.FC<Poll2PlanSectionProps> = ({
                 </button>
                 <button
                   type="submit"
-                  className="rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-500"
+                  disabled={isSubmitting}
+                  className="rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-500 disabled:opacity-50"
                 >
-                  Generate Plan & Tasks
+                  {isSubmitting ? 'Generating...' : 'Generate Plan & Tasks'}
                 </button>
               </div>
             </form>
@@ -378,6 +431,7 @@ export const Poll2PlanSection: React.FC<Poll2PlanSectionProps> = ({
                     </span>
                     {poll.status === 'open' && (
                       <button
+                        type="button"
                         onClick={() => {
                           setConvertingPollId(poll.id);
                           setPlanTitle(poll.question);
@@ -458,9 +512,10 @@ export const Poll2PlanSection: React.FC<Poll2PlanSectionProps> = ({
                 </button>
                 <button
                   type="submit"
-                  className="rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-500"
+                  disabled={isSubmitting}
+                  className="rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-500 disabled:opacity-50"
                 >
-                  Log Commitment
+                  {isSubmitting ? 'Saving...' : 'Log Commitment'}
                 </button>
               </div>
             </form>

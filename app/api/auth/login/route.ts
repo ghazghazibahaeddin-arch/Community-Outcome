@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { authenticateUser, createSession, setSessionCookie } from '@/lib/services/auth';
-import { ensureDatabaseHydrated } from '@/lib/db/store';
+import { ensureDatabaseHydrated, persistDatabaseNow } from '@/lib/db/store';
 import { getRuntimeEnv } from '@/lib/env';
 
 export async function POST(req: NextRequest, _context?: any) {
@@ -28,6 +28,7 @@ export async function POST(req: NextRequest, _context?: any) {
     const userAgent = req.headers.get('user-agent') || undefined;
     const ip = req.headers.get('x-forwarded-for') || undefined;
     const session = createSession(authResult.user.id, userAgent, ip);
+    await persistDatabaseNow(env);
 
     const res = NextResponse.json({
       success: true,

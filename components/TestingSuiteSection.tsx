@@ -20,22 +20,27 @@ export const TestingSuiteSection: React.FC<TestingSuiteSectionProps> = ({
   const [results, setResults] = useState<JourneyTestResult[]>(initialResults);
   const [isRunning, setIsRunning] = useState<boolean>(false);
   const [lastExecuted, setLastExecuted] = useState<string | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const handleRunAllTests = async () => {
     setIsRunning(true);
+    setErrorMsg(null);
     try {
       const res = await fetch('/api/data', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ action: 'run_e2e_tests' })
       });
       const data = await res.json();
-      if (data.success && Array.isArray(data.result)) {
+      if (res.ok && data.success && Array.isArray(data.result)) {
         setResults(data.result);
         setLastExecuted(new Date().toLocaleTimeString());
+      } else {
+        setErrorMsg(data.error || 'Verification suite failed to execute.');
       }
-    } catch (err) {
-      console.error('Failed to run testing suite:', err);
+    } catch (err: any) {
+      setErrorMsg(err?.message || 'Network error running verification suite.');
     } finally {
       setIsRunning(false);
     }
@@ -46,6 +51,12 @@ export const TestingSuiteSection: React.FC<TestingSuiteSectionProps> = ({
 
   return (
     <div className="space-y-6">
+      {errorMsg && (
+        <div className="rounded-xl border border-rose-500/40 bg-rose-950/40 p-3 text-xs text-rose-300 flex items-center justify-between gap-2">
+          <span>{errorMsg}</span>
+          <button type="button" onClick={() => setErrorMsg(null)} className="text-slate-400 hover:text-white px-1">✕</button>
+        </div>
+      )}
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-4">
         <div>
@@ -71,6 +82,7 @@ export const TestingSuiteSection: React.FC<TestingSuiteSectionProps> = ({
           )}
 
           <button
+            type="button"
             onClick={handleRunAllTests}
             disabled={isRunning}
             className="flex items-center gap-2 rounded-lg bg-amber-600 px-4 py-2 text-xs font-bold text-white hover:bg-amber-500 transition-colors shadow-sm disabled:opacity-50"
