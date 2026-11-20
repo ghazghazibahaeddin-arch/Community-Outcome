@@ -29,19 +29,28 @@ export const TrustGraphSection: React.FC<TrustGraphSectionProps> = ({
   onRefresh
 }) => {
   const _t = translations[lang];
+  const isRtl = lang === 'ar';
 
   const [activeSubTab, setActiveSubTab] = useState<'contributions' | 'attestations' | 'disputes'>('contributions');
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Review Drawer State
   const [reviewingContributionId, setReviewingContributionId] = useState<string | null>(null);
-  const [reviewDecision, setReviewDecision] = useState<'verified' | 'rejected' | 'disputed'>('verified');
+  const [reviewDecision, setReviewDecision] = useState<'verified' | 'revision_requested' | 'rejected' | 'disputed'>('verified');
   const [reviewReason, setReviewReason] = useState('');
 
-  // File Dispute State
+  // Resubmit Revision State (Contributor)
+  const [resubmittingId, setResubmittingId] = useState<string | null>(null);
+  const [resubmitUrl, setResubmitUrl] = useState('');
+  const [resubmitDesc, setResubmitDesc] = useState('');
+
+  // File Dispute & Appeal State
   const [isFilingDispute, setIsFilingDispute] = useState(false);
   const [disputeContribId, setDisputeContribId] = useState(contributions[0]?.id || '');
   const [disputeReason, setDisputeReason] = useState('');
+  const [appealingDisputeId, setAppealingDisputeId] = useState<string | null>(null);
+  const [appealReason, setAppealReason] = useState('');
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -66,8 +75,9 @@ export const TrustGraphSection: React.FC<TrustGraphSectionProps> = ({
 
   const handleReview = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!reviewingContributionId || !reviewReason.trim()) return;
+    if (!reviewingContributionId || !reviewReason.trim() || isSubmitting) return;
     setFeedback(null);
+    setIsSubmitting(true);
 
     try {
       const res = await fetch('/api/data', {
@@ -95,13 +105,55 @@ export const TrustGraphSection: React.FC<TrustGraphSectionProps> = ({
       onRefresh();
     } catch (err: any) {
       setFeedback({ type: 'error', text: err?.message || 'Network error submitting review.' });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleResubmitRevision = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!resubmittingId || !resubmitUrl.trim() || isSubmitting) return;
+    setFeedback(null);
+    setIsSubmitting(true);
+    try {
+      const res = await fetch('/api/data', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          action: 'resubmit_contribution',
+          payload: {
+            contributionId: resubmittingId,
+            evidenceUrl: resubmitUrl.trim(),
+            description: resubmitDesc.trim()
+          }
+        })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        setFeedback({ type: 'error', text: data.error || 'Failed to resubmit revised contribution.' });
+        return;
+      }
+      setResubmittingId(null);
+      setResubmitUrl('');
+      setResubmitDesc('');
+      setFeedback({
+        type: 'success',
+        text: isRtl ? 'تمت إعادة إرسال المساهمة بالأدلة المحدثة للمراجعة.' : 'Contribution resubmitted with updated evidence for peer review.'
+      });
+      onRefresh();
+    } catch (err: any) {
+      setFeedback({ type: 'error', text: err?.message || 'Network error resubmitting contribution.' });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   const handleFileDispute = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!effectiveDisputeContribId || !disputeReason.trim()) return;
+    if (!effectiveDisputeContribId || !disputeReason.trim() || isSubmitting) return;
     setFeedback(null);
+    setIsSubmitting(true);
 
     try {
       const res = await fetch('/api/data', {
@@ -130,11 +182,50 @@ export const TrustGraphSection: React.FC<TrustGraphSectionProps> = ({
       onRefresh();
     } catch (err: any) {
       setFeedback({ type: 'error', text: err?.message || 'Network error filing dispute.' });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleAppealDispute = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!appealingDisputeId || !appealReason.trim() || isSubmitting) return;
+    setFeedback(null);
+    setIsSubmitting(true);
+    try {
+      const res = await fetch('/api/data', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          action: 'appeal_dispute',
+          payload: {
+            disputeId: appealingDisputeId,
+            appealReason: appealReason.trim()
+          }
+        })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        setFeedback({ type: 'error', text: data.error || 'Failed to submit dispute appeal.' });
+        return;
+      }
+      setAppealingDisputeId(null);
+      setAppealReason('');
+      setFeedback({
+        type: 'success',
+        text: isRtl ? 'تم رفع استئناف النزاع إلى مجلس المراجعة بنجاح.' : 'Dispute appeal submitted to Community Shield.'
+      });
+      onRefresh();
+    } catch (err: any) {
+      setFeedback({ type: 'error', text: err?.message || 'Network error appealing dispute.' });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   return (
-    <div className="space-y-6">
+    <div dir={isRtl ? 'rtl' : 'ltr'} className="space-y-6">
       {feedback && (
         <div
           className={`rounded-xl border p-3 text-xs flex items-center justify-between gap-2 ${
@@ -207,9 +298,10 @@ export const TrustGraphSection: React.FC<TrustGraphSectionProps> = ({
                     onChange={(e) => setReviewDecision(e.target.value as any)}
                     className="w-full rounded-md border border-slate-700 bg-slate-900 px-2.5 py-1.5 text-xs text-white capitalize"
                   >
-                    <option value="verified">Verified (Approved with dual signoff)</option>
-                    <option value="rejected">Rejected (Insufficient evidence)</option>
-                    <option value="disputed">Disputed (Contested claims)</option>
+                    <option value="verified">{isRtl ? 'معتمد (موثق)' : 'Verified (Approved with dual signoff)'}</option>
+                    <option value="revision_requested">{isRtl ? 'طلب تعديل / أدلة إضافية' : 'Request Revision (More evidence needed)'}</option>
+                    <option value="rejected">{isRtl ? 'مرفوض (أدلة غير كافية)' : 'Rejected (Insufficient evidence)'}</option>
+                    <option value="disputed">{isRtl ? 'متنازع عليه' : 'Disputed (Contested claims)'}</option>
                   </select>
                 </div>
                 <div>
@@ -223,7 +315,9 @@ export const TrustGraphSection: React.FC<TrustGraphSectionProps> = ({
                 </div>
               </div>
               <div>
-                <label className="text-[11px] text-slate-300 block mb-1">Mandatory Audit Rationale</label>
+                <label className="text-[11px] text-slate-300 block mb-1">
+                  Mandatory Audit Rationale <span className="text-rose-400">*</span>
+                </label>
                 <textarea
                   required
                   rows={2}
@@ -243,9 +337,10 @@ export const TrustGraphSection: React.FC<TrustGraphSectionProps> = ({
                 </button>
                 <button
                   type="submit"
-                  className="rounded-md bg-indigo-600 px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-indigo-500"
+                  disabled={isSubmitting}
+                  className="rounded-md bg-indigo-600 px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-indigo-500 disabled:opacity-50"
                 >
-                  Confirm Official Review Decision
+                  {isSubmitting ? (isRtl ? 'جاري الحفظ...' : 'Submitting...') : (isRtl ? 'تأكيد قرار المراجعة' : 'Confirm Official Review Decision')}
                 </button>
               </div>
             </form>
@@ -308,29 +403,94 @@ export const TrustGraphSection: React.FC<TrustGraphSectionProps> = ({
 
                   {/* Decision rationale if reviewed */}
                   {cnt.decisionReason && (
-                    <div className="text-xs text-slate-400 border-l-2 border-indigo-500 pl-3 py-0.5 italic">
+                    <div className="text-xs text-slate-400 border-s-2 border-indigo-500 ps-3 py-0.5 italic">
                       Review Decision ({cnt.reviewerId}): &quot;{cnt.decisionReason}&quot;
                     </div>
                   )}
 
-                  {/* Review Button if pending */}
-                  {cnt.reviewStatus === 'pending' && (
-                    <div className="flex justify-end pt-2 border-t border-slate-800">
-                      {canReview ? (
+                  {/* Resubmit form if revision_requested for contributor */}
+                  {resubmittingId === cnt.id && (
+                    <form onSubmit={handleResubmitRevision} className="rounded-lg border border-amber-500/40 bg-amber-950/20 p-3.5 space-y-2.5">
+                      <div className="text-xs font-semibold text-amber-200">
+                        {isRtl ? 'إعادة إرسال المساهمة بالأدلة المعدّلة' : 'Resubmit with Updated Evidence'}
+                      </div>
+                      <div>
+                        <label className="text-[11px] text-slate-300 block mb-1">
+                          {isRtl ? 'رابط الدليل المحدث' : 'Revised Evidence URL'} <span className="text-rose-400">*</span>
+                        </label>
+                        <input
+                          type="url"
+                          required
+                          value={resubmitUrl}
+                          onChange={(e) => setResubmitUrl(e.target.value)}
+                          placeholder="https://github.com/..."
+                          className="w-full rounded-md border border-slate-700 bg-slate-950 px-2.5 py-1.5 text-xs text-white"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[11px] text-slate-300 block mb-1">
+                          {isRtl ? 'ملاحظات التعديل' : 'Revision Notes'}
+                        </label>
+                        <textarea
+                          rows={2}
+                          value={resubmitDesc}
+                          onChange={(e) => setResubmitDesc(e.target.value)}
+                          placeholder={isRtl ? 'صف التعديلات والأدلة الجديدة...' : 'Describe what was updated...'}
+                          className="w-full rounded-md border border-slate-700 bg-slate-950 p-2 text-xs text-white"
+                        />
+                      </div>
+                      <div className="flex justify-end gap-2">
                         <button
-                          onClick={() => {
-                            setReviewingContributionId(cnt.id);
-                            setReviewReason('');
-                          }}
-                          className="flex items-center gap-1.5 rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-500"
+                          type="button"
+                          onClick={() => setResubmittingId(null)}
+                          className="px-2.5 py-1 text-xs text-slate-400 hover:text-white"
                         >
-                          <ShieldCheck className="h-3.5 w-3.5" />
-                          <span>Perform Review & Signoff</span>
+                          {isRtl ? 'إلغاء' : 'Cancel'}
                         </button>
-                      ) : (
-                        <span className="text-[11px] font-mono text-slate-400">
-                          Awaiting reviewer / owner verification
-                        </span>
+                        <button
+                          type="submit"
+                          disabled={isSubmitting}
+                          className="rounded-md bg-amber-600 px-3 py-1 text-xs font-semibold text-white hover:bg-amber-500 disabled:opacity-50"
+                        >
+                          {isSubmitting ? '...' : (isRtl ? 'إعادة الإرسال للمراجعة' : 'Resubmit for Review')}
+                        </button>
+                      </div>
+                    </form>
+                  )}
+
+                  {/* Review Button if pending / disputed OR Resubmit if revision_requested */}
+                  {(cnt.reviewStatus === 'pending' || cnt.reviewStatus === 'disputed' || (cnt.reviewStatus === 'revision_requested' && cnt.memberId === currentUser.id)) && (
+                    <div className="flex flex-wrap justify-end gap-2 pt-2 border-t border-slate-800">
+                      {cnt.reviewStatus === 'revision_requested' && cnt.memberId === currentUser.id && resubmittingId !== cnt.id && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setResubmittingId(cnt.id);
+                            setResubmitUrl(cnt.evidence?.[0]?.url || '');
+                            setResubmitDesc(cnt.description || '');
+                          }}
+                          className="flex items-center gap-1.5 rounded-md bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-500"
+                        >
+                          <span>{isRtl ? 'تعديل وإعادة إرسال' : 'Update & Resubmit Revision'}</span>
+                        </button>
+                      )}
+                      {(cnt.reviewStatus === 'pending' || cnt.reviewStatus === 'disputed') && (
+                        canReview ? (
+                          <button
+                            onClick={() => {
+                              setReviewingContributionId(cnt.id);
+                              setReviewReason('');
+                            }}
+                            className="flex items-center gap-1.5 rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-500"
+                          >
+                            <ShieldCheck className="h-3.5 w-3.5" />
+                            <span>{isRtl ? 'مراجعة واعتماد' : 'Perform Review & Signoff'}</span>
+                          </button>
+                        ) : (
+                          <span className="text-[11px] font-mono text-slate-400">
+                            {isRtl ? 'بانتظار مراجعة المشرف / المالك' : 'Awaiting reviewer / owner verification'}
+                          </span>
+                        )
                       )}
                     </div>
                   )}
@@ -478,8 +638,52 @@ export const TrustGraphSection: React.FC<TrustGraphSectionProps> = ({
                     </span>
                   </div>
                   <p className="text-xs text-slate-300">{d.reason}</p>
-                  <div className="pt-2 border-t border-slate-800 text-[11px] text-slate-400">
-                    Filed by {d.filedById} on {new Date(d.createdAt).toLocaleDateString()}
+                  {d.resolutionNotes && (
+                    <div className="rounded-lg border border-emerald-800/40 bg-emerald-950/20 p-2.5 text-xs text-emerald-200">
+                      <strong>{isRtl ? 'القرار:' : 'Resolution:'}</strong> {d.resolutionNotes}
+                    </div>
+                  )}
+                  {appealingDisputeId === d.id && (
+                    <form onSubmit={handleAppealDispute} className="rounded-lg border border-amber-500/40 bg-slate-950/80 p-3 space-y-2">
+                      <label className="text-[11px] text-slate-300 block">
+                        {isRtl ? 'سبب الاستئناف' : 'Appeal Justification'} <span className="text-rose-400">*</span>
+                      </label>
+                      <textarea
+                        required
+                        rows={2}
+                        value={appealReason}
+                        onChange={(e) => setAppealReason(e.target.value)}
+                        placeholder={isRtl ? 'اشرح سبب طلب إعادة النظر...' : 'Explain why this ruling or dispute requires escalation...'}
+                        className="w-full rounded-md border border-slate-700 bg-slate-900 p-2 text-xs text-white"
+                      />
+                      <div className="flex justify-end gap-2">
+                        <button type="button" onClick={() => setAppealingDisputeId(null)} className="px-2.5 py-1 text-xs text-slate-400 hover:text-white">
+                          {isRtl ? 'إلغاء' : 'Cancel'}
+                        </button>
+                        <button
+                          type="submit"
+                          disabled={isSubmitting}
+                          className="rounded-md bg-amber-600 px-3 py-1 text-xs font-semibold text-white hover:bg-amber-500 disabled:opacity-50"
+                        >
+                          {isSubmitting ? '...' : (isRtl ? 'إرسال الاستئناف' : 'Submit Appeal')}
+                        </button>
+                      </div>
+                    </form>
+                  )}
+                  <div className="flex items-center justify-between pt-2 border-t border-slate-800 text-[11px] text-slate-400">
+                    <span>Filed by {d.filedById} on {new Date(d.createdAt).toLocaleDateString()}</span>
+                    {d.status !== 'appealed' && appealingDisputeId !== d.id && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAppealingDisputeId(d.id);
+                          setAppealReason('');
+                        }}
+                        className="rounded-md border border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/20 px-2.5 py-1 text-xs font-semibold text-amber-300"
+                      >
+                        {isRtl ? 'استئناف القرار' : 'Appeal Dispute'}
+                      </button>
+                    )}
                   </div>
                 </div>
               ))}

@@ -2,10 +2,20 @@ import { NextRequest, NextResponse } from 'next/server';
 import { authenticateUser, createSession, setSessionCookie } from '@/lib/services/auth';
 import { ensureDatabaseHydrated, persistDatabaseNow } from '@/lib/db/store';
 import { getRuntimeEnv } from '@/lib/env';
+import { checkRateLimit, getClientIp } from '@/lib/services/rateLimit';
 
 export async function POST(req: NextRequest, _context?: any) {
   const env = getRuntimeEnv(_context?.env || _context);
   try {
+    const clientIp = getClientIp(req);
+    const rl = checkRateLimit({ key: `auth_login:${clientIp}`, limit: 20, windowMs: 60_000 });
+    if (!rl.allowed) {
+      return NextResponse.json(
+        { success: false, error: 'Too many login attempts. Please try again later.' },
+        { status: 429, headers: { 'Retry-After': String(rl.retryAfterSeconds) } }
+      );
+    }
+
     await ensureDatabaseHydrated(env);
     const body = (await req.json()) as { email?: string; password?: string };
     const { email, password } = body;

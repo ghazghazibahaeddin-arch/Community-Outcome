@@ -6,6 +6,7 @@ import {
 import { getRuntimeEnv, CloudflareEnv } from '@/lib/env';
 
 import { isHttpsRequest } from '@/lib/services/auth';
+import { sanitizeReturnTo } from '@/lib/services/validation';
 
 /**
  * Initiates the official Telegram OpenID Connect (OIDC) flow with PKCE S256.
@@ -18,7 +19,9 @@ export async function GET(req: NextRequest, _context?: any) {
     const url = new URL(req.url);
     const intentParam = url.searchParams.get('intent');
     const intent: 'owner' | 'member' = intentParam === 'owner' ? 'owner' : 'member';
-    const { authUrl, sessionState } = buildTelegramOidcAuthorization(env, intent);
+    const rawReturnTo = url.searchParams.get('returnTo');
+    const returnTo = rawReturnTo ? sanitizeReturnTo(rawReturnTo, '') : '';
+    const { authUrl, sessionState } = buildTelegramOidcAuthorization(env, intent, returnTo || undefined);
     const shouldRedirect = url.searchParams.get('redirect') !== 'false';
 
     const response = shouldRedirect

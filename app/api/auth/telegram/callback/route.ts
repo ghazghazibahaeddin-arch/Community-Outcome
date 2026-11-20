@@ -13,7 +13,8 @@ import {
   verifyTelegramIdToken
 } from '@/lib/services/telegramOidc';
 import { User } from '@/lib/types';
-import { getRuntimeEnv, CloudflareEnv } from '@/lib/env';
+import { getRuntimeEnv } from '@/lib/env';
+import { sanitizeReturnTo } from '@/lib/services/validation';
 
 /**
  * Handles the official Telegram OpenID Connect (OIDC) callback.
@@ -153,8 +154,8 @@ export async function GET(req: NextRequest, _context?: any) {
       name: displayName,
       email: username ? `${username.toLowerCase()}@telegram.user` : `tg_${telegramSub}@telegram.user`,
       avatar: payload.picture || `https://picsum.photos/seed/${newUserId}/200/200`,
-      bio: intent === 'owner' ? 'Verified Telegram community owner.' : 'Verified Telegram community member.',
-      platformRole: intent === 'owner' ? 'community_owner' : 'user',
+      bio: 'Verified Telegram community member.',
+      platformRole: 'user',
       createdAt: now,
       identities: {
         telegramId: telegramSub,
@@ -189,9 +190,6 @@ export async function GET(req: NextRequest, _context?: any) {
     if (!user.identities) user.identities = {};
     user.identities.telegramId = telegramSub;
     if (username) user.identities.telegramUsername = username;
-    if (intent === 'owner' && user.platformRole === 'user') {
-      user.platformRole = 'community_owner';
-    }
     user.identities.linkedAt = new Date().toISOString();
     saveDatabase(db);
   }
@@ -200,14 +198,15 @@ export async function GET(req: NextRequest, _context?: any) {
   const session = createSession(user.id, req.headers.get('user-agent') || undefined);
   await persistDatabaseNow(env);
   const ownsAnyCommunity = (db.communities || []).some((c) => c.ownerId === user!.id);
-  const targetTab = intent === 'owner' ? 'owner' : 'member';
+  const targetTab = intent === 'owner' && ownsAnyCommunity ? 'owner' : 'member';
   const onboardingParam = intent === 'owner' && !ownsAnyCommunity ? '&onboarding=owner' : '';
+  const safeReturnTo = sessionState.returnTo ? sanitizeReturnTo(sessionState.returnTo, '') : '';
+  const destinationUrl = safeReturnTo
+    ? `${appUrl}${safeReturnTo}`
+    : `${appUrl}/?tab=${targetTab}&login_success=true&provider=telegram${onboardingParam}`;
 
   // Return redirect with secure HttpOnly SameSite=Lax cookie.
-  // Note: Session token is NEVER exposed in the URL query parameters!
-  const redirectRes = NextResponse.redirect(
-    `${appUrl}/?tab=${targetTab}&login_success=true&provider=telegram${onboardingParam}`
-  );
+  const redirectRes = NextResponse.redirect(destinationUrl);
   setSessionCookie(redirectRes, session.token, { isCrossSite: false, req });
 
   // Clear the OIDC transient state cookie

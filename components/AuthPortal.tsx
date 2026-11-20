@@ -25,19 +25,23 @@ import {
   Crown
 } from 'lucide-react';
 
+import { sanitizeReturnTo } from '@/lib/services/validation';
+
 interface AuthPortalProps {
   lang: Language;
   onToggleLang: () => void;
   onAuthenticated: (user: User, defaultWorkspace: 'owner' | 'member', isNewSignup?: boolean) => void;
   discordInstallUrl?: string;
   initialMode?: 'login' | 'signup';
+  returnTo?: string;
 }
 
 export const AuthPortal: React.FC<AuthPortalProps> = ({
   lang,
   onToggleLang,
   onAuthenticated,
-  initialMode = 'login'
+  initialMode = 'login',
+  returnTo: returnToProp
 }) => {
   const isRtl = lang === 'ar';
 
@@ -85,11 +89,22 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({
       const data = await res.json();
       if (data.success) {
         setTelegramConfig(data);
+      } else {
+        setErrorMessage(data.error || (isRtl ? 'تعذر تحميل إعدادات تيلغرام' : 'Could not load Telegram OIDC configuration.'));
       }
-    } catch {
-      // Non-blocking
+    } catch (err) {
+      console.warn('[AuthPortal] Failed to fetch Telegram config:', err);
     }
   };
+
+  const resolvedReturnTo = React.useMemo(() => {
+    if (returnToProp) return sanitizeReturnTo(returnToProp, '');
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      return sanitizeReturnTo(params.get('returnTo'), '');
+    }
+    return '';
+  }, [returnToProp]);
 
   React.useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -104,7 +119,9 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({
         const timer = setTimeout(() => setErrorMessage(oauthErr), 0);
         return () => clearTimeout(timer);
       }
-    } catch {}
+    } catch (err) {
+      console.warn('[AuthPortal] Query parameter parse warning:', err);
+    }
   }, []);
 
   // 1. Handle Email Login
@@ -270,8 +287,9 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({
     }
   };
 
-  const telegramAuthHref = `/api/auth/telegram/authorize?redirect=true&intent=${selectedIntent}`;
-  const discordAuthHref = `/api/discord/connect?mode=user&redirect=true&intent=${selectedIntent}`;
+  const returnToSuffix = resolvedReturnTo ? `&returnTo=${encodeURIComponent(resolvedReturnTo)}` : '';
+  const telegramAuthHref = `/api/auth/telegram/authorize?redirect=true&intent=${selectedIntent}${returnToSuffix}`;
+  const discordAuthHref = `/api/discord/connect?mode=user&redirect=true&intent=${selectedIntent}${returnToSuffix}`;
 
   return (
     <div
@@ -403,9 +421,10 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({
                 </span>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5" role="group" aria-label={isRtl ? 'اختر دور الحساب' : 'Choose account role'}>
                 <button
                   type="button"
+                  aria-pressed={selectedIntent === 'member'}
                   onClick={() => setSelectedIntent('member')}
                   className={`rounded-xl border p-3.5 text-start transition-all flex items-start gap-3 ${
                     selectedIntent === 'member'
@@ -436,6 +455,7 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({
 
                 <button
                   type="button"
+                  aria-pressed={selectedIntent === 'owner'}
                   onClick={() => setSelectedIntent('owner')}
                   className={`rounded-xl border p-3.5 text-start transition-all flex items-start gap-3 ${
                     selectedIntent === 'owner'
@@ -458,8 +478,8 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({
                     </div>
                     <p className="text-[11px] text-slate-400 mt-0.5 leading-snug">
                       {isRtl
-                        ? 'ربط بوت ديسكورد وتيلغرام وإدارة الأعضاء والمراجعات.'
-                        : 'Connect Discord/Telegram bots, govern rules & review work.'}
+                        ? 'إنشاء مجتمعك الخاص وربط البوت وإدارته (يتطلب ملكية موثقة).'
+                        : 'Create your own community & link bots (requires verified ownership).'}
                     </p>
                   </div>
                 </button>
@@ -477,9 +497,10 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({
                 </span>
               </div>
 
-              <div className="grid grid-cols-3 gap-1.5 rounded-xl bg-slate-950 p-1.5 border border-slate-800">
+              <div className="grid grid-cols-3 gap-1.5 rounded-xl bg-slate-950 p-1.5 border border-slate-800" role="group" aria-label={isRtl ? 'اختر منصة الدخول' : 'Choose sign-in platform'}>
                 <button
                   type="button"
+                  aria-pressed={entryMethod === 'telegram'}
                   onClick={() => {
                     setEntryMethod('telegram');
                     setErrorMessage(null);
@@ -496,6 +517,7 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({
 
                 <button
                   type="button"
+                  aria-pressed={entryMethod === 'discord'}
                   onClick={() => {
                     setEntryMethod('discord');
                     setErrorMessage(null);
@@ -512,6 +534,7 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({
 
                 <button
                   type="button"
+                  aria-pressed={entryMethod === 'email'}
                   onClick={() => {
                     setEntryMethod('email');
                     setErrorMessage(null);
@@ -704,17 +727,17 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({
                   <form onSubmit={handleLogin} className="space-y-3.5">
                     <div>
                       <label className="block text-xs font-medium text-slate-300 mb-1">
-                        {isRtl ? 'البريد الإلكتروني' : 'Email Address'}
+                        {isRtl ? 'البريد الإلكتروني' : 'Email Address'} <span className="text-rose-400">*</span>
                       </label>
                       <div className="relative">
-                        <Mail className="absolute top-3 left-3 h-4 w-4 text-slate-500" />
+                        <Mail className="absolute top-3 start-3 h-4 w-4 text-slate-500" />
                         <input
                           type="email"
                           value={email}
                           onChange={(e) => setEmail(e.target.value)}
                           placeholder="you@domain.com"
                           required
-                          className="w-full rounded-lg border border-slate-800 bg-slate-950 px-3 py-2.5 pl-9 text-xs text-white placeholder-slate-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                          className="w-full rounded-lg border border-slate-800 bg-slate-950 px-3 py-2.5 ps-9 text-xs text-white placeholder-slate-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
                         />
                       </div>
                     </div>
@@ -722,7 +745,7 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({
                     <div>
                       <div className="flex items-center justify-between mb-1">
                         <label className="text-xs font-medium text-slate-300">
-                          {isRtl ? 'كلمة المرور' : 'Password'}
+                          {isRtl ? 'كلمة المرور' : 'Password'} <span className="text-rose-400">*</span>
                         </label>
                         <button
                           type="button"
@@ -733,14 +756,14 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({
                         </button>
                       </div>
                       <div className="relative">
-                        <Lock className="absolute top-3 left-3 h-4 w-4 text-slate-500" />
+                        <Lock className="absolute top-3 start-3 h-4 w-4 text-slate-500" />
                         <input
                           type="password"
                           value={password}
                           onChange={(e) => setPassword(e.target.value)}
                           placeholder="••••••••••••"
                           required
-                          className="w-full rounded-lg border border-slate-800 bg-slate-950 px-3 py-2.5 pl-9 text-xs text-white placeholder-slate-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                          className="w-full rounded-lg border border-slate-800 bg-slate-950 px-3 py-2.5 ps-9 text-xs text-white placeholder-slate-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
                         />
                       </div>
                     </div>
@@ -783,44 +806,44 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({
                   <form onSubmit={handleSignUp} className="space-y-3.5">
                     <div>
                       <label className="block text-xs font-medium text-slate-300 mb-1">
-                        {isRtl ? 'الاسم الكامل' : 'Full Name'}
+                        {isRtl ? 'الاسم الكامل' : 'Full Name'} <span className="text-rose-400">*</span>
                       </label>
                       <div className="relative">
-                        <UserIcon className="absolute top-3 left-3 h-4 w-4 text-slate-500" />
+                        <UserIcon className="absolute top-3 start-3 h-4 w-4 text-slate-500" />
                         <input
                           type="text"
                           value={name}
                           onChange={(e) => setName(e.target.value)}
                           placeholder="Jane Doe"
                           required
-                          className="w-full rounded-lg border border-slate-800 bg-slate-950 px-3 py-2.5 pl-9 text-xs text-white placeholder-slate-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                          className="w-full rounded-lg border border-slate-800 bg-slate-950 px-3 py-2.5 ps-9 text-xs text-white placeholder-slate-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
                         />
                       </div>
                     </div>
 
                     <div>
                       <label className="block text-xs font-medium text-slate-300 mb-1">
-                        {isRtl ? 'البريد الإلكتروني' : 'Email Address'}
+                        {isRtl ? 'البريد الإلكتروني' : 'Email Address'} <span className="text-rose-400">*</span>
                       </label>
                       <div className="relative">
-                        <Mail className="absolute top-3 left-3 h-4 w-4 text-slate-500" />
+                        <Mail className="absolute top-3 start-3 h-4 w-4 text-slate-500" />
                         <input
                           type="email"
                           value={email}
                           onChange={(e) => setEmail(e.target.value)}
                           placeholder="jane@example.com"
                           required
-                          className="w-full rounded-lg border border-slate-800 bg-slate-950 px-3 py-2.5 pl-9 text-xs text-white placeholder-slate-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                          className="w-full rounded-lg border border-slate-800 bg-slate-950 px-3 py-2.5 ps-9 text-xs text-white placeholder-slate-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
                         />
                       </div>
                     </div>
 
                     <div>
                       <label className="block text-xs font-medium text-slate-300 mb-1">
-                        {isRtl ? 'كلمة المرور (8 أحرف على الأقل)' : 'Password (min. 8 characters)'}
+                        {isRtl ? 'كلمة المرور (8 أحرف على الأقل)' : 'Password (min. 8 characters)'} <span className="text-rose-400">*</span>
                       </label>
                       <div className="relative">
-                        <Lock className="absolute top-3 left-3 h-4 w-4 text-slate-500" />
+                        <Lock className="absolute top-3 start-3 h-4 w-4 text-slate-500" />
                         <input
                           type="password"
                           value={password}
@@ -828,7 +851,7 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({
                           placeholder="Create secure password"
                           required
                           minLength={8}
-                          className="w-full rounded-lg border border-slate-800 bg-slate-950 px-3 py-2.5 pl-9 text-xs text-white placeholder-slate-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                          className="w-full rounded-lg border border-slate-800 bg-slate-950 px-3 py-2.5 ps-9 text-xs text-white placeholder-slate-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
                         />
                       </div>
                     </div>
@@ -891,14 +914,14 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({
                         {isRtl ? 'البريد الإلكتروني' : 'Email Address'}
                       </label>
                       <div className="relative">
-                        <Mail className="absolute top-3 left-3 h-4 w-4 text-slate-500" />
+                        <Mail className="absolute top-3 start-3 h-4 w-4 text-slate-500" />
                         <input
                           type="email"
                           value={email}
                           onChange={(e) => setEmail(e.target.value)}
                           placeholder="you@domain.com"
                           required
-                          className="w-full rounded-lg border border-slate-800 bg-slate-950 px-3 py-2.5 pl-9 text-xs text-white placeholder-slate-500 focus:border-indigo-500 focus:outline-none"
+                          className="w-full rounded-lg border border-slate-800 bg-slate-950 px-3 py-2.5 ps-9 text-xs text-white placeholder-slate-500 focus:border-indigo-500 focus:outline-none"
                         />
                       </div>
                     </div>

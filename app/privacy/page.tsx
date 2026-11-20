@@ -19,7 +19,10 @@ export default function PrivacyPage() {
       } else {
         setAuthUser(null);
       }
-    } catch {}
+    } catch (err) {
+      console.warn('[PrivacyPage] Failed to load session user:', err);
+      setAuthUser(null);
+    }
   }, []);
 
   useEffect(() => {

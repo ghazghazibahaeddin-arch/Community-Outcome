@@ -16,7 +16,10 @@ export async function POST(req: NextRequest, _context?: any) {
 
     await ensureDatabaseHydrated(env);
     const authUser = await getAuthenticatedUserFromRequest(req);
-    const actorId = authUser?.id || 'usr_sarah';
+    if (!authUser) {
+      return NextResponse.json({ success: false, error: 'Authentication required' }, { status: 401 });
+    }
+    const actorId = authUser.id;
     const role = getUserRoleInCommunity(actorId, communityId);
 
     if (!['platform_admin', 'community_owner', 'admin'].includes(role)) {
@@ -39,7 +42,9 @@ export async function POST(req: NextRequest, _context?: any) {
         if (getMeJson.ok && getMeJson.result?.username) {
           botUsername = getMeJson.result.username;
         }
-      } catch {}
+      } catch (err) {
+        console.warn('[Telegram Challenge] Failed to fetch bot username from getMe:', err);
+      }
     }
 
     const challenge = dbOperations.createGroupConnectionChallenge(communityId, actorId, 'telegram');

@@ -37,6 +37,7 @@ export const PrivacyPoliciesSection: React.FC<PrivacyPoliciesSectionProps> = ({
     allowCrossCommunitySharing: currentUser?.privacy?.allowCrossCommunitySharing ?? false
   });
   const [isSaving, setIsSaving] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   useEffect(() => {
@@ -89,34 +90,46 @@ export const PrivacyPoliciesSection: React.FC<PrivacyPoliciesSectionProps> = ({
     }
   };
 
-  const handleDownloadMyData = () => {
+  const handleDownloadMyData = async () => {
     if (!currentUser || typeof window === 'undefined') return;
-    const exportPayload = {
-      exportedAt: new Date().toISOString(),
-      user: {
-        id: currentUser.id,
-        name: currentUser.name,
-        email: currentUser.email,
-        platformRole: currentUser.platformRole,
-        createdAt: currentUser.createdAt,
-        identities: {
-          discordUsername: currentUser.identities?.discordUsername || null,
-          telegramUsername: currentUser.identities?.telegramUsername || null,
-          linkedAt: currentUser.identities?.linkedAt || null
-        },
-        privacy: privacyState,
-        passport: currentUser.passport
+    setIsExporting(true);
+    setFeedback(null);
+    try {
+      const res = await fetch('/api/data', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ action: 'export_my_data', payload: {} })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success || !data.result) {
+        setFeedback({
+          type: 'error',
+          text: data.error || (isRtl ? 'فشل تصدير البيانات من الخادم.' : 'Failed to export personal data.')
+        });
+        return;
       }
-    };
-    const blob = new Blob([JSON.stringify(exportPayload, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `community-os-data-${currentUser.id}.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+      const blob = new Blob([JSON.stringify(data.result, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `community-os-data-${currentUser.id}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      setFeedback({
+        type: 'success',
+        text: isRtl ? 'تم تنزيل سجل بياناتك الكامل بنجاح.' : 'Full personal data archive exported cleanly.'
+      });
+    } catch (err: any) {
+      setFeedback({
+        type: 'error',
+        text: err?.message || (isRtl ? 'تعذر تصدير البيانات.' : 'Network error exporting data.')
+      });
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   const toggleItems: {
@@ -200,11 +213,12 @@ export const PrivacyPoliciesSection: React.FC<PrivacyPoliciesSectionProps> = ({
             <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
+                disabled={isExporting}
                 onClick={handleDownloadMyData}
-                className="min-h-[40px] inline-flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-950 px-3 text-xs font-semibold text-slate-200 hover:text-white transition-colors whitespace-nowrap"
+                className="min-h-[40px] inline-flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-950 px-3 text-xs font-semibold text-slate-200 hover:text-white transition-colors whitespace-nowrap disabled:opacity-50"
               >
                 <Download className="h-3.5 w-3.5 text-emerald-400" />
-                <span>{isRtl ? 'تنزيل بياناتي (JSON)' : 'Export My Data (JSON)'}</span>
+                <span>{isExporting ? (isRtl ? 'جاري التصدير...' : 'Exporting...') : (isRtl ? 'تنزيل بياناتي (JSON)' : 'Export My Data (JSON)')}</span>
               </button>
               <button
                 type="button"

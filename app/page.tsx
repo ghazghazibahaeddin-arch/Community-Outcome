@@ -182,7 +182,9 @@ export default function HomePage() {
         if (savedLang === 'ar' || savedLang === 'en') {
           setLang(savedLang);
         }
-      } catch {}
+      } catch (err) {
+        console.warn('[Home] failed reading preferences from localStorage:', err);
+      }
     }, 0);
     const onKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
@@ -222,7 +224,9 @@ export default function HomePage() {
       if (inviteParam) {
         try {
           sessionStorage.setItem('cos_pending_invite', inviteParam);
-        } catch {}
+        } catch (err) {
+          console.warn('[Home] failed saving pending invite:', err);
+        }
       }
 
       const isDiscordGuildConnected = connectedPlatform === 'discord' && Boolean(guildId);
@@ -348,7 +352,9 @@ export default function HomePage() {
         }, 0);
         return () => clearTimeout(timer);
       }
-    } catch {}
+    } catch (err) {
+      console.warn('[Home] failed parsing initial query params:', err);
+    }
   }, []);
 
   const fetchData = React.useCallback(async (commId = currentCommunityId, silent = false) => {
@@ -540,7 +546,9 @@ export default function HomePage() {
       const next = prev === 'en' ? 'ar' : 'en';
       try {
         localStorage.setItem('cos_lang', next);
-      } catch {}
+      } catch (err) {
+        console.warn('[Home] failed saving language preference:', err);
+      }
       return next;
     });
   };
@@ -551,7 +559,9 @@ export default function HomePage() {
       try {
         localStorage.setItem('cos_theme', next ? 'dark' : 'light');
         document.documentElement.classList.toggle('cos-light-root', !next);
-      } catch {}
+      } catch (err) {
+        console.warn('[Home] failed saving theme preference:', err);
+      }
       return next;
     });
   };
@@ -592,7 +602,9 @@ export default function HomePage() {
       });
       try {
         localStorage.removeItem('community_os_session_token');
-      } catch {}
+      } catch (err) {
+        console.warn('[Home] failed clearing legacy session token:', err);
+      }
       setAuthUser(null);
       setCurrentUserRole('guest');
       hasAppliedInitialRoleRef.current = false;
@@ -726,11 +738,23 @@ export default function HomePage() {
 
   // 1. AUTHENTICATION MUST BE THE ENTRY POINT
   if (!authUser) {
+    const returnToParam =
+      typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('returnTo') || '' : '';
+    const safeReturnTo =
+      returnToParam.startsWith('/') && !returnToParam.startsWith('//') && !returnToParam.startsWith('/\\')
+        ? returnToParam
+        : '';
+
     return (
       <AuthPortal
         lang={lang}
         onToggleLang={handleToggleLang}
+        returnTo={safeReturnTo || undefined}
         onAuthenticated={(user, defaultWorkspace, isNewSignup) => {
+          if (safeReturnTo && typeof window !== 'undefined') {
+            window.location.assign(safeReturnTo);
+            return;
+          }
           setAuthUser(user);
           setWorkspaceMode(defaultWorkspace);
           const ownedByUser = communities.filter((c) => c.ownerId === user.id);
@@ -924,7 +948,9 @@ export default function HomePage() {
                   setInitialInviteCode('');
                   try {
                     sessionStorage.removeItem('cos_pending_invite');
-                  } catch {}
+                  } catch (err) {
+                    console.warn('[Home] failed removing pending invite:', err);
+                  }
                 }}
                 onOpenAccountSettings={() => setIsAccountSettingsOpen(true)}
                 onRefresh={() => fetchData(currentCommunityId)}

@@ -125,7 +125,10 @@ export async function POST(req: NextRequest, _context?: any) {
                 webhookDetails = `Webhook active at: ${info.url} (pending: ${info.pending_update_count ?? 0})`;
               }
             }
-          } catch {}
+          } catch (whErr) {
+            console.warn('[Integrations Verify] Could not fetch Telegram webhook info:', whErr);
+            webhookDetails = 'Webhook verification request failed; check network/bot token.';
+          }
 
           const result: IntegrationCheckResult = {
             platform: 'telegram',

@@ -3,8 +3,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { dbOperations, ensureDatabaseHydrated, getDatabase, persistDatabaseNow, saveDatabase } from '@/lib/db/store';
 import { createSession, getAuthenticatedUserFromRequest, setSessionCookie } from '@/lib/services/auth';
 import { getDiscordRedirectUri, getVerifiedAppUrl } from '@/lib/services/securityConfig';
+import { sanitizeReturnTo } from '@/lib/services/validation';
+import { DISCORD_OAUTH_COOKIE_NAME } from '../connect/route';
 import { User } from '@/lib/types';
-import { getRuntimeEnv, CloudflareEnv } from '@/lib/env';
+import { getRuntimeEnv } from '@/lib/env';
 
 export async function GET(req: NextRequest, _context?: any) {
   const env = getRuntimeEnv(_context?.env || _context);
@@ -17,15 +19,49 @@ export async function GET(req: NextRequest, _context?: any) {
 
   const appUrl = getVerifiedAppUrl(env);
 
-  // 1. Handle user cancellation or OAuth error
   if (error) {
     const errMessage = errorDescription || error || 'Discord authorization was cancelled or denied';
     return NextResponse.redirect(`${appUrl}/?discord_error=${encodeURIComponent(errMessage)}`);
   }
 
-  // 2. Validate state parameter
   if (!state || !state.startsWith('os_discord_')) {
-    return NextResponse.redirect(`${appUrl}/?discord_error=${encodeURIComponent('Invalid or missing OAuth state security parameter')}`);
+    return NextResponse.redirect(
+      `${appUrl}/?discord_error=${encodeURIComponent('Invalid or missing OAuth state security parameter')}`
+    );
+  }
+
+  // Validate CSRF state against HttpOnly cookie (mandatory in production or whenever cookie exists)
+  const rawCookie = req.cookies.get(DISCORD_OAUTH_COOKIE_NAME)?.value;
+  let storedStateObj: {
+    state?: string;
+    mode?: string;
+    intent?: string;
+    communityId?: string;
+    returnTo?: string;
+    createdAt?: number;
+  } | null = null;
+  if (rawCookie) {
+    try {
+      storedStateObj = JSON.parse(rawCookie);
+    } catch {
+      return NextResponse.redirect(
+        `${appUrl}/?discord_error=${encodeURIComponent('Corrupted Discord OAuth state cookie')}`
+      );
+    }
+    if (!storedStateObj || storedStateObj.state !== state) {
+      return NextResponse.redirect(
+        `${appUrl}/?discord_error=${encodeURIComponent('Discord OAuth CSRF state mismatch')}`
+      );
+    }
+    if (storedStateObj.createdAt && Date.now() - storedStateObj.createdAt > 10 * 60 * 1000) {
+      return NextResponse.redirect(
+        `${appUrl}/?discord_error=${encodeURIComponent('Discord OAuth session has expired')}`
+      );
+    }
+  } else if (env.NODE_ENV === 'production') {
+    return NextResponse.redirect(
+      `${appUrl}/?discord_error=${encodeURIComponent('Missing Discord OAuth state cookie or session expired')}`
+    );
   }
 
   const isUserAuthMode = state.startsWith('os_discord_user_');
@@ -34,23 +70,30 @@ export async function GET(req: NextRequest, _context?: any) {
   const existingUser = await getAuthenticatedUserFromRequest(req);
   const db = getDatabase();
 
-  // Find target community from state or fallback
-  let matchedCommunity = db.communities.find((c) => state.includes(`_${c.id}_`));
+  let matchedCommunity = db.communities.find(
+    (c) => (storedStateObj?.communityId && c.id === storedStateObj.communityId) || state.includes(`_${c.id}_`)
+  );
   if (!matchedCommunity) {
     matchedCommunity = db.communities.find((c) => c.id === 'comm_devforge') || db.communities[0];
   }
   const communityId = matchedCommunity?.id || 'comm_devforge';
 
-  // 3. User Identity OAuth Mode ("Continue with Discord" or link personal account)
+  const clearStateCookie = (res: NextResponse) => {
+    res.cookies.set({ name: DISCORD_OAUTH_COOKIE_NAME, value: '', path: '/', maxAge: 0 });
+    return res;
+  };
+
+  // User Identity OAuth Mode
   if (isUserAuthMode && code) {
     const clientId = env.DISCORD_APPLICATION_ID || '1565501338597462099';
     const clientSecret = env.DISCORD_CLIENT_SECRET;
     const redirectUri = getDiscordRedirectUri(env);
+    const isDevMock = env.NODE_ENV !== 'production' && code.startsWith('mock_');
 
     let discordUser: { id: string; username: string; email?: string; avatar?: string } | null = null;
     let oauthExchangeError: string | null = null;
 
-    if (clientSecret && !code.startsWith('mock_')) {
+    if (clientSecret && !isDevMock) {
       try {
         const tokenRes = await fetch('https://discord.com/api/oauth2/token', {
           method: 'POST',
@@ -82,16 +125,15 @@ export async function GET(req: NextRequest, _context?: any) {
         console.error('Failed to exchange Discord OAuth code:', e);
         oauthExchangeError = `Discord OAuth network error: ${e?.message || 'unknown error'}`;
       }
-    } else if (!clientSecret && !code.startsWith('mock_')) {
-      oauthExchangeError = 'DISCORD_CLIENT_SECRET is not configured in Cloudflare Workers Runtime Secrets.';
+    } else if (!clientSecret && !isDevMock) {
+      oauthExchangeError = 'DISCORD_CLIENT_SECRET is not configured in server runtime environment.';
     }
 
     if (oauthExchangeError) {
-      return NextResponse.redirect(`${appUrl}/?discord_error=${encodeURIComponent(oauthExchangeError)}`);
+      return clearStateCookie(NextResponse.redirect(`${appUrl}/?discord_error=${encodeURIComponent(oauthExchangeError)}`));
     }
 
-    // Automated test mock code support
-    if (!discordUser && code.startsWith('mock_')) {
+    if (!discordUser && isDevMock) {
       discordUser = {
         id: `discord_${code.slice(0, 10)}`,
         username: `DiscordUser_${code.slice(0, 6)}`,
@@ -100,10 +142,11 @@ export async function GET(req: NextRequest, _context?: any) {
     }
 
     if (!discordUser) {
-      return NextResponse.redirect(`${appUrl}/?discord_error=${encodeURIComponent('Unable to retrieve Discord user profile')}`);
+      return clearStateCookie(
+        NextResponse.redirect(`${appUrl}/?discord_error=${encodeURIComponent('Unable to retrieve Discord user profile')}`)
+      );
     }
 
-    // If user already logged in, link identity to existing user profile
     if (existingUser) {
       const u = db.users.find((usr) => usr.id === existingUser.id);
       if (u) {
@@ -114,14 +157,16 @@ export async function GET(req: NextRequest, _context?: any) {
         saveDatabase(db);
         await persistDatabaseNow(env);
       }
+      const safeReturnTo = storedStateObj?.returnTo ? sanitizeReturnTo(storedStateObj.returnTo, '') : '';
       const targetQuery =
         intent === 'owner'
           ? 'account_updated=discord_linked&tab=owner&section=connect'
           : 'account_updated=discord_linked&tab=member&subtab=identity';
-      return NextResponse.redirect(`${appUrl}/?${targetQuery}`);
+      return clearStateCookie(
+        NextResponse.redirect(safeReturnTo ? `${appUrl}${safeReturnTo}` : `${appUrl}/?${targetQuery}`)
+      );
     }
 
-    // Check if user already exists with this Discord ID
     let user = db.users.find((u) => u.identities?.discordId === discordUser!.id);
     if (!user && discordUser.email) {
       user = db.users.find((u) => u.email.toLowerCase() === discordUser!.email!.toLowerCase());
@@ -137,8 +182,8 @@ export async function GET(req: NextRequest, _context?: any) {
         avatar: discordUser.avatar
           ? `https://cdn.discordapp.com/avatars/${discordUser.id}/${discordUser.avatar}.png`
           : `https://picsum.photos/seed/${newUserId}/200/200`,
-        bio: intent === 'owner' ? 'Discord verified community owner.' : 'Discord verified community member.',
-        platformRole: intent === 'owner' ? 'community_owner' : 'user',
+        bio: 'Discord verified community member.',
+        platformRole: 'user', // Strictly never grant owner privileges via OAuth intent
         createdAt: now,
         identities: {
           discordId: discordUser.id,
@@ -172,28 +217,26 @@ export async function GET(req: NextRequest, _context?: any) {
       if (!user.identities) user.identities = {};
       user.identities.discordId = discordUser.id;
       user.identities.discordUsername = discordUser.username;
-      if (intent === 'owner' && user.platformRole === 'user') {
-        user.platformRole = 'community_owner';
-      }
       user.identities.linkedAt = new Date().toISOString();
       saveDatabase(db);
     }
 
-    // Create session and set cookie with SameSite=Lax
-    // Note: No session token is placed into the URL query parameters
     const session = createSession(user.id, req.headers.get('user-agent') || undefined);
     await persistDatabaseNow(env);
     const ownsAnyCommunity = (db.communities || []).some((c) => c.ownerId === user!.id);
-    const targetTab = intent === 'owner' ? 'owner' : 'member';
+    const targetTab = intent === 'owner' && ownsAnyCommunity ? 'owner' : 'member';
     const onboardingParam = intent === 'owner' && !ownsAnyCommunity ? '&onboarding=owner' : '';
-    const res = NextResponse.redirect(
-      `${appUrl}/?tab=${targetTab}&connected_platform=discord&login_success=true${onboardingParam}`
-    );
+    const safeReturnTo = storedStateObj?.returnTo ? sanitizeReturnTo(storedStateObj.returnTo, '') : '';
+    const destination = safeReturnTo
+      ? `${appUrl}${safeReturnTo}`
+      : `${appUrl}/?tab=${targetTab}&connected_platform=discord&login_success=true${onboardingParam}`;
+
+    const res = NextResponse.redirect(destination);
     setSessionCookie(res, session.token, { isCrossSite: false, req });
-    return res;
+    return clearStateCookie(res);
   }
 
-  // 4. Bot Server Installation Mode (guild_id returned)
+  // Bot Server Installation Mode (guild_id returned)
   if (guildId) {
     let serverName = `Discord Server (${guildId})`;
     const token = env.DISCORD_BOT_TOKEN;
@@ -224,20 +267,12 @@ export async function GET(req: NextRequest, _context?: any) {
       'Use Application Commands'
     ];
 
-    dbOperations.connectDiscordGuild(
-      communityId,
-      guildId,
-      serverName,
-      'default',
-      defaultPermissions
-    );
+    dbOperations.connectDiscordGuild(communityId, guildId, serverName, 'default', defaultPermissions);
     await persistDatabaseNow(env);
 
     const redirectUrl = `${appUrl}/?tab=owner&connected_platform=discord&guild_id=${encodeURIComponent(guildId)}&guild_name=${encodeURIComponent(serverName)}&status=success`;
-    const res = NextResponse.redirect(redirectUrl);
-    return res;
+    return clearStateCookie(NextResponse.redirect(redirectUrl));
   }
 
-  // Fallback
-  return NextResponse.redirect(`${appUrl}/?tab=owner&discord_status=authorized`);
+  return clearStateCookie(NextResponse.redirect(`${appUrl}/?tab=owner&discord_status=authorized`));
 }

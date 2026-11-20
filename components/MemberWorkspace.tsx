@@ -130,6 +130,13 @@ export const MemberWorkspace: React.FC<MemberWorkspaceProps> = ({
     return () => clearTimeout(timer);
   }, [initialSubTab]);
 
+  const [nowMs, setNowMs] = useState<number>(0);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setNowMs(Date.now()), 0);
+    return () => clearTimeout(timer);
+  }, []);
+
   // General UI Feedback & Optimistic Overrides
   const [actionFeedback, setActionFeedback] = useState<{ type: 'error' | 'success'; text: string } | null>(null);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
@@ -195,10 +202,17 @@ export const MemberWorkspace: React.FC<MemberWorkspaceProps> = ({
   const [confirmUnlinkPlatform, setConfirmUnlinkPlatform] = useState<'discord' | 'telegram' | null>(null);
   const [unlinkingPlatform, setUnlinkingPlatform] = useState<'discord' | 'telegram' | null>(null);
 
-  // Evidence submission state
+  // Community leave inline confirmation state
+  const [confirmLeaveCommId, setConfirmLeaveCommId] = useState<string | null>(null);
+  const [leavingCommId, setLeavingCommId] = useState<string | null>(null);
+
+  // Evidence submission & revision resubmission state
   const [completingTaskId, setCompletingTaskId] = useState<string | null>(null);
   const [evidenceUrl, setEvidenceUrl] = useState<string>('');
   const [evidenceNotes, setEvidenceNotes] = useState<string>('');
+  const [resubmittingContribId, setResubmittingContribId] = useState<string | null>(null);
+  const [revisionUrl, setRevisionUrl] = useState<string>('');
+  const [revisionNotes, setRevisionNotes] = useState<string>('');
 
   // Derived collections
   const activeSearch = feedSearch.trim().toLowerCase();
@@ -353,12 +367,30 @@ export const MemberWorkspace: React.FC<MemberWorkspaceProps> = ({
     setIsSubmitting(true);
     try {
       await callApiAction('join_community', { communityId, userId: currentUser.id });
-      setActionFeedback({ type: 'success', text: 'Joined community successfully!' });
+      setActionFeedback({ type: 'success', text: isRtl ? 'تم الانضمام للمجتمع بنجاح!' : 'Joined community successfully!' });
       onRefresh();
     } catch (err: any) {
       setActionFeedback({ type: 'error', text: err?.message || 'Failed to join community.' });
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleLeaveCommunity = async (communityId: string) => {
+    setActionFeedback(null);
+    setLeavingCommId(communityId);
+    try {
+      await callApiAction('leave_community', { communityId });
+      setConfirmLeaveCommId(null);
+      setActionFeedback({
+        type: 'success',
+        text: isRtl ? 'تمت مغادرة المجتمع بنجاح.' : 'Left community cleanly.'
+      });
+      onRefresh();
+    } catch (err: any) {
+      setActionFeedback({ type: 'error', text: err?.message || 'Failed to leave community.' });
+    } finally {
+      setLeavingCommId(null);
     }
   };
 
@@ -527,7 +559,9 @@ export const MemberWorkspace: React.FC<MemberWorkspaceProps> = ({
         setCopiedPlatformCode(platform);
         setTimeout(() => setCopiedPlatformCode(null), 2500);
       }
-    } catch {}
+    } catch (err) {
+      console.warn('[MemberWorkspace] clipboard copy failed:', err);
+    }
   };
 
   const handleUnlinkPlatform = async (platform: 'discord' | 'telegram') => {
@@ -572,8 +606,9 @@ export const MemberWorkspace: React.FC<MemberWorkspaceProps> = ({
 
   const handleSubmitDeliverable = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!completingTaskId || !evidenceUrl.trim()) return;
+    if (!completingTaskId || !evidenceUrl.trim() || isSubmitting) return;
     setActionFeedback(null);
+    setIsSubmitting(true);
     try {
       await callApiAction('complete_task', {
         taskId: completingTaskId,
@@ -584,15 +619,47 @@ export const MemberWorkspace: React.FC<MemberWorkspaceProps> = ({
       setCompletingTaskId(null);
       setEvidenceUrl('');
       setEvidenceNotes('');
-      setActionFeedback({ type: 'success', text: 'Deliverable submitted to the Contribution Ledger for verification.' });
+      setActionFeedback({ type: 'success', text: isRtl ? 'تم إرسال العمل والدليل إلى سجل المساهمات للمراجعة.' : 'Deliverable submitted to the Contribution Ledger for verification.' });
       onRefresh();
     } catch (err: any) {
       setActionFeedback({ type: 'error', text: err?.message || 'Connection error submitting deliverable.' });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
+  const handleResubmitContribution = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!resubmittingContribId || !revisionUrl.trim() || isSubmitting) return;
+    setActionFeedback(null);
+    setIsSubmitting(true);
+    try {
+      await callApiAction('resubmit_contribution', {
+        contributionId: resubmittingContribId,
+        evidenceUrl: revisionUrl.trim(),
+        description: revisionNotes.trim()
+      });
+      setResubmittingContribId(null);
+      setRevisionUrl('');
+      setRevisionNotes('');
+      setActionFeedback({
+        type: 'success',
+        text: isRtl ? 'تمت إعادة إرسال المساهمة بالأدلة المعدلة للمراجعة.' : 'Contribution resubmitted with revised evidence for review.'
+      });
+      onRefresh();
+    } catch (err: any) {
+      setActionFeedback({ type: 'error', text: err?.message || 'Failed to resubmit contribution.' });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const myRevisionRequests = contributions.filter(
+    (c) => c.memberId === currentUser.id && c.reviewStatus === 'revision_requested'
+  );
+
   return (
-    <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 space-y-6">
+    <div dir={isRtl ? 'rtl' : 'ltr'} className="mx-auto max-w-7xl px-4 py-6 sm:px-6 space-y-6">
       {/* Persona Bar & Active Member Identity */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-slate-800 pb-4">
         <div>
@@ -735,14 +802,14 @@ export const MemberWorkspace: React.FC<MemberWorkspaceProps> = ({
       {/* Member Navigation Tabs */}
       <div className="flex overflow-x-auto gap-1.5 border-b border-slate-800/80 pb-2.5 text-xs font-medium text-slate-400 no-scrollbar">
         {[
-          { id: 'inbox', label: `Inbox & Notices (${unreadCount > 0 ? `${unreadCount} new` : myNotifications.length})` },
-          { id: 'feed', label: `Opportunities & Bounties (${opportunityFeed.length + openBounties.length})` },
-          { id: 'communities', label: `Communities & Invites (${joinedCommunityIds.size})` },
-          { id: 'events', label: `Events & Polls (${events.length + polls.length})` },
-          { id: 'tasks', label: `My Tasks (${myTasks.length})` },
-          { id: 'commitments', label: `Commitments (${myCommitments.length})` },
-          { id: 'passport', label: 'Passport, Privacy & Ranks' },
-          { id: 'identity', label: lang === 'ar' ? 'ربط Discord & Telegram' : 'Connected Accounts' }
+          { id: 'inbox', label: isRtl ? `الوارد والإشعارات (${unreadCount > 0 ? `${unreadCount} جديد` : myNotifications.length})` : `Inbox & Notices (${unreadCount > 0 ? `${unreadCount} new` : myNotifications.length})` },
+          { id: 'feed', label: isRtl ? `الفرص والمكافآت (${opportunityFeed.length + openBounties.length})` : `Opportunities & Bounties (${opportunityFeed.length + openBounties.length})` },
+          { id: 'communities', label: isRtl ? `المجتمعات والدعوات (${joinedCommunityIds.size})` : `Communities & Invites (${joinedCommunityIds.size})` },
+          { id: 'events', label: isRtl ? `الفعاليات والتصويت (${events.length + polls.length})` : `Events & Polls (${events.length + polls.length})` },
+          { id: 'tasks', label: isRtl ? `مهامي (${myTasks.length})` : `My Tasks (${myTasks.length})` },
+          { id: 'commitments', label: isRtl ? `الالتزامات (${myCommitments.length})` : `Commitments (${myCommitments.length})` },
+          { id: 'passport', label: isRtl ? 'جواز المهارات والترتيب' : 'Passport, Privacy & Ranks' },
+          { id: 'identity', label: isRtl ? 'ربط Discord و Telegram' : 'Connected Accounts' }
         ].map((tab) => (
           <button
             key={tab.id}
@@ -897,13 +964,13 @@ export const MemberWorkspace: React.FC<MemberWorkspaceProps> = ({
           {/* Quick Search Filter Bar */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-900/40 p-3">
             <div className="relative flex-1">
-              <Search className="h-3.5 w-3.5 text-slate-400 absolute left-3 top-2.5" />
+              <Search className="h-3.5 w-3.5 text-slate-400 absolute start-3 top-2.5" />
               <input
                 type="text"
                 value={feedSearch}
                 onChange={(e) => setFeedSearch(e.target.value)}
                 placeholder={isRtl ? 'ابحث في المهام والفرص بالمهارة أو العنوان...' : 'Filter bounties & requests by skill or title...'}
-                className="w-full rounded-lg border border-slate-700 bg-slate-950 pl-9 pr-3 py-1.5 text-xs text-white placeholder-slate-500 focus:border-indigo-500 focus:outline-none"
+                className="w-full rounded-lg border border-slate-700 bg-slate-950 ps-9 pe-3 py-1.5 text-xs text-white placeholder-slate-500 focus:border-indigo-500 focus:outline-none"
               />
             </div>
             {feedSearch && (
@@ -1135,19 +1202,50 @@ export const MemberWorkspace: React.FC<MemberWorkspaceProps> = ({
                     </div>
                   </div>
 
-                  <div className="pt-3 border-t border-slate-800/80 flex justify-end">
+                  <div className="pt-3 border-t border-slate-800/80 flex items-center justify-between gap-2">
                     {isJoined ? (
-                      <span className="text-xs font-mono text-emerald-400 flex items-center gap-1">
-                        <CheckCircle2 className="h-3.5 w-3.5" /> Active Member
-                      </span>
+                      <>
+                        <span className="text-xs font-mono text-emerald-400 flex items-center gap-1">
+                          <CheckCircle2 className="h-3.5 w-3.5" /> {isRtl ? 'عضو نشط' : 'Active Member'}
+                        </span>
+                        {comm.ownerId !== currentUser.id && (
+                          confirmLeaveCommId === comm.id ? (
+                            <div className="inline-flex items-center gap-1.5 text-[11px]">
+                              <button
+                                type="button"
+                                disabled={leavingCommId === comm.id}
+                                onClick={() => handleLeaveCommunity(comm.id)}
+                                className="rounded bg-rose-600 px-2 py-0.5 font-semibold text-white hover:bg-rose-500 disabled:opacity-50"
+                              >
+                                {leavingCommId === comm.id ? '...' : (isRtl ? 'تأكيد المغادرة' : 'Confirm Leave')}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setConfirmLeaveCommId(null)}
+                                className="rounded bg-slate-800 px-2 py-0.5 text-slate-300"
+                              >
+                                {isRtl ? 'إلغاء' : 'Cancel'}
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setConfirmLeaveCommId(comm.id)}
+                              className="rounded-md border border-rose-800/40 bg-rose-950/20 px-2.5 py-1 text-[11px] font-medium text-rose-300 hover:bg-rose-950/50"
+                            >
+                              {isRtl ? 'مغادرة' : 'Leave'}
+                            </button>
+                          )
+                        )}
+                      </>
                     ) : (
                       <button
                         type="button"
                         disabled={isSubmitting}
                         onClick={() => handleJoinCommunity(comm.id)}
-                        className="rounded-md bg-indigo-600 px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-indigo-500"
+                        className="ms-auto rounded-md bg-indigo-600 px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-indigo-500 disabled:opacity-50"
                       >
-                        Join Community
+                        {isRtl ? 'انضمام للمجتمع' : 'Join Community'}
                       </button>
                     )}
                   </div>
@@ -1201,7 +1299,7 @@ export const MemberWorkspace: React.FC<MemberWorkspaceProps> = ({
                               type="button"
                               disabled={poll.status === 'closed'}
                               onClick={() => handleCastVote(poll.id, alt.id)}
-                              className={`w-full text-left rounded-lg border p-2.5 text-xs transition-colors ${
+                              className={`w-full text-start rounded-lg border p-2.5 text-xs transition-colors ${
                                 voted
                                   ? 'border-indigo-500/60 bg-indigo-950/40 text-white'
                                   : 'border-slate-800 bg-slate-950/60 text-slate-300 hover:border-slate-700'
@@ -1397,39 +1495,124 @@ export const MemberWorkspace: React.FC<MemberWorkspaceProps> = ({
                 <button type="button" onClick={() => setCompletingTaskId(null)} className="px-3 py-1.5 text-xs text-slate-400 hover:text-white">
                   Cancel
                 </button>
-                <button type="submit" className="rounded-md bg-emerald-600 px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-emerald-500">
-                  Submit to Contribution Ledger
+                <button type="submit" disabled={isSubmitting} className="rounded-md bg-emerald-600 px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-emerald-500 disabled:opacity-50">
+                  {isSubmitting ? (isRtl ? 'جاري الإرسال...' : 'Submitting...') : (isRtl ? 'إرسال للسجل الموثق' : 'Submit to Contribution Ledger')}
                 </button>
               </div>
             </form>
           )}
 
+          {/* Revision Requested Contributions Banner & Resubmit Drawer */}
+          {myRevisionRequests.length > 0 && (
+            <div className="rounded-xl border border-amber-500/40 bg-amber-950/20 p-4 space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs font-bold text-amber-300">
+                  {isRtl
+                    ? `مساهمات تتطلب تعديل أو أدلة إضافية (${myRevisionRequests.length})`
+                    : `Contributions Requesting Revision (${myRevisionRequests.length})`}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => onSelectTab('trust')}
+                  className="text-[11px] font-semibold text-indigo-300 hover:underline"
+                >
+                  {isRtl ? 'فتح سجل النزاعات والمراجعات' : 'Open Contribution Ledger & Shield'}
+                </button>
+              </div>
+              {myRevisionRequests.map((rc) => (
+                <div key={rc.id} className="rounded-lg border border-slate-800 bg-slate-950/70 p-3 space-y-2 text-xs">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-semibold text-white">{rc.title}</span>
+                    <span className="font-mono text-[10px] text-amber-300 bg-amber-950/60 px-2 py-0.5 rounded">
+                      revision_requested
+                    </span>
+                  </div>
+                  {rc.decisionReason && (
+                    <p className="text-slate-300 text-[11px]">
+                      <strong>{isRtl ? 'ملاحظة المراجع:' : 'Reviewer note:'}</strong> {rc.decisionReason}
+                    </p>
+                  )}
+                  {resubmittingContribId === rc.id ? (
+                    <form onSubmit={handleResubmitContribution} className="space-y-2 pt-2 border-t border-slate-800">
+                      <input
+                        type="url"
+                        required
+                        value={revisionUrl}
+                        onChange={(e) => setRevisionUrl(e.target.value)}
+                        placeholder="https://github.com/..."
+                        className="w-full rounded-md border border-slate-700 bg-slate-900 px-2.5 py-1.5 text-xs text-white"
+                      />
+                      <textarea
+                        rows={2}
+                        value={revisionNotes}
+                        onChange={(e) => setRevisionNotes(e.target.value)}
+                        placeholder={isRtl ? 'تفاصيل التعديل...' : 'Explain updated evidence...'}
+                        className="w-full rounded-md border border-slate-700 bg-slate-900 p-2 text-xs text-white"
+                      />
+                      <div className="flex justify-end gap-2">
+                        <button type="button" onClick={() => setResubmittingContribId(null)} className="px-2.5 py-1 text-xs text-slate-400">
+                          {isRtl ? 'إلغاء' : 'Cancel'}
+                        </button>
+                        <button type="submit" disabled={isSubmitting} className="rounded-md bg-amber-600 px-3 py-1 text-xs font-semibold text-white hover:bg-amber-500 disabled:opacity-50">
+                          {isSubmitting ? '...' : (isRtl ? 'إعادة الإرسال' : 'Resubmit Revision')}
+                        </button>
+                      </div>
+                    </form>
+                  ) : (
+                    <div className="flex justify-end">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setResubmittingContribId(rc.id);
+                          setRevisionUrl(rc.evidence?.[0]?.url || '');
+                          setRevisionNotes(rc.description || '');
+                        }}
+                        className="rounded-md bg-amber-600 px-3 py-1 text-xs font-semibold text-white hover:bg-amber-500"
+                      >
+                        {isRtl ? 'تعديل وإعادة إرسال الأدلة' : 'Update & Resubmit Evidence'}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
           {myTasks.length === 0 ? (
             <div className="rounded-xl border border-slate-800 bg-slate-900/20 p-8 text-center text-xs text-slate-400 space-y-2">
-              <p>No tasks currently assigned to your account.</p>
+              <p>{isRtl ? 'لا توجد مهام مسندة لحسابك حالياً.' : 'No tasks currently assigned to your account.'}</p>
               {openBounties.length > 0 && (
                 <button
                   type="button"
                   onClick={() => setActiveSubTab('feed')}
                   className="rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-500"
                 >
-                  Browse {openBounties.length} Open Bounties
+                  {isRtl ? `تصفح ${openBounties.length} مكافآت متاحة` : `Browse ${openBounties.length} Open Bounties`}
                 </button>
               )}
             </div>
           ) : (
             <div className="space-y-3">
-              {myTasks.map((task) => (
+              {myTasks.map((task) => {
+                const isOverdue = task.status !== 'completed' && nowMs > 0 && Boolean(task.deadline) && new Date(task.deadline).getTime() < nowMs;
+                return (
                 <div key={task.id} className="rounded-xl border border-slate-800 bg-slate-900/40 p-4 space-y-3">
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
                     <span className="text-xs font-bold text-white">{task.title}</span>
-                    <span
-                      className={`text-[11px] font-mono capitalize px-2 py-0.5 rounded ${
-                        task.status === 'completed' ? 'bg-emerald-950 text-emerald-300' : 'bg-indigo-950 text-indigo-300'
-                      }`}
-                    >
-                      {task.status.replace('_', ' ')}
-                    </span>
+                    <div className="flex items-center gap-1.5">
+                      {isOverdue && (
+                        <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-rose-950 text-rose-300 border border-rose-700/50">
+                          {isRtl ? 'متأخرة' : 'OVERDUE'}
+                        </span>
+                      )}
+                      <span
+                        className={`text-[11px] font-mono capitalize px-2 py-0.5 rounded ${
+                          task.status === 'completed' ? 'bg-emerald-950 text-emerald-300' : 'bg-indigo-950 text-indigo-300'
+                        }`}
+                      >
+                        {task.status.replace('_', ' ')}
+                      </span>
+                    </div>
                   </div>
 
                   <p className="text-xs text-slate-300">{task.description}</p>
@@ -1463,19 +1646,20 @@ export const MemberWorkspace: React.FC<MemberWorkspaceProps> = ({
                         className="flex items-center gap-1.5 rounded-md border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs text-slate-200 hover:bg-slate-700"
                       >
                         <ArrowRightLeft className="h-3.5 w-3.5" />
-                        <span>Hand Off Task</span>
+                        <span>{isRtl ? 'تسليم المهمة لعضو آخر' : 'Hand Off Task'}</span>
                       </button>
                       <button
                         onClick={() => setCompletingTaskId(task.id)}
                         className="flex items-center gap-1.5 rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-500"
                       >
                         <Shield className="h-3.5 w-3.5" />
-                        <span>Submit Work with Evidence</span>
+                        <span>{isRtl ? 'إرسال العمل مع الدليل' : 'Submit Work with Evidence'}</span>
                       </button>
                     </div>
                   )}
                 </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>

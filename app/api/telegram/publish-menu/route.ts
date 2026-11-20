@@ -17,8 +17,10 @@ export async function POST(req: NextRequest, _context?: any) {
 
     await ensureDatabaseHydrated(env);
     const authUser = await getAuthenticatedUserFromRequest(req);
-    const actorId = authUser?.id || 'usr_sarah';
-    const role = getUserRoleInCommunity(actorId, communityId);
+    if (!authUser) {
+      return NextResponse.json({ success: false, error: 'Authentication required' }, { status: 401 });
+    }
+    const role = getUserRoleInCommunity(authUser.id, communityId);
 
     if (!['platform_admin', 'community_owner', 'admin'].includes(role)) {
       return NextResponse.json({ success: false, error: 'Unauthorized: only community owners can publish menus' }, { status: 403 });
@@ -101,7 +103,9 @@ export async function POST(req: NextRequest, _context?: any) {
                   disable_notification: true
                 })
               });
-            } catch {}
+            } catch (pinErr) {
+              console.warn('[Telegram Publish Menu] Could not pin menu message:', pinErr);
+            }
           }
         } else {
           // If Telegram rejected because chat is not found on live servers (e.g. test chat ID or bot pending addition)

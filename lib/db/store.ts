@@ -3,6 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import { isSupabaseConfigured, syncDatabaseToSupabase, hydrateDatabaseFromSupabase } from './supabase';
 import { getCloudflareExecutionContext, getRuntimeEnv, CloudflareEnv } from '../env';
+import { isValidHttpUrl, sanitizeSlug, sanitizeUrlList, validateEvidenceUrl } from '../services/validation';
 import {
   User,
   Community,
@@ -87,6 +88,7 @@ export interface DatabaseSchema {
   subscriptions?: CommunitySubscription[];
   webhookEvents?: PaymentWebhookEvent[];
   referrals?: ReferralRecord[];
+  processedInteractionIds?: string[];
   dataMode?: DataMode;
 }
 
@@ -1718,6 +1720,66 @@ export const dbOperations = {
     return mem;
   },
 
+  leaveCommunity: (communityId: string, userId: string): { success: boolean; error?: string } => {
+    const db = getDatabase();
+    const comm = db.communities.find(c => c.id === communityId);
+    if (!comm) {
+      return { success: false, error: 'Community not found' };
+    }
+    if (comm.ownerId === userId) {
+      return {
+        success: false,
+        error: 'Community owners cannot leave their own community before transferring ownership.'
+      };
+    }
+    const existingLen = db.memberships.length;
+    db.memberships = db.memberships.filter(m => !(m.communityId === communityId && m.userId === userId));
+    if (db.memberships.length === existingLen) {
+      return { success: false, error: 'Membership record not found' };
+    }
+    db.auditLogs.unshift({
+      id: `aud_${Date.now()}`,
+      communityId,
+      actorId: userId,
+      action: 'community_left',
+      details: `User ${userId} voluntarily left community ${communityId}`,
+      timestamp: new Date().toISOString()
+    });
+    saveDatabase(db);
+    return { success: true };
+  },
+
+  exportUserPersonalData: (userId: string) => {
+    const db = getDatabase();
+    const user = db.users.find(u => u.id === userId);
+    if (!user) return null;
+    return {
+      exportedAt: new Date().toISOString(),
+      schemaVersion: '1.0',
+      profile: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        bio: user.bio,
+        platformRole: user.platformRole,
+        createdAt: user.createdAt,
+        identities: user.identities,
+        passport: user.passport,
+        privacy: user.privacy
+      },
+      memberships: db.memberships.filter(m => m.userId === userId),
+      requestsCreated: db.requests.filter(r => r.creatorId === userId),
+      offersSubmitted: db.offers.filter(o => o.memberId === userId),
+      tasksAssigned: db.tasks.filter(t => t.assigneeId === userId),
+      commitments: db.commitments.filter(c => c.committedById === userId || c.expectingDeliveryId === userId),
+      contributions: db.contributions.filter(c => c.memberId === userId),
+      outcomes: db.outcomes.filter(o => o.participatingMemberIds.includes(userId)),
+      portfolioItems: db.portfolioItems.filter(p => p.userId === userId),
+      disputes: db.disputes.filter(d => d.filedById === userId),
+      notifications: db.notifications.filter(n => n.userId === userId)
+    };
+  },
+
   // Users & Passports
   getUsers: () => getDatabase().users,
   getUserById: (id: string) => getDatabase().users.find(u => u.id === id),
@@ -1846,10 +1908,18 @@ export const dbOperations = {
     const db = getDatabase();
     const offer = db.offers.find(o => o.id === offerId);
     if (!offer) return null;
-    offer.status = 'accepted';
+    if (offer.status !== 'pending') {
+      return { error: `Offer is already ${offer.status} and cannot be accepted again.` };
+    }
 
     // Assign on request
     const req = db.requests.find(r => r.id === offer.requestId);
+    if (req && (req.status === 'in_progress' || req.status === 'completed' || req.status === 'closed')) {
+      return { error: `Request is already ${req.status} and has an assigned deliverable.` };
+    }
+
+    offer.status = 'accepted';
+
     if (req) {
       req.status = 'in_progress';
       req.assignedOfferId = offer.id;
@@ -2063,6 +2133,19 @@ export const dbOperations = {
     const db = getDatabase();
     const task = db.tasks.find(t => t.id === taskId);
     if (!task || task.status === 'completed') return null;
+
+    const urlCheck = validateEvidenceUrl(evidenceUrl);
+    if (!urlCheck.valid || !urlCheck.normalized) {
+      return { error: urlCheck.error || 'Invalid evidence URL' };
+    }
+
+    const existingActiveContrib = db.contributions.find(
+      c => c.relatedTaskId === taskId && (c.reviewStatus === 'pending' || c.reviewStatus === 'verified')
+    );
+    if (existingActiveContrib) {
+      return { error: 'An active or verified contribution already exists for this task.' };
+    }
+
     task.status = 'completed';
 
     // Create contribution in Contribution Ledger
@@ -2078,7 +2161,7 @@ export const dbOperations = {
         {
           id: `evi_${Date.now()}`,
           type: 'link',
-          url: evidenceUrl,
+          url: urlCheck.normalized,
           description: 'Task completion deliverable link',
           submittedAt: new Date().toISOString()
         }
@@ -2191,11 +2274,42 @@ export const dbOperations = {
   },
   submitContribution: (cnt: Omit<Contribution, 'id' | 'submissionDate' | 'reviewStatus' | 'firstPartyConfirmed' | 'secondPartyConfirmed' | 'sharingValidity'>) => {
     const db = getDatabase();
+    const sanitizedEvidence = (cnt.evidence || []).map((ev) => {
+      const check = validateEvidenceUrl(ev.url);
+      if (!check.valid || !check.normalized) {
+        throw new Error(check.error || 'Invalid evidence URL');
+      }
+      return { ...ev, url: check.normalized };
+    });
+    if (sanitizedEvidence.length === 0) {
+      throw new Error('At least one valid evidence URL is required.');
+    }
+
+    if (cnt.relatedTaskId) {
+      const dup = db.contributions.find(
+        c => c.relatedTaskId === cnt.relatedTaskId && (c.reviewStatus === 'pending' || c.reviewStatus === 'verified')
+      );
+      if (dup) {
+        throw new Error('A pending or verified contribution already exists for this task.');
+      }
+    }
+
+    const now = new Date().toISOString();
     const newContribution: Contribution = {
       ...cnt,
+      evidence: sanitizedEvidence,
       id: `cnt_${Date.now()}`,
-      submissionDate: new Date().toISOString(),
+      submissionDate: now,
       reviewStatus: 'pending',
+      revisionHistory: [
+        {
+          timestamp: now,
+          actorId: cnt.memberId,
+          status: 'pending',
+          note: 'Initial contribution submitted with evidence.',
+          evidenceUrls: sanitizedEvidence.map(e => e.url)
+        }
+      ],
       firstPartyConfirmed: true,
       secondPartyConfirmed: false,
       sharingValidity: true
@@ -2204,17 +2318,123 @@ export const dbOperations = {
     saveDatabase(db);
     return newContribution;
   },
-  reviewContribution: (contributionId: string, reviewerId: string, decision: 'verified' | 'rejected' | 'disputed', reason: string) => {
+  resubmitContribution: (
+    contributionId: string,
+    memberId: string,
+    evidenceUrl: string,
+    description?: string
+  ): { success: boolean; contribution?: Contribution; error?: string } => {
+    const db = getDatabase();
+    const contribution = db.contributions.find(c => c.id === contributionId);
+    if (!contribution) {
+      return { success: false, error: 'Contribution not found' };
+    }
+    if (contribution.memberId !== memberId) {
+      return { success: false, error: 'Unauthorized: only the contributor can resubmit this contribution' };
+    }
+    if (contribution.reviewStatus === 'verified') {
+      return { success: false, error: 'Verified contributions are locked and cannot be altered silently.' };
+    }
+    if (contribution.reviewStatus !== 'revision_requested' && contribution.reviewStatus !== 'rejected') {
+      return { success: false, error: `Contribution in status "${contribution.reviewStatus}" cannot be resubmitted.` };
+    }
+
+    const urlCheck = validateEvidenceUrl(evidenceUrl);
+    if (!urlCheck.valid || !urlCheck.normalized) {
+      return { success: false, error: urlCheck.error || 'Invalid evidence URL' };
+    }
+
+    const now = new Date().toISOString();
+    contribution.evidence.push({
+      id: `evi_${Date.now()}`,
+      type: 'link',
+      url: urlCheck.normalized,
+      description: description?.trim() || 'Updated deliverable evidence after review feedback',
+      submittedAt: now
+    });
+    if (description && description.trim()) {
+      contribution.description = description.trim();
+    }
+    contribution.reviewStatus = 'pending';
+    contribution.secondPartyConfirmed = false;
+    if (!contribution.revisionHistory) contribution.revisionHistory = [];
+    contribution.revisionHistory.push({
+      timestamp: now,
+      actorId: memberId,
+      status: 'pending',
+      note: description?.trim() || 'Resubmitted updated evidence for review.',
+      evidenceUrls: [urlCheck.normalized]
+    });
+
+    if (contribution.relatedTaskId) {
+      const task = db.tasks.find(t => t.id === contribution.relatedTaskId);
+      if (task) task.status = 'completed';
+    }
+
+    const comm = db.communities.find(c => c.id === contribution.communityId);
+    if (comm?.ownerId && comm.ownerId !== memberId) {
+      db.notifications.unshift({
+        id: `ntf_resub_${Date.now()}`,
+        userId: comm.ownerId,
+        communityId: contribution.communityId,
+        title: `Revision Resubmitted: ${contribution.title}`,
+        message: `${memberId} uploaded updated evidence for review.`,
+        linkUrl: '/trust',
+        type: 'review',
+        read: false,
+        channelAttempts: { inApp: true, discord: false, telegram: false },
+        createdAt: now
+      });
+    }
+
+    db.auditLogs.unshift({
+      id: `aud_${Date.now()}`,
+      communityId: contribution.communityId,
+      actorId: memberId,
+      action: 'contribution_resubmitted',
+      details: `Member ${memberId} resubmitted contribution "${contribution.title}"`,
+      timestamp: now
+    });
+
+    saveDatabase(db);
+    return { success: true, contribution };
+  },
+  reviewContribution: (
+    contributionId: string,
+    reviewerId: string,
+    decision: 'verified' | 'rejected' | 'revision_requested' | 'disputed',
+    reason: string
+  ) => {
     const db = getDatabase();
     const contribution = db.contributions.find(c => c.id === contributionId);
     if (!contribution) return null;
 
+    if (!String(reason || '').trim()) {
+      return { error: 'A clear reviewer reason or feedback note is required.' };
+    }
+    if (contribution.reviewStatus === 'verified' && decision !== 'disputed') {
+      return { error: 'Verified contribution evidence is locked; open a Community Shield dispute instead.' };
+    }
+
+    const now = new Date().toISOString();
     contribution.reviewStatus = decision;
     contribution.reviewerId = reviewerId;
-    contribution.decisionReason = reason;
+    contribution.decisionReason = reason.trim();
+    if (!contribution.revisionHistory) contribution.revisionHistory = [];
+    contribution.revisionHistory.push({
+      timestamp: now,
+      actorId: reviewerId,
+      status: decision,
+      note: reason.trim()
+    });
 
     if (decision === 'verified') {
       contribution.secondPartyConfirmed = true;
+      contribution.lockedAt = now;
+
+      // Respect member privacy preference for cross-community sharing if set
+      const memberUser = db.users.find(u => u.id === contribution.memberId);
+      const allowCross = Boolean(memberUser?.privacy?.allowCrossCommunitySharing);
 
       // Auto-create Portable Outcome Record (avoid duplicates if already minted)
       const alreadyHasOutcome = db.outcomes.some(
@@ -2229,7 +2449,7 @@ export const dbOperations = {
           deliveredResult: contribution.description,
           confirmationStatus: 'verified',
           evidenceUrls: contribution.evidence.map(e => e.url),
-          date: new Date().toISOString().split('T')[0],
+          date: now.split('T')[0],
           shareable: true
         };
         db.outcomes.unshift(newOutcome);
@@ -2243,7 +2463,7 @@ export const dbOperations = {
           roleDescription: 'Verified Contributor',
           communityName: db.communities.find(c => c.id === contribution.communityId)?.name || 'Community OS',
           featured: true,
-          isPublic: true
+          isPublic: allowCross || Boolean(memberUser?.passport?.isPublic)
         };
         db.portfolioItems.unshift(newPortfolioItem);
       }
@@ -2255,7 +2475,31 @@ export const dbOperations = {
         actorId: reviewerId,
         action: 'contribution_verified',
         details: `Verified contribution "${contribution.title}" for member ${contribution.memberId}`,
-        timestamp: new Date().toISOString()
+        timestamp: now
+      });
+    } else if (decision === 'revision_requested') {
+      contribution.secondPartyConfirmed = false;
+      if (contribution.relatedTaskId) {
+        const linkedTask = db.tasks.find(t => t.id === contribution.relatedTaskId);
+        if (linkedTask) linkedTask.status = 'in_progress';
+      }
+      db.auditLogs.unshift({
+        id: `aud_${Date.now()}`,
+        communityId: contribution.communityId,
+        actorId: reviewerId,
+        action: 'contribution_revision_requested',
+        details: `Requested revision on "${contribution.title}": ${reason.trim()}`,
+        timestamp: now
+      });
+    } else if (decision === 'rejected') {
+      contribution.secondPartyConfirmed = false;
+      db.auditLogs.unshift({
+        id: `aud_${Date.now()}`,
+        communityId: contribution.communityId,
+        actorId: reviewerId,
+        action: 'contribution_rejected',
+        details: `Rejected contribution "${contribution.title}": ${reason.trim()}`,
+        timestamp: now
       });
     } else if (decision === 'disputed') {
       const hasOpenDispute = db.disputes.some(
@@ -2272,12 +2516,12 @@ export const dbOperations = {
           status: 'open',
           auditTrail: [
             {
-              timestamp: new Date().toISOString(),
+              timestamp: now,
               action: 'Dispute opened during contribution review.',
               actorId: reviewerId
             }
           ],
-          createdAt: new Date().toISOString()
+          createdAt: now
         });
       }
       db.auditLogs.unshift({
@@ -2286,7 +2530,7 @@ export const dbOperations = {
         actorId: reviewerId,
         action: 'contribution_disputed',
         details: `Flagged contribution "${contribution.title}" for dispute audit`,
-        timestamp: new Date().toISOString()
+        timestamp: now
       });
     }
 
@@ -2299,15 +2543,17 @@ export const dbOperations = {
       title:
         decision === 'verified'
           ? `Outcome Verified: ${contribution.title}`
-          : decision === 'rejected'
+          : decision === 'revision_requested'
           ? `Revision Requested: ${contribution.title}`
+          : decision === 'rejected'
+          ? `Submission Rejected: ${contribution.title}`
           : `Dispute Opened: ${contribution.title}`,
       message: reason || `Your deliverable was marked as ${decision}.`,
       linkUrl: '/passport',
       type: 'review',
       read: false,
       channelAttempts: { inApp: true, discord: false, telegram: false },
-      createdAt: new Date().toISOString()
+      createdAt: now
     });
 
     saveDatabase(db);
@@ -2450,6 +2696,69 @@ export const dbOperations = {
     saveDatabase(db);
     return disp;
   },
+  appealDispute: (
+    disputeId: string,
+    actorId: string,
+    appealNotes: string,
+    evidenceLinks?: string[]
+  ): { success: boolean; dispute?: Dispute; error?: string } => {
+    const db = getDatabase();
+    const disp = db.disputes.find(d => d.id === disputeId);
+    if (!disp) {
+      return { success: false, error: 'Dispute not found' };
+    }
+    if (!String(appealNotes || '').trim()) {
+      return { success: false, error: 'Appeal statement is required.' };
+    }
+    const urlCheck = sanitizeUrlList(evidenceLinks || []);
+    if (!urlCheck.valid) {
+      return { success: false, error: urlCheck.error || 'Invalid appeal evidence link' };
+    }
+
+    const now = new Date().toISOString();
+    disp.status = 'appealed';
+    if (urlCheck.sanitized.length > 0) {
+      disp.evidenceLinks = Array.from(new Set([...disp.evidenceLinks, ...urlCheck.sanitized]));
+    }
+    disp.auditTrail.push({
+      timestamp: now,
+      action: `Appeal submitted: ${appealNotes.trim()}`,
+      actorId
+    });
+
+    const cnt = db.contributions.find(c => c.id === disp.contributionId);
+    if (cnt) {
+      cnt.reviewStatus = 'disputed';
+    }
+
+    const comm = db.communities.find(c => c.id === disp.communityId);
+    if (comm?.ownerId && comm.ownerId !== actorId) {
+      db.notifications.unshift({
+        id: `ntf_app_${Date.now()}`,
+        userId: comm.ownerId,
+        communityId: disp.communityId,
+        title: `Dispute Appeal Filed (${disp.id})`,
+        message: appealNotes.trim(),
+        linkUrl: '/trust',
+        type: 'dispute',
+        read: false,
+        channelAttempts: { inApp: true, discord: false, telegram: false },
+        createdAt: now
+      });
+    }
+
+    db.auditLogs.unshift({
+      id: `aud_${Date.now()}`,
+      communityId: disp.communityId,
+      actorId,
+      action: 'dispute_appealed',
+      details: `Dispute ${disp.id} appealed by ${actorId}: ${appealNotes.trim()}`,
+      timestamp: now
+    });
+
+    saveDatabase(db);
+    return { success: true, dispute: disp };
+  },
 
   // Knowledge & Freshness
   getKnowledge: (communityId?: string) => {
@@ -2507,12 +2816,7 @@ export const dbOperations = {
   },
   createLink: (link: Omit<CommunityLink, 'id' | 'createdAt' | 'stats' | 'isRevoked'>) => {
     const db = getDatabase();
-    const baseSlug =
-      String(link.slug || '')
-        .toLowerCase()
-        .trim()
-        .replace(/[^a-z0-9-]+/g, '-')
-        .replace(/^-+|-+$/g, '') || `link-${Date.now()}`;
+    const baseSlug = sanitizeSlug(link.slug || '') || `link-${Date.now()}`;
     const hasCollision = db.links.some(l => l.slug.toLowerCase() === baseSlug && !l.isRevoked);
     const finalSlug = hasCollision ? `${baseSlug}-${Date.now().toString().slice(-4)}` : baseSlug;
     const newLink: CommunityLink = {
@@ -2520,6 +2824,7 @@ export const dbOperations = {
       slug: finalSlug,
       id: `lnk_${Date.now()}`,
       isRevoked: false,
+      maxUses: link.maxUses && Number(link.maxUses) > 0 ? Number(link.maxUses) : undefined,
       stats: { visits: 0, starts: 0, submissions: 0, completions: 0, verifiedOutcomes: 0 },
       createdAt: new Date().toISOString()
     };
@@ -2527,15 +2832,140 @@ export const dbOperations = {
     saveDatabase(db);
     return newLink;
   },
+  resolveActionLinkAccess: (slug: string, user?: User | null) => {
+    const db = getDatabase();
+    const slugLower = String(slug || '').trim().toLowerCase();
+    let link = db.links.find(l => l.slug.toLowerCase() === slugLower) || null;
+    let community = link ? db.communities.find(c => c.id === link!.communityId) || null : null;
+
+    if (!link && slugLower) {
+      const normalized = slugLower.replace(/-(action-)?hub$/, '');
+      community =
+        db.communities.find(c => {
+          const cSlug = (c.slug || '').toLowerCase();
+          const cId = c.id.toLowerCase();
+          return (
+            cSlug === slugLower ||
+            cSlug === normalized ||
+            cId === slugLower ||
+            cId === normalized ||
+            `${cSlug}-hub` === slugLower ||
+            `${cSlug}-action-hub` === slugLower ||
+            `${cId}-hub` === slugLower
+          );
+        }) || null;
+
+      if (community) {
+        link =
+          db.links.find(
+            l => l.communityId === community!.id && l.linkType === 'hub_multipurpose' && !l.isRevoked
+          ) || {
+            id: `virtual_hub_${community.id}`,
+            communityId: community.id,
+            linkType: 'hub_multipurpose',
+            slug,
+            title: `${community.name} Action Hub`,
+            description:
+              community.description ||
+              'Central synchronized Action Hub for NeedSignal help requests, QuestLoop tasks, and verified outcomes.',
+            audience: 'public',
+            stats: { visits: 0, starts: 0, submissions: 0, completions: 0, verifiedOutcomes: 0 },
+            createdAt: community.createdAt,
+            isRevoked: false
+          };
+      }
+    }
+
+    if (!link || !community) {
+      return { found: false as const, allowed: false, reason: 'Link not found', statusCode: 404 };
+    }
+    if (link.isRevoked) {
+      return { found: true as const, link, community, allowed: false, reason: 'revoked', statusCode: 410 };
+    }
+    if (link.expiresAt && new Date(link.expiresAt).getTime() <= Date.now()) {
+      return { found: true as const, link, community, allowed: false, reason: 'expired', statusCode: 410 };
+    }
+    if (link.maxUses && link.stats.completions >= link.maxUses) {
+      return { found: true as const, link, community, allowed: false, reason: 'max_uses_reached', statusCode: 410 };
+    }
+    if (link.audience === 'members_only') {
+      if (!user) {
+        return { found: true as const, link, community, allowed: false, requiresAuth: true, reason: 'auth_required', statusCode: 401 };
+      }
+      const isMember =
+        user.platformRole === 'platform_admin' ||
+        community.ownerId === user.id ||
+        db.memberships.some(m => m.communityId === link!.communityId && m.userId === user.id && m.moderationStatus !== 'suspended');
+      if (!isMember) {
+        return { found: true as const, link, community, allowed: false, reason: 'membership_required', statusCode: 403 };
+      }
+    }
+    if (link.audience === 'role_restricted') {
+      if (!user) {
+        return { found: true as const, link, community, allowed: false, requiresAuth: true, reason: 'auth_required', statusCode: 401 };
+      }
+      const mem = db.memberships.find(m => m.communityId === link!.communityId && m.userId === user.id);
+      const isOwner = community.ownerId === user.id || user.platformRole === 'platform_admin';
+      const required = link.requiredRole || 'community_owner';
+      const roleHierarchy = ['platform_admin', 'community_owner', 'admin', 'moderator', 'reviewer', 'task_manager', 'event_organizer', 'expert', 'member'];
+      const userEffectiveRole = isOwner ? 'community_owner' : mem?.role || 'guest';
+      const reqIdx = roleHierarchy.indexOf(required);
+      const usrIdx = roleHierarchy.indexOf(userEffectiveRole);
+      const hasRole = usrIdx !== -1 && (reqIdx === -1 || usrIdx <= reqIdx);
+      if (!hasRole) {
+        return { found: true as const, link, community, allowed: false, reason: 'role_restricted', statusCode: 403 };
+      }
+    }
+    return { found: true as const, link, community, allowed: true, statusCode: 200 };
+  },
+  confirmContributionSecondParty: (
+    contributionId: string,
+    actorId: string,
+    note?: string
+  ): { success: boolean; contribution?: Contribution; error?: string } => {
+    const db = getDatabase();
+    const contribution = db.contributions.find(c => c.id === contributionId);
+    if (!contribution) {
+      return { success: false, error: 'Contribution not found' };
+    }
+    if (contribution.memberId === actorId) {
+      return { success: false, error: 'The original contributor cannot provide second-party confirmation for their own work.' };
+    }
+    const now = new Date().toISOString();
+    contribution.secondPartyConfirmed = true;
+    contribution.secondPartyId = actorId;
+    if (!contribution.revisionHistory) contribution.revisionHistory = [];
+    contribution.revisionHistory.push({
+      timestamp: now,
+      actorId,
+      status: contribution.reviewStatus,
+      note: note?.trim() || 'Second-party outcome confirmation recorded.'
+    });
+    db.auditLogs.unshift({
+      id: `aud_${Date.now()}`,
+      communityId: contribution.communityId,
+      actorId,
+      action: 'contribution_second_party_confirmed',
+      details: `Second-party confirmation added to "${contribution.title}" by ${actorId}`,
+      timestamp: now
+    });
+    saveDatabase(db);
+    return { success: true, contribution };
+  },
   recordLinkEvent: (linkId: string, eventType: 'visit' | 'start' | 'submission' | 'completion' | 'verifiedOutcome') => {
     const db = getDatabase();
-    const link = db.links.find(l => l.id === linkId || l.slug === linkId);
+    const target = String(linkId || '').toLowerCase();
+    const link = db.links.find(l => l.id === linkId || l.slug.toLowerCase() === target);
     if (!link || link.isRevoked) return null;
+    if (link.expiresAt && new Date(link.expiresAt).getTime() <= Date.now()) return null;
 
     if (eventType === 'visit') link.stats.visits += 1;
     if (eventType === 'start') link.stats.starts += 1;
     if (eventType === 'submission') link.stats.submissions += 1;
-    if (eventType === 'completion') link.stats.completions += 1;
+    if (eventType === 'completion') {
+      if (link.maxUses && link.stats.completions >= link.maxUses) return null;
+      link.stats.completions += 1;
+    }
     if (eventType === 'verifiedOutcome') link.stats.verifiedOutcomes += 1;
 
     saveDatabase(db);
@@ -2548,6 +2978,20 @@ export const dbOperations = {
     link.isRevoked = true;
     saveDatabase(db);
     return link;
+  },
+  recordWebhookInteractionId: (interactionId: string): boolean => {
+    if (!interactionId) return true;
+    const db = getDatabase();
+    if (!db.processedInteractionIds) db.processedInteractionIds = [];
+    if (db.processedInteractionIds.includes(interactionId)) {
+      return false; // Duplicate
+    }
+    db.processedInteractionIds.unshift(interactionId);
+    if (db.processedInteractionIds.length > 500) {
+      db.processedInteractionIds = db.processedInteractionIds.slice(0, 500);
+    }
+    saveDatabase(db);
+    return true;
   },
 
   // Agent Kits

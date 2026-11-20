@@ -17,8 +17,10 @@ export async function POST(req: NextRequest, _context?: any) {
 
     await ensureDatabaseHydrated(env);
     const authUser = await getAuthenticatedUserFromRequest(req);
-    const actorId = authUser?.id || 'usr_sarah';
-    const role = getUserRoleInCommunity(actorId, communityId);
+    if (!authUser) {
+      return NextResponse.json({ success: false, error: 'Authentication required' }, { status: 401 });
+    }
+    const role = getUserRoleInCommunity(authUser.id, communityId);
 
     if (!['platform_admin', 'community_owner', 'admin'].includes(role)) {
       return NextResponse.json({ success: false, error: 'Unauthorized: only community owners can publish community menus' }, { status: 403 });

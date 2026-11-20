@@ -265,13 +265,17 @@ async function runTests() {
   });
   assert(oldLoginRes.status === 401, 'Journey D: Old password rejected following password reset');
 
-  // 6. Test login with new password (MUST SUCCEED)
+  // 6. Test login with new password (MUST SUCCEED and capture refreshed session cookie)
   const newLoginRes = await fetch(`${BASE_URL}/api/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email: testEmailA, password: newPasswordA })
   });
-  assert(newLoginRes.status === 200, 'Journey D: Login succeeds with new password');
+  const refreshedCookieHeader = newLoginRes.headers.get('set-cookie');
+  if (refreshedCookieHeader) {
+    cookieA = refreshedCookieHeader.split(';')[0];
+  }
+  assert(newLoginRes.status === 200 && cookieA.length > 0, 'Journey D: Login succeeds with new password and issues refreshed session');
 
   // --- JOURNEY E: Complete Contribution Workflow ---
   console.log('\n--- Executing Journey E: Complete Contribution Workflow ---');
@@ -357,7 +361,9 @@ async function runTests() {
 
   // --- JOURNEY F: Data Integrity & Calculated Metrics ---
   console.log('\n--- Executing Journey F: Data Integrity ---');
-  const finalDbRes = await fetch(`${BASE_URL}/api/data`);
+  const finalDbRes = await fetch(`${BASE_URL}/api/data?communityId=comm_devforge`, {
+    headers: { Cookie: sarahCookie }
+  });
   const finalDb = (await finalDbRes.json()).data;
   
   assert(Array.isArray(finalDb.communities) && finalDb.communities.length > 0, 'Journey F: Real communities array present');
@@ -392,16 +398,15 @@ async function runTests() {
   // --- PLATFORM INTEGRATIONS: Discord & Telegram Gateway Tests ---
   console.log('\n--- Executing Platform Integration Tests ---');
   
-  // 1. Discord PING challenge
+  // 1. Discord PING challenge without cryptographic signature MUST be rejected (401 Fail-Closed)
   const discordPingRes = await fetch(`${BASE_URL}/api/discord/interactions`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ type: 1 })
   });
-  const discordPingData = await discordPingRes.json();
-  assert(discordPingData.type === 1, 'Discord Adapter: Responds with PONG (type 1) to PING challenges');
+  assert(discordPingRes.status === 401, 'Discord Adapter: Rejects unsigned PING challenges with HTTP 401 Fail-Closed');
 
-  // 2. Discord Slash Command: /requests
+  // 2. Discord Slash Command /requests without cryptographic signature MUST be rejected (401 Fail-Closed)
   const discordReqCmdRes = await fetch(`${BASE_URL}/api/discord/interactions`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -411,10 +416,9 @@ async function runTests() {
       user: { id: 'discord_test_user_1', username: 'tester' }
     })
   });
-  const discordReqCmdData = await discordReqCmdRes.json();
   assert(
-    discordReqCmdData.type === 4 && discordReqCmdData.data?.content.includes('NeedSignal'),
-    'Discord Adapter: Handled /requests slash command using shared backend data'
+    discordReqCmdRes.status === 401,
+    'Discord Adapter: Rejects unsigned /requests slash command with HTTP 401 Fail-Closed'
   );
 
   // 3. Telegram Webhook: Secret Token Authentication Check
@@ -479,8 +483,10 @@ async function runTests() {
   // --- DIRECT COMMUNITY CONNECTION CENTER & IN-GROUP BOT EXPERIENCE ---
   console.log('\n--- Executing Direct Community Connection Center Tests ---');
 
-  // 6. Discord Connect Info API (URL generation with correct scopes & permissions)
-  const discordConnectInfoRes = await fetch(`${BASE_URL}/api/discord/connect?communityId=comm_devforge`);
+  // 6. Discord Connect Info API (URL generation with correct scopes & permissions — authenticated owner)
+  const discordConnectInfoRes = await fetch(`${BASE_URL}/api/discord/connect?communityId=comm_devforge`, {
+    headers: { Cookie: sarahCookie }
+  });
   const discordConnectInfo = await discordConnectInfoRes.json();
   assert(
     discordConnectInfo.success &&
@@ -489,13 +495,13 @@ async function runTests() {
     'Connection Center: Discord OAuth installation URL generated with correct permissions and scopes'
   );
 
-  // 7. Discord Guild Connection via API
+  // 7. Discord Guild Connection via API (authenticated owner re-verifying primary DevForge guild)
   const discordGuildConnectRes = await fetch(`${BASE_URL}/api/discord/connect`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', Cookie: sarahCookie },
     body: JSON.stringify({
       communityId: 'comm_devforge',
-      serverId: 'guild_test_prod_99182',
+      serverId: 'discord_guild_devforge',
       serverName: 'Verified DevForge Operations Guild',
       channelId: 'ch_actions_99'
     })
@@ -506,10 +512,14 @@ async function runTests() {
     'Connection Center: Discord server successfully verified, associated, and persisted to community'
   );
 
-  // 8. Discord In-Guild Message Component Button Click (btn_requests)
+  // 8. Discord In-Guild Message Component Button Click with invalid signature MUST be rejected (401 Fail-Closed)
   const discordBtnRes = await fetch(`${BASE_URL}/api/discord/interactions`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      'x-signature-ed25519': '0'.repeat(128),
+      'x-signature-timestamp': String(Math.floor(Date.now() / 1000))
+    },
     body: JSON.stringify({
       type: 3, // MESSAGE_COMPONENT
       data: { custom_id: 'btn_requests' },
@@ -517,16 +527,15 @@ async function runTests() {
       user: { id: 'discord_user_btn_test', username: 'btn_clicker' }
     })
   });
-  const discordBtnData = await discordBtnRes.json();
   assert(
-    discordBtnData.type === 4 && discordBtnData.data?.content.includes('NeedSignal Requests'),
-    'In-Group Bot: Discord interactive button (btn_requests) handled with instant in-guild response'
+    discordBtnRes.status === 401,
+    'In-Group Bot: Discord rejects forged Ed25519 button interaction with HTTP 401'
   );
 
-  // 9. Discord Publish Persistent Menu Embed with ActionRow Buttons
+  // 9. Discord Publish Persistent Menu Embed with ActionRow Buttons (authenticated owner)
   const discordPublishMenuRes = await fetch(`${BASE_URL}/api/discord/publish-menu`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', Cookie: sarahCookie },
     body: JSON.stringify({
       communityId: 'comm_devforge',
       channelId: 'ch_actions_99'
@@ -538,10 +547,10 @@ async function runTests() {
     'In-Group Bot: Published interactive persistent menu with buttons to Discord channel'
   );
 
-  // 10. Telegram Group Connection Challenge Generation
+  // 10. Telegram Group Connection Challenge Generation (authenticated owner)
   const tgChallengeRes = await fetch(`${BASE_URL}/api/telegram/challenge`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', Cookie: sarahCookie },
     body: JSON.stringify({ communityId: 'comm_devforge' })
   });
   const tgChallengeData = await tgChallengeRes.json();
@@ -594,10 +603,10 @@ async function runTests() {
     'In-Group Bot: Handled Telegram callback_query from inline keyboard button (menu_requests)'
   );
 
-  // 13. Telegram Publish Persistent Menu with Inline Keyboard
+  // 13. Telegram Publish Persistent Menu with Inline Keyboard (authenticated owner)
   const tgPublishMenuRes = await fetch(`${BASE_URL}/api/telegram/publish-menu`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', Cookie: sarahCookie },
     body: JSON.stringify({
       communityId: 'comm_devforge',
       pinMessage: true
@@ -655,7 +664,9 @@ async function runTests() {
   );
 
   // 17. Discord Permission Bitfield: Explicitly includes VIEW_CHANNEL (1024)
-  const discordPermRes = await fetch(`${BASE_URL}/api/discord/connect?communityId=comm_devforge`);
+  const discordPermRes = await fetch(`${BASE_URL}/api/discord/connect?communityId=comm_devforge`, {
+    headers: { Cookie: sarahCookie }
+  });
   const discordPermData = await discordPermRes.json();
   const permBigInt = BigInt(discordPermData.permissionsInteger || '0');
   const hasViewChannel = (permBigInt & 1024n) === 1024n;
@@ -772,9 +783,8 @@ async function runTests() {
   );
 
   // 24. Discord Fixed Redirect URI Security & Allowlist Enforcement: Untrusted host header ignored
-  const untrustedHostRes = await fetch(`${BASE_URL}/api/discord/connect`, {
+  const untrustedHostRes = await fetch(`${BASE_URL}/api/discord/connect?mode=user&communityId=comm_devforge`, {
     headers: {
-      Host: 'evil-attacker-site.com',
       'X-Forwarded-Host': 'malicious-proxy.net'
     }
   });
@@ -952,7 +962,7 @@ async function runTests() {
   );
 
   // 35. Public Shareable Verified Outcome: Public access allowed with Powered by attribution
-  const outcomeRes = await fetch(`${BASE_URL}/outcome/out_sec_audit`);
+  const outcomeRes = await fetch(`${BASE_URL}/outcome/out_01`);
   assert(
     outcomeRes.status === 200,
     'Viral Growth: Public verified Outcome record accessible at /outcome/:outcomeId'

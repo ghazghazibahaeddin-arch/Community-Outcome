@@ -201,7 +201,7 @@ export const OwnerWorkspace: React.FC<OwnerWorkspaceProps> = ({
 
   // Review Drawer State
   const [reviewingContribId, setReviewingContribId] = useState<string | null>(null);
-  const [reviewDecision, setReviewDecision] = useState<'verified' | 'rejected' | 'disputed'>('verified');
+  const [reviewDecision, setReviewDecision] = useState<'verified' | 'revision_requested' | 'rejected' | 'disputed'>('verified');
   const [reviewReason, setReviewReason] = useState<string>('');
 
   // Dispute Adjudication State
@@ -257,7 +257,7 @@ export const OwnerWorkspace: React.FC<OwnerWorkspaceProps> = ({
     : (users[0]?.id || '');
 
   const pendingContributions = contributions.filter((c) => c.reviewStatus === 'pending');
-  const openDisputes = disputes.filter((d) => d.status === 'open' || d.status === 'investigating');
+  const openDisputes = disputes.filter((d) => d.status === 'open' || d.status === 'investigating' || d.status === 'appealed');
   const pendingOffers = offers.filter((o) => o.status === 'pending');
 
   const isOwnerOrAdmin = ['platform_admin', 'community_owner', 'admin'].includes(currentUserRole);
@@ -412,7 +412,9 @@ export const OwnerWorkspace: React.FC<OwnerWorkspaceProps> = ({
         setCopiedInviteId(asLink ? `${invite.id}_link` : invite.id);
         setTimeout(() => setCopiedInviteId(null), 2000);
       }
-    } catch {}
+    } catch (err) {
+      console.warn('[OwnerWorkspace] invite clipboard copy failed:', err);
+    }
   };
 
   const handlePublishAnnouncement = async (e: React.FormEvent) => {
@@ -487,8 +489,9 @@ export const OwnerWorkspace: React.FC<OwnerWorkspaceProps> = ({
 
   const handleReviewContribution = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!reviewingContribId || !reviewReason.trim()) return;
+    if (!reviewingContribId || !reviewReason.trim() || isSubmitting) return;
     setActionFeedback(null);
+    setIsSubmitting(true);
     try {
       await callApiAction('review_contribution', {
         contributionId: reviewingContribId,
@@ -502,6 +505,8 @@ export const OwnerWorkspace: React.FC<OwnerWorkspaceProps> = ({
       onRefresh();
     } catch (err: any) {
       setActionFeedback({ type: 'error', text: err?.message || 'Failed to submit contribution review.' });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -688,6 +693,44 @@ export const OwnerWorkspace: React.FC<OwnerWorkspaceProps> = ({
     downloadCsv(`${community.slug || community.id}-outcomes.csv`, headers, rows);
   };
 
+  const handleExportAuditLogs = async (format: 'json' | 'csv') => {
+    setActionFeedback(null);
+    try {
+      const data = await callApiAction('export_audit_logs', {
+        communityId: community.id,
+        format
+      });
+      const res = data.result;
+      if (format === 'csv' && typeof res?.content === 'string') {
+        const blob = new Blob([res.content], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', res.filename || `${community.slug || community.id}-audit.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+      } else {
+        const blob = new Blob([JSON.stringify(res, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', `${community.slug || community.id}-audit-logs.json`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+      }
+      setActionFeedback({
+        type: 'success',
+        text: lang === 'ar' ? `تم تصدير سجل التدقيق بصيغة ${format.toUpperCase()}.` : `Audit log archive exported as ${format.toUpperCase()}.`
+      });
+    } catch (err: any) {
+      setActionFeedback({ type: 'error', text: err?.message || 'Failed to export audit logs.' });
+    }
+  };
+
   // Count members belonging specifically to this community
   const communityMembersCount = users.filter(
     (u) => u.id === community.ownerId || Boolean(getMembershipForUser(u.id))
@@ -724,7 +767,7 @@ export const OwnerWorkspace: React.FC<OwnerWorkspaceProps> = ({
   const openBountiesCount = tasks.filter((t) => !t.assigneeId && t.status === 'todo').length;
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 space-y-6">
+    <div dir={lang === 'ar' ? 'rtl' : 'ltr'} className="mx-auto max-w-7xl px-4 py-6 sm:px-6 space-y-6">
       {/* Workspace Header & Zero-Fabrication Status */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-4">
         <div>
@@ -1329,6 +1372,7 @@ export const OwnerWorkspace: React.FC<OwnerWorkspaceProps> = ({
                     className="w-full rounded-md border border-slate-700 bg-slate-900 px-2.5 py-1.5 text-xs text-white capitalize"
                   >
                     <option value="verified">Verified (Approved with dual signoff)</option>
+                    <option value="revision_requested">Request Revision (More evidence needed)</option>
                     <option value="rejected">Rejected (Insufficient evidence)</option>
                     <option value="disputed">Disputed (Contested claims)</option>
                   </select>
@@ -1344,7 +1388,9 @@ export const OwnerWorkspace: React.FC<OwnerWorkspaceProps> = ({
                 </div>
               </div>
               <div>
-                <label className="text-[11px] text-slate-300 block mb-1">Mandatory Audit Rationale</label>
+                <label className="text-[11px] text-slate-300 block mb-1">
+                  Mandatory Audit Rationale <span className="text-rose-400">*</span>
+                </label>
                 <textarea
                   required
                   rows={2}
@@ -1364,9 +1410,10 @@ export const OwnerWorkspace: React.FC<OwnerWorkspaceProps> = ({
                 </button>
                 <button
                   type="submit"
-                  className="rounded-md bg-indigo-600 px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-indigo-500"
+                  disabled={isSubmitting}
+                  className="rounded-md bg-indigo-600 px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-indigo-500 disabled:opacity-50"
                 >
-                  Confirm Official Review Decision
+                  {isSubmitting ? 'Submitting...' : 'Confirm Official Review Decision'}
                 </button>
               </div>
             </form>
@@ -1403,7 +1450,7 @@ export const OwnerWorkspace: React.FC<OwnerWorkspaceProps> = ({
                     </a>
                   </div>
                 )}
-                {cnt.reviewStatus === 'pending' && (
+                {(cnt.reviewStatus === 'pending' || cnt.reviewStatus === 'disputed') && (
                   <div className="flex justify-end pt-2 border-t border-slate-800">
                     <button
                       onClick={() => setReviewingContribId(cnt.id)}
@@ -1807,13 +1854,13 @@ export const OwnerWorkspace: React.FC<OwnerWorkspaceProps> = ({
               </h3>
               <div className="flex flex-wrap items-center gap-2">
                 <div className="relative">
-                  <Search className="h-3.5 w-3.5 text-slate-500 absolute left-2.5 top-2" />
+                  <Search className="h-3.5 w-3.5 text-slate-500 absolute start-2.5 top-2" />
                   <input
                     type="text"
                     value={memberSearch}
                     onChange={(e) => setMemberSearch(e.target.value)}
                     placeholder="Search name, email, @handle..."
-                    className="rounded-md border border-slate-700 bg-slate-950 pl-8 pr-3 py-1 text-xs text-white"
+                    className="rounded-md border border-slate-700 bg-slate-950 ps-8 pe-3 py-1 text-xs text-white"
                   />
                 </div>
                 <select
@@ -2205,7 +2252,7 @@ export const OwnerWorkspace: React.FC<OwnerWorkspaceProps> = ({
                 className="inline-flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800 hover:bg-slate-700 px-3 py-1.5 text-xs font-medium text-white whitespace-nowrap"
               >
                 <Download className="h-3.5 w-3.5 text-emerald-400" />
-                <span>Export Members CSV</span>
+                <span>{lang === 'ar' ? 'تصدير الأعضاء CSV' : 'Export Members CSV'}</span>
               </button>
               <button
                 type="button"
@@ -2213,7 +2260,23 @@ export const OwnerWorkspace: React.FC<OwnerWorkspaceProps> = ({
                 className="inline-flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800 hover:bg-slate-700 px-3 py-1.5 text-xs font-medium text-white whitespace-nowrap"
               >
                 <Download className="h-3.5 w-3.5 text-indigo-400" />
-                <span>Export Outcomes CSV</span>
+                <span>{lang === 'ar' ? 'تصدير المخرجات CSV' : 'Export Outcomes CSV'}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleExportAuditLogs('csv')}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-sky-700/60 bg-sky-950/40 hover:bg-sky-900/50 px-3 py-1.5 text-xs font-medium text-sky-200 whitespace-nowrap"
+              >
+                <Download className="h-3.5 w-3.5 text-sky-400" />
+                <span>{lang === 'ar' ? 'سجل التدقيق CSV' : 'Export Audit CSV'}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleExportAuditLogs('json')}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-amber-700/60 bg-amber-950/40 hover:bg-amber-900/50 px-3 py-1.5 text-xs font-medium text-amber-200 whitespace-nowrap"
+              >
+                <Download className="h-3.5 w-3.5 text-amber-400" />
+                <span>{lang === 'ar' ? 'سجل التدقيق JSON' : 'Export Audit JSON'}</span>
               </button>
             </div>
           </div>
@@ -2234,13 +2297,13 @@ export const OwnerWorkspace: React.FC<OwnerWorkspaceProps> = ({
 
           <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-4 space-y-3">
             <div className="relative max-w-sm">
-              <Search className="h-3.5 w-3.5 text-slate-500 absolute left-2.5 top-2" />
+              <Search className="h-3.5 w-3.5 text-slate-500 absolute start-2.5 top-2" />
               <input
                 type="text"
                 value={auditSearch}
                 onChange={(e) => setAuditSearch(e.target.value)}
                 placeholder="Filter audit action, actor, details..."
-                className="w-full rounded-md border border-slate-700 bg-slate-950 pl-8 pr-3 py-1.5 text-xs text-white"
+                className="w-full rounded-md border border-slate-700 bg-slate-950 ps-8 pe-3 py-1.5 text-xs text-white"
               />
             </div>
 

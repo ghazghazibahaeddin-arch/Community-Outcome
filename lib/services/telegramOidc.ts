@@ -48,6 +48,7 @@ export interface TelegramOidcSessionState {
   clientId: string;
   redirectUri: string;
   intent?: 'owner' | 'member';
+  returnTo?: string;
   createdAt: number;
 }
 
@@ -109,7 +110,8 @@ export function getTelegramOidcClientId(explicitEnv?: CloudflareEnv): string {
  */
 export function buildTelegramOidcAuthorization(
   explicitEnv?: CloudflareEnv,
-  intent?: 'owner' | 'member'
+  intent?: 'owner' | 'member',
+  returnTo?: string
 ): {
   authUrl: string;
   sessionState: TelegramOidcSessionState;
@@ -141,6 +143,7 @@ export function buildTelegramOidcAuthorization(
     clientId,
     redirectUri,
     intent: intent === 'owner' ? 'owner' : 'member',
+    returnTo: returnTo && returnTo.startsWith('/') && !returnTo.startsWith('//') ? returnTo : undefined,
     createdAt: Date.now()
   };
 
@@ -163,8 +166,8 @@ export async function exchangeTelegramAuthorizationCode(
   const clientSecret =
     env.TELEGRAM_OIDC_CLIENT_SECRET || env.TELEGRAM_BOT_TOKEN || '';
 
-  // Check for test mock code during local automated testing
-  if (params.code.startsWith('mock_test_oidc_code_')) {
+  // Allow test mock code ONLY in non-production environments
+  if (params.code.startsWith('mock_test_oidc_code_') && env.NODE_ENV !== 'production') {
     const idToken = createTestSignedIdToken({
       sub: 'tg_88921029',
       username: 'tariq_builder',

@@ -104,18 +104,21 @@ export const OnboardingChoiceModal: React.FC<OnboardingChoiceModalProps> = ({
         )}
 
         {/* Choice Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6" role="radiogroup" aria-label={isRtl ? 'مسار الانضمام' : 'Onboarding Path'}>
           {/* Option A: Community Owner */}
-          <div
+          <button
+            type="button"
+            role="radio"
+            aria-checked={selectedPath === 'owner'}
             onClick={() => setSelectedPath('owner')}
-            className={`cursor-pointer rounded-xl border p-5 transition-all text-left relative flex flex-col justify-between ${
+            className={`cursor-pointer rounded-xl border p-5 transition-all text-start relative flex flex-col justify-between ${
               selectedPath === 'owner'
                 ? 'border-indigo-500 bg-indigo-950/20 shadow-lg shadow-indigo-900/30 ring-1 ring-indigo-500'
                 : 'border-slate-800 bg-slate-950 hover:border-slate-700'
             }`}
           >
             {selectedPath === 'owner' && (
-              <div className="absolute top-3 right-3 text-indigo-400">
+              <div className="absolute top-3 end-3 text-indigo-400">
                 <CheckCircle2 className="h-5 w-5" />
               </div>
             )}
@@ -125,12 +128,12 @@ export const OnboardingChoiceModal: React.FC<OnboardingChoiceModalProps> = ({
               </div>
               <div>
                 <h3 className="text-sm font-bold text-white mb-1">
-                  {isRtl ? 'أنا مالك / مدير مجتمع' : 'I am a Community Owner'}
+                  {isRtl ? 'إنشاء وإدارة مجتمع جديد (مالك)' : 'Create & Govern a Community (Owner)'}
                 </h3>
                 <p className="text-xs text-slate-400 leading-relaxed">
                   {isRtl
-                    ? 'إدارة مجتمع، ربط خادم Discord ومجموعة Telegram، وتعيين المشرفين.'
-                    : 'Create and govern communities, install bots on Discord/Telegram, and lead initiatives.'}
+                    ? 'أنشئ مجتمعك الخاص واربط خادم Discord أو مجموعة Telegram بعد التحقق الفعلي من صلاحيات الإدارة.'
+                    : 'Launch your own community, verify server admin rights, and govern Discord/Telegram integrations.'}
                 </p>
               </div>
 
@@ -145,28 +148,31 @@ export const OnboardingChoiceModal: React.FC<OnboardingChoiceModalProps> = ({
                 </div>
                 <div className="flex items-center gap-2 text-[11px] text-slate-300">
                   <Lock className="h-3.5 w-3.5 text-indigo-400 shrink-0" />
-                  <span>{isRtl ? 'تحقق إلزامي من صلاحيات المشرف الحقيقية' : 'Verified server administrator permissions check'}</span>
+                  <span>{isRtl ? 'تحقق إلزامي من صلاحيات المالك في الخادم' : 'Strict server-enforced tenant ownership verification'}</span>
                 </div>
               </div>
             </div>
 
             <div className="mt-4 pt-3 text-[11px] font-mono text-indigo-300 flex items-center gap-1">
-              <span>{isRtl ? 'تفعيل مساحة المالك' : 'Access Owner Workspace'}</span>
+              <span>{isRtl ? 'تأسيس مساحة المالك' : 'Create & Access Owner Workspace'}</span>
               <ArrowRight className="h-3 w-3" />
             </div>
-          </div>
+          </button>
 
           {/* Option B: Community Member */}
-          <div
+          <button
+            type="button"
+            role="radio"
+            aria-checked={selectedPath === 'member'}
             onClick={() => setSelectedPath('member')}
-            className={`cursor-pointer rounded-xl border p-5 transition-all text-left relative flex flex-col justify-between ${
+            className={`cursor-pointer rounded-xl border p-5 transition-all text-start relative flex flex-col justify-between ${
               selectedPath === 'member'
                 ? 'border-violet-500 bg-violet-950/20 shadow-lg shadow-violet-900/30 ring-1 ring-violet-500'
                 : 'border-slate-800 bg-slate-950 hover:border-slate-700'
             }`}
           >
             {selectedPath === 'member' && (
-              <div className="absolute top-3 right-3 text-violet-400">
+              <div className="absolute top-3 end-3 text-violet-400">
                 <CheckCircle2 className="h-5 w-5" />
               </div>
             )}
@@ -196,7 +202,7 @@ export const OnboardingChoiceModal: React.FC<OnboardingChoiceModalProps> = ({
                 </div>
                 <div className="flex items-center gap-2 text-[11px] text-slate-300">
                   <ShieldCheck className="h-3.5 w-3.5 text-violet-400 shrink-0" />
-                  <span>{isRtl ? 'جواز سفر معتمد بالمهام ومراجعة الأقران' : 'Cryptographic peer-reviewed SourceTrail ledger'}</span>
+                  <span>{isRtl ? 'جواز سفر معتمد بالمهام ومراجعة الأقران' : 'Verified peer-reviewed SourceTrail ledger'}</span>
                 </div>
               </div>
             </div>
@@ -205,14 +211,14 @@ export const OnboardingChoiceModal: React.FC<OnboardingChoiceModalProps> = ({
               <span>{isRtl ? 'تفعيل مساحة العضو' : 'Access Member Space'}</span>
               <ArrowRight className="h-3 w-3" />
             </div>
-          </div>
+          </button>
         </div>
 
         {/* Dynamic Context Fields */}
         {selectedPath === 'owner' && (
           <div className="mb-6 rounded-xl border border-indigo-500/20 bg-slate-950 p-4 space-y-3">
             <label className="block text-xs font-semibold text-slate-200">
-              {isRtl ? 'اسم المجتمع الرئيسي الذي تريد إنشاؤه أو إدارته' : 'Primary Community Name to Create / Manage'}
+              {isRtl ? 'اسم المجتمع الرئيسي الذي تريد إنشاؤه أو إدارته' : 'Primary Community Name to Create / Manage'} <span className="text-rose-400">*</span>
             </label>
             <input
               type="text"

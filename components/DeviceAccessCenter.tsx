@@ -59,7 +59,9 @@ export const DeviceAccessCenter: React.FC<DeviceAccessCenterProps> = ({
         setCopiedUrl(true);
         setTimeout(() => setCopiedUrl(false), 2200);
       }
-    } catch {}
+    } catch (err) {
+      console.warn('[DeviceAccessCenter] clipboard copy failed:', err);
+    }
   };
 
   const handleGenerateMobileCode = async (platform: 'telegram' | 'discord') => {
@@ -96,7 +98,9 @@ export const DeviceAccessCenter: React.FC<DeviceAccessCenterProps> = ({
       await navigator.clipboard.writeText(`/connect ${quickCode}`);
       setCopiedQuickCode(true);
       setTimeout(() => setCopiedQuickCode(false), 2200);
-    } catch {}
+    } catch (err) {
+      console.warn('[DeviceAccessCenter] clipboard copy failed:', err);
+    }
   };
 
   return (

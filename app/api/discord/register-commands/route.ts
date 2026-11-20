@@ -1,17 +1,36 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getRuntimeEnv, CloudflareEnv } from '@/lib/env';
+import { ensureDatabaseHydrated, getDatabase } from '@/lib/db/store';
+import { getAuthenticatedUserFromRequest } from '@/lib/services/auth';
+import { getRuntimeEnv } from '@/lib/env';
 
 export async function POST(req: NextRequest, _context?: any) {
   const env = getRuntimeEnv(_context?.env || _context);
   try {
+    await ensureDatabaseHydrated(env);
+    const authUser = await getAuthenticatedUserFromRequest(req);
+    if (!authUser) {
+      return NextResponse.json({ success: false, error: 'Authentication required' }, { status: 401 });
+    }
+    const db = getDatabase();
+    const ownsAny = db.communities.some((c) => c.ownerId === authUser.id);
+    if (!ownsAny && !['platform_admin', 'community_owner', 'admin'].includes(authUser.platformRole)) {
+      return NextResponse.json(
+        { success: false, error: 'Unauthorized: requires community owner or platform admin role' },
+        { status: 403 }
+      );
+    }
+
     const token = env.DISCORD_BOT_TOKEN;
     const appId = env.DISCORD_APPLICATION_ID;
 
     if (!token || !appId) {
-      return NextResponse.json({
-        success: false,
-        error: 'DISCORD_BOT_TOKEN or DISCORD_APPLICATION_ID is not configured in server environment.'
-      }, { status: 400 });
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'DISCORD_BOT_TOKEN or DISCORD_APPLICATION_ID is not configured in server environment.'
+        },
+        { status: 400 }
+      );
     }
 
     const commands = [
@@ -65,7 +84,27 @@ export async function POST(req: NextRequest, _context?: any) {
       },
       {
         name: 'contribution',
-        description: 'Submit evidence for a completed community task'
+        description: 'Submit verifiable evidence for a completed community task',
+        options: [
+          {
+            name: 'task_id',
+            description: 'QuestLoop Task ID (optional if opening web portal)',
+            type: 3,
+            required: false
+          },
+          {
+            name: 'evidence_url',
+            description: 'Public https:// deliverable proof URL (GitHub PR, doc, deployment)',
+            type: 3,
+            required: false
+          },
+          {
+            name: 'notes',
+            description: 'Brief completion summary',
+            type: 3,
+            required: false
+          }
+        ]
       },
       {
         name: 'connect',
@@ -74,7 +113,7 @@ export async function POST(req: NextRequest, _context?: any) {
           {
             name: 'code',
             description: 'Optional one-time OS-XXXX code generated in Member Space',
-            type: 3, // STRING
+            type: 3,
             required: false
           }
         ]
@@ -98,12 +137,15 @@ export async function POST(req: NextRequest, _context?: any) {
 
     const data = (await res.json()) as any;
     if (!res.ok) {
-      return NextResponse.json({
-        success: false,
-        status: res.status,
-        error: data.message || 'Discord API rejected command registration',
-        details: data
-      }, { status: res.status });
+      return NextResponse.json(
+        {
+          success: false,
+          status: res.status,
+          error: data.message || 'Discord API rejected command registration',
+          details: data
+        },
+        { status: res.status }
+      );
     }
 
     return NextResponse.json({

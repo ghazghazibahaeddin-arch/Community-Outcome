@@ -9,10 +9,10 @@ export async function POST(req: NextRequest, _context?: any) {
   try {
     // 1. Validate incoming Telegram secret token header if configured
     const rawSecret = env.TELEGRAM_WEBHOOK_SECRET;
+    const headerSecret = req.headers.get('x-telegram-bot-api-secret-token');
+    const isTestSecret = env.NODE_ENV !== 'production' && headerSecret === 'test_secret';
     if (rawSecret) {
       const sanitizedSecret = rawSecret.trim().replace(/[^A-Za-z0-9_-]/g, '');
-      const headerSecret = req.headers.get('x-telegram-bot-api-secret-token');
-      const isTestSecret = env.NODE_ENV !== 'production' && headerSecret === 'test_secret';
       if (!isTestSecret && headerSecret !== sanitizedSecret && headerSecret !== rawSecret.trim()) {
         return NextResponse.json({ error: 'Unauthorized secret token' }, { status: 403 });
       }
@@ -23,9 +23,9 @@ export async function POST(req: NextRequest, _context?: any) {
     await persistDatabaseNow(env);
 
     // 2. Actively dispatch reply via Telegram Bot API when token is available
-    // (More reliable than inline webhook HTTP reply on Cloudflare Workers/OpenNext, with HTML->plain auto-fallback)
+    // (Skip outbound Telegram API call for local synthetic test_secret assertions so tests verify processed payload safely)
     const token = env.TELEGRAM_BOT_TOKEN;
-    if (token && reply.method === 'sendMessage' && !reply.duplicate) {
+    if (token && !isTestSecret && reply.method === 'sendMessage' && !reply.duplicate) {
       const dispatched = await dispatchTelegramReply(token, reply);
       if (dispatched.sent) {
         return NextResponse.json({ ok: true, dispatched: true, messageId: dispatched.messageId });
@@ -34,7 +34,7 @@ export async function POST(req: NextRequest, _context?: any) {
       return NextResponse.json({ ok: true, dispatched: false, error: dispatched.error || 'dispatch_failed' });
     }
 
-    return NextResponse.json(reply);
+    return NextResponse.json(isTestSecret ? { ...reply, dryRun: true } : reply);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     console.error('[Telegram Webhook Error]:', message);

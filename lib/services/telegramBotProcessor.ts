@@ -2,11 +2,18 @@
 // Synchronizes all Telegram commands & inline callback buttons directly with the central store & Supabase.
 import { dbOperations, ensureDatabaseHydrated, getCommunityHubSlug, getDatabase } from '@/lib/db/store';
 import { getVerifiedAppUrl } from '@/lib/services/securityConfig';
+import { validateEvidenceUrl } from '@/lib/services/validation';
 import { CloudflareEnv } from '@/lib/env';
 
 // Deduplicate Telegram update retries
 const recentUpdateIds = new Set<number>();
 const MAX_RECENT_UPDATES = 2000;
+
+function detectIsArabic(rawText?: string, languageCode?: string): boolean {
+  if (rawText && /\bar\b/i.test(rawText)) return true;
+  if (rawText && /[\u0600-\u06FF]/.test(rawText)) return true;
+  return Boolean(languageCode && languageCode.toLowerCase().startsWith('ar'));
+}
 
 export const TELEGRAM_BOT_COMMANDS = [
   { command: 'start', description: 'Open Community OS interactive menu' },
@@ -75,36 +82,38 @@ function shortLabel(text: string, maxLen = 28): string {
   return `${clean.slice(0, maxLen - 1)}…`;
 }
 
-function buildMainMenuKeyboard(communityName: string, hubLink: string) {
+function buildMainMenuKeyboard(communityName: string, hubLink: string, isAr = false) {
   const isHttps = hubLink.startsWith('https://');
   return {
     inline_keyboard: [
-      ...(isHttps ? [[{ text: `🚀 Open ${shortLabel(communityName, 22)} Hub`, url: hubLink }]] : []),
+      ...(isHttps
+        ? [[{ text: isAr ? `🚀 فتح مركز ${shortLabel(communityName, 18)}` : `🚀 Open ${shortLabel(communityName, 22)} Hub`, url: hubLink }]]
+        : []),
       [
-        { text: '🆘 Open Requests', callback_data: 'menu_requests' },
-        { text: '📋 QuestLoop Tasks', callback_data: 'menu_tasks' }
+        { text: isAr ? '🆘 الطلبات المفتوحة' : '🆘 Open Requests', callback_data: 'menu_requests' },
+        { text: isAr ? '📋 مهام QuestLoop' : '📋 QuestLoop Tasks', callback_data: 'menu_tasks' }
       ],
       [
-        { text: '🎯 My Tasks', callback_data: 'menu_mytasks' },
-        { text: '🎖️ My Passport', callback_data: 'menu_passport' }
+        { text: isAr ? '🎯 مهامي' : '🎯 My Tasks', callback_data: 'menu_mytasks' },
+        { text: isAr ? '🎖️ جوازي الموثق' : '🎖️ My Passport', callback_data: 'menu_passport' }
       ],
       [
-        { text: '➕ New Request', callback_data: 'menu_new_request' },
-        { text: '⚡ Link Profile', callback_data: 'menu_connect' }
+        { text: isAr ? '➕ طلب مساعدة جديد' : '➕ New Request', callback_data: 'menu_new_request' },
+        { text: isAr ? '⚡ ربط الحساب' : '⚡ Link Profile', callback_data: 'menu_connect' }
       ]
     ]
   };
 }
 
-function buildNavFooter(hubLink: string, refreshCallback?: string) {
+function buildNavFooter(hubLink: string, refreshCallback?: string, isAr = false) {
   const row: any[] = [];
   if (refreshCallback) {
-    row.push({ text: '🔄 Refresh', callback_data: refreshCallback });
+    row.push({ text: isAr ? '🔄 تحديث' : '🔄 Refresh', callback_data: refreshCallback });
   }
-  row.push({ text: '🏠 Main Menu', callback_data: 'menu_home' });
+  row.push({ text: isAr ? '🏠 القائمة الرئيسية' : '🏠 Main Menu', callback_data: 'menu_home' });
   const rows: any[][] = [row];
   if (hubLink.startsWith('https://')) {
-    rows.push([{ text: '🌐 Open Synced Web Hub', url: hubLink }]);
+    rows.push([{ text: isAr ? '🌐 فتح المنصة المتزامنة' : '🌐 Open Synced Web Hub', url: hubLink }]);
   }
   return rows;
 }
@@ -187,7 +196,9 @@ async function answerCallback(token: string | undefined, callbackId: string | un
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ callback_query_id: callbackId, text })
     });
-  } catch {}
+  } catch (err) {
+    console.warn('[Telegram] Failed to acknowledge callback_query:', err);
+  }
 }
 
 async function buildTelegramReply(rawBody: any, env: CloudflareEnv): Promise<TelegramReplyPayload> {
@@ -197,16 +208,18 @@ async function buildTelegramReply(rawBody: any, env: CloudflareEnv): Promise<Tel
     const cbChatId = cb.message?.chat?.id;
     const cbData = String(cb.data || '');
     const cbFrom = cb.from || {};
+    const isAr = detectIsArabic(cb.message?.text, cbFrom.language_code);
     const token = env.TELEGRAM_BOT_TOKEN;
     const appUrl = getVerifiedAppUrl(env);
     await ensureDatabaseHydrated(env);
     const db = getDatabase();
+    const matchedCommunity = db.communities.find(
+      (c) =>
+        c.telegramConfig?.groupId === String(cbChatId) ||
+        c.connectedTelegramGroups?.some((g) => g.groupId === String(cbChatId))
+    );
     const community =
-      db.communities.find(
-        (c) =>
-          c.telegramConfig?.groupId === String(cbChatId) ||
-          c.connectedTelegramGroups?.some((g) => g.groupId === String(cbChatId))
-      ) ||
+      matchedCommunity ||
       db.communities.find((c) => c.id === 'comm_devforge') ||
       db.communities[0];
 
@@ -229,16 +242,15 @@ async function buildTelegramReply(rawBody: any, env: CloudflareEnv): Promise<Tel
 
     // Home Menu
     if (cbData === 'menu_home') {
-      await answerCallback(token, cb.id, 'Main menu');
+      await answerCallback(token, cb.id, isAr ? 'القائمة الرئيسية' : 'Main menu');
       return {
         method: 'sendMessage',
         chat_id: cbChatId,
-        text:
-          `<b>Community OS — ${escapeHtml(community.name)}</b>\n` +
-          `Everything here stays synced in real time with the Web platform.\n\n` +
-          `Choose an action below:`,
+        text: isAr
+          ? `<b>Community OS — ${escapeHtml(community.name)}</b>\nجميع الإجراءات متزامنة لحظياً مع المنصة.\n\nاختر إجراءً:`
+          : `<b>Community OS — ${escapeHtml(community.name)}</b>\nEverything here stays synced in real time with the Web platform.\n\nChoose an action below:`,
         parse_mode: 'HTML',
-        reply_markup: buildMainMenuKeyboard(community.name, hubLink)
+        reply_markup: buildMainMenuKeyboard(community.name, hubLink, isAr)
       };
     }
 
@@ -623,12 +635,13 @@ async function buildTelegramReply(rawBody: any, env: CloudflareEnv): Promise<Tel
         linkedUser.id
       );
 
-      if (!res) {
-        await answerCallback(token, cb.id, 'Task not found');
+      if (!res || (res as any).error || !res.task || !res.contribution) {
+        const errMsg = (res as any)?.error || `Task ${taskId} was not found or unavailable.`;
+        await answerCallback(token, cb.id, 'Unavailable');
         return {
           method: 'sendMessage',
           chat_id: cbChatId,
-          text: `Task <code>${escapeHtml(taskId)}</code> was not found.`,
+          text: `⚠️ ${escapeHtml(errMsg)}`,
           parse_mode: 'HTML',
           reply_markup: { inline_keyboard: buildNavFooter(hubLink, 'menu_mytasks') }
         };
@@ -733,17 +746,20 @@ async function buildTelegramReply(rawBody: any, env: CloudflareEnv): Promise<Tel
   const firstWordToken = rawText.split(/\s+/)[0];
   const firstWord = firstWordToken.toLowerCase().split('@')[0];
   const argsString = rawText.slice(firstWordToken.length).trim();
+  const isAr = detectIsArabic(rawText, message.from?.language_code);
 
   await ensureDatabaseHydrated(env);
   const db = getDatabase();
   const appUrl = getVerifiedAppUrl(env);
 
+  const matchedGroupComm = db.communities.find(
+    (c) =>
+      c.telegramConfig?.groupId === String(chatId) ||
+      c.connectedTelegramGroups?.some((g) => g.groupId === String(chatId))
+  );
+  const isGroupChat = message.chat?.type === 'group' || message.chat?.type === 'supergroup';
   const community =
-    db.communities.find(
-      (c) =>
-        c.telegramConfig?.groupId === String(chatId) ||
-        c.connectedTelegramGroups?.some((g) => g.groupId === String(chatId))
-    ) ||
+    matchedGroupComm ||
     db.communities.find((c) => c.id === 'comm_devforge') ||
     db.communities[0];
 
@@ -763,27 +779,39 @@ async function buildTelegramReply(rawBody: any, env: CloudflareEnv): Promise<Tel
   const isConnectDeepLink = firstWord === '/start' && argsString.toLowerCase() === 'connect';
 
   if ((firstWord === '/start' && !isConnectDeepLink) || firstWord === '/help') {
-    const text =
-      `<b>Community OS — Interactive Command Center</b>\n` +
-      `Operating on <b>${escapeHtml(community.name)}</b>\n\n` +
-      `Use the live buttons below to browse &amp; act directly from Telegram, or use commands:\n` +
-      `• <code>/hub</code> — Open Community Action Hub\n` +
-      `• <code>/requests</code> — Browse &amp; offer help on open requests\n` +
-      `• <code>/help_request title | priority</code> — Create a help request\n` +
-      `• <code>/tasks</code> — Browse &amp; claim QuestLoop tasks\n` +
-      `• <code>/mytasks</code> — Manage &amp; complete your assigned tasks\n` +
-      `• <code>/passport</code> — View your verified competencies\n` +
-      `• <code>/contribution task_id | evidence_url | summary</code> — Submit deliverable\n` +
-      `• <code>/connect OS-XXXX</code> — Link your personal Member account\n` +
-      `• <code>/connect CONNECT-TG-XXXX</code> — Link a Telegram Group (Group Admin)\n` +
-      `• <code>/status</code> — Verify bot and database health`;
+    const text = isAr
+      ? `<b>Community OS — مركز الأوامر التفاعلي</b>\n` +
+        `المجتمع النشط: <b>${escapeHtml(community.name)}</b>\n\n` +
+        `استخدم الأزرار التفاعلية أدناه أو الأوامر:\n` +
+        `• <code>/hub</code> — فتح بوابة المجتمع\n` +
+        `• <code>/requests</code> — استعراض طلبات المساعدة وتقديم عروض\n` +
+        `• <code>/help_request العنوان | high</code> — إنشاء طلب جديد\n` +
+        `• <code>/tasks</code> — استعراض ومطالبة المهام\n` +
+        `• <code>/mytasks</code> — إدارة وتسليم مهامي\n` +
+        `• <code>/passport</code> — عرض جواز المهارات الموثق\n` +
+        `• <code>/contribution task_id | https://url | الملخص</code> — إرسال إثبات الإنجاز\n` +
+        `• <code>/connect OS-XXXX</code> — ربط حسابك الشخصي\n` +
+        `• <code>/status</code> — فحص حالة البوت والمزامنة`
+      : `<b>Community OS — Interactive Command Center</b>\n` +
+        `Operating on <b>${escapeHtml(community.name)}</b>\n\n` +
+        `Use the live buttons below to browse &amp; act directly from Telegram, or use commands:\n` +
+        `• <code>/hub</code> — Open Community Action Hub\n` +
+        `• <code>/requests</code> — Browse &amp; offer help on open requests\n` +
+        `• <code>/help_request title | priority</code> — Create a help request\n` +
+        `• <code>/tasks</code> — Browse &amp; claim QuestLoop tasks\n` +
+        `• <code>/mytasks</code> — Manage &amp; complete your assigned tasks\n` +
+        `• <code>/passport</code> — View your verified competencies\n` +
+        `• <code>/contribution task_id | evidence_url | summary</code> — Submit deliverable\n` +
+        `• <code>/connect OS-XXXX</code> — Link your personal Member account\n` +
+        `• <code>/connect CONNECT-TG-XXXX</code> — Link a Telegram Group (Group Admin)\n` +
+        `• <code>/status</code> — Verify bot and database health`;
 
     return {
       method: 'sendMessage',
       chat_id: chatId,
       text,
       parse_mode: 'HTML',
-      reply_markup: buildMainMenuKeyboard(community.name, hubLink)
+      reply_markup: buildMainMenuKeyboard(community.name, hubLink, isAr)
     };
   }
 
@@ -854,7 +882,7 @@ async function buildTelegramReply(rawBody: any, env: CloudflareEnv): Promise<Tel
       }
     }
 
-    const activeCreatorId = linkedUser ? linkedUser.id : (db.users[0]?.id || 'usr_alex');
+    const activeCreatorId = linkedUser ? linkedUser.id : `tg_${telegramUserId || 'anonymous'}`;
     if (
       linkedUser &&
       db.memberships?.some(
@@ -866,14 +894,14 @@ async function buildTelegramReply(rawBody: any, env: CloudflareEnv): Promise<Tel
         chat_id: chatId,
         text: `⛔ Suspended members cannot create help requests in <b>${escapeHtml(community.name)}</b>.`,
         parse_mode: 'HTML',
-        reply_markup: { inline_keyboard: buildNavFooter(hubLink) }
+        reply_markup: { inline_keyboard: buildNavFooter(hubLink, undefined, isAr) }
       };
     }
     const newReq = dbOperations.createRequest({
       communityId: community.id,
       creatorId: activeCreatorId,
       title,
-      description: `Created via Telegram Bot by @${telegramUsername || telegramUserId}`,
+      description: `Created via Telegram Bot by @${telegramUsername || telegramUserId}${isGroupChat && !matchedGroupComm ? ' (Unlinked group fallback)' : ''}`,
       category: community.contributionCategories[0]?.id || 'cat_core',
       skillsRequired: ['General Assistance & Verification'],
       priority,
@@ -1043,8 +1071,22 @@ async function buildTelegramReply(rawBody: any, env: CloudflareEnv): Promise<Tel
 
     const parts = argsString.split('|').map((s: string) => s.trim());
     const taskId = parts[0];
-    const evidenceUrl = parts[1] || 'https://github.com/deliverable';
+    const evidenceUrlRaw = parts[1] || '';
     const summary = parts[2] || 'Submitted via Telegram bot';
+
+    const urlValidation = validateEvidenceUrl(evidenceUrlRaw);
+    if (!urlValidation.valid || !urlValidation.normalized) {
+      return {
+        method: 'sendMessage',
+        chat_id: chatId,
+        text:
+          `❌ <b>Invalid Evidence URL</b>\n\n` +
+          `Please provide a valid public <code>https://</code> deliverable link:\n` +
+          `<code>/contribution ${escapeHtml(taskId || 'tsk_id')} | https://github.com/org/repo/pull/1 | summary</code>`,
+        parse_mode: 'HTML',
+        reply_markup: { inline_keyboard: buildNavFooter(hubLink, 'menu_mytasks', isAr) }
+      };
+    }
 
     const task = db.tasks.find((t) => t.id === taskId);
     if (!task) {
@@ -1053,7 +1095,7 @@ async function buildTelegramReply(rawBody: any, env: CloudflareEnv): Promise<Tel
         chat_id: chatId,
         text: `Task with ID <code>${escapeHtml(taskId)}</code> was not found. Use <code>/tasks</code> to browse available tasks.`,
         parse_mode: 'HTML',
-        reply_markup: { inline_keyboard: buildNavFooter(hubLink, 'menu_tasks') }
+        reply_markup: { inline_keyboard: buildNavFooter(hubLink, 'menu_tasks', isAr) }
       };
     }
     if (task.status === 'completed') {
@@ -1062,27 +1104,45 @@ async function buildTelegramReply(rawBody: any, env: CloudflareEnv): Promise<Tel
         chat_id: chatId,
         text: `✅ Task <b>${escapeHtml(task.title)}</b> was already completed and submitted for review.`,
         parse_mode: 'HTML',
-        reply_markup: { inline_keyboard: buildNavFooter(hubLink, 'menu_mytasks') }
+        reply_markup: { inline_keyboard: buildNavFooter(hubLink, 'menu_mytasks', isAr) }
       };
     }
-    const actorUserId = linkedUser ? linkedUser.id : (db.users[0]?.id || 'usr_alex');
+    if (!linkedUser) {
+      return {
+        method: 'sendMessage',
+        chat_id: chatId,
+        text: `🔐 Link your Telegram profile first (<code>/connect OS-XXXX</code>) before submitting task deliverable evidence.`,
+        parse_mode: 'HTML',
+        reply_markup: { inline_keyboard: buildNavFooter(hubLink, undefined, isAr) }
+      };
+    }
+    const actorUserId = linkedUser.id;
     if (task.assigneeId && task.assigneeId !== actorUserId) {
       return {
         method: 'sendMessage',
         chat_id: chatId,
         text: `⛔ Task <code>${escapeHtml(task.id)}</code> is assigned to another contributor.`,
         parse_mode: 'HTML',
-        reply_markup: { inline_keyboard: buildNavFooter(hubLink, 'menu_tasks') }
+        reply_markup: { inline_keyboard: buildNavFooter(hubLink, 'menu_tasks', isAr) }
       };
     }
 
     const result = dbOperations.completeTaskWithEvidence(
       task.id,
-      evidenceUrl,
+      urlValidation.normalized,
       summary,
       actorUserId
     );
-    const newContribution = result?.contribution;
+    if (!result || (result as any).error) {
+      return {
+        method: 'sendMessage',
+        chat_id: chatId,
+        text: `❌ ${escapeHtml((result as any)?.error || 'Could not submit contribution')}`,
+        parse_mode: 'HTML',
+        reply_markup: { inline_keyboard: buildNavFooter(hubLink, 'menu_mytasks', isAr) }
+      };
+    }
+    const newContribution = (result as any).contribution;
 
     return {
       method: 'sendMessage',
@@ -1092,9 +1152,9 @@ async function buildTelegramReply(rawBody: any, env: CloudflareEnv): Promise<Tel
         `• <b>Contribution ID</b>: <code>${escapeHtml(newContribution?.id || 'pending')}</code>\n` +
         `• <b>Task</b>: ${escapeHtml(task.title)}\n` +
         `• <b>Status</b>: Completed &amp; Pending Community Peer Review\n` +
-        `• <b>Evidence</b>: ${escapeHtml(evidenceUrl)}`,
+        `• <b>Evidence</b>: ${escapeHtml(urlValidation.normalized)}`,
       parse_mode: 'HTML',
-      reply_markup: { inline_keyboard: buildNavFooter(hubLink) }
+      reply_markup: { inline_keyboard: buildNavFooter(hubLink, undefined, isAr) }
     };
   }
 
@@ -1163,7 +1223,9 @@ async function buildTelegramReply(rawBody: any, env: CloudflareEnv): Promise<Tel
               parse_mode: 'HTML'
             };
           }
-        } catch {}
+        } catch (adminErr) {
+          console.warn('[Telegram Connect] getChatMember admin verification error:', adminErr);
+        }
       }
 
       const groupTitle = message.chat?.title || 'Telegram Group';

@@ -333,9 +333,11 @@ export interface Contribution {
   }[];
   submissionDate: string;
   createdAt?: string;
-  reviewStatus: 'pending' | 'verified' | 'rejected' | 'disputed';
+  reviewStatus: 'pending' | 'verified' | 'rejected' | 'revision_requested' | 'disputed';
   reviewerId?: string;
   decisionReason?: string;
+  revisionHistory?: { timestamp: string; actorId: string; status: string; note: string; evidenceUrls?: string[] }[];
+  lockedAt?: string;
   firstPartyConfirmed: boolean;
   secondPartyConfirmed: boolean;
   secondPartyId?: string;
@@ -463,6 +465,7 @@ export interface CommunityLink {
   audience: 'public' | 'members_only' | 'role_restricted';
   requiredRole?: UserRole;
   expiresAt?: string;
+  maxUses?: number;
   isRevoked: boolean;
   referralCode?: string;
   stats: {

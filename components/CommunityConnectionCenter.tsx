@@ -101,7 +101,9 @@ export const CommunityConnectionCenter: React.FC<CommunityConnectionCenterProps>
         if (active && data.success && data.installUrl) {
           setDiscordInstallUrl(data.installUrl);
         }
-      } catch {}
+      } catch (err) {
+        console.warn('[CommunityConnectionCenter] failed loading discord connect url:', err);
+      }
       try {
         const tgRes = await fetch('/api/telegram/register-webhook');
         const tgData = await tgRes.json();
@@ -112,7 +114,9 @@ export const CommunityConnectionCenter: React.FC<CommunityConnectionCenterProps>
             setTelegramPendingUpdates(tgData.webhookInfo.pending_update_count);
           }
         }
-      } catch {}
+      } catch (err) {
+        console.warn('[CommunityConnectionCenter] failed loading telegram webhook info:', err);
+      }
     };
     if (isOwnerOrAdmin) {
       fetchInitialInfo();
@@ -483,7 +487,9 @@ export const CommunityConnectionCenter: React.FC<CommunityConnectionCenterProps>
         setCopiedCode(true);
         setTimeout(() => setCopiedCode(false), 2500);
       }
-    } catch {}
+    } catch (err) {
+      console.warn('[CommunityConnectionCenter] clipboard copy failed:', err);
+    }
   };
 
   const isDiscordConnected = community.discordConfig?.connected && community.discordConfig?.status !== 'disconnected';

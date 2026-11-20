@@ -2,10 +2,21 @@ import { NextRequest, NextResponse } from 'next/server';
 import { ensureDatabaseHydrated, persistDatabaseNow } from '@/lib/db/store';
 import { requestPasswordReset } from '@/lib/services/auth';
 import { getRuntimeEnv } from '@/lib/env';
+import { checkRateLimit, getClientIp } from '@/lib/services/rateLimit';
+import { getVerifiedAppUrl } from '@/lib/services/securityConfig';
 
 export async function POST(req: NextRequest, _context?: any) {
   const env = getRuntimeEnv(_context?.env || _context);
   try {
+    const clientIp = getClientIp(req);
+    const rl = checkRateLimit({ key: `auth_forgot:${clientIp}`, limit: 10, windowMs: 60_000 });
+    if (!rl.allowed) {
+      return NextResponse.json(
+        { success: false, error: 'Too many password reset requests. Please try again later.' },
+        { status: 429, headers: { 'Retry-After': String(rl.retryAfterSeconds) } }
+      );
+    }
+
     const body = (await req.json()) as { email?: string };
     const { email } = body;
 
@@ -14,7 +25,7 @@ export async function POST(req: NextRequest, _context?: any) {
     }
 
     await ensureDatabaseHydrated(env);
-    const appUrl = env.APP_URL || `${req.nextUrl.protocol}//${req.nextUrl.host}`;
+    const appUrl = getVerifiedAppUrl(env);
     const result = requestPasswordReset(email, appUrl, env);
     await persistDatabaseNow(env);
 

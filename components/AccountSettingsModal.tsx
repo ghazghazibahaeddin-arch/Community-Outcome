@@ -11,7 +11,10 @@ import {
   Save,
   CheckCircle2,
   AlertCircle,
-  Unlink
+  Unlink,
+  Download,
+  Trash2,
+  AlertTriangle
 } from 'lucide-react';
 
 interface AccountSettingsModalProps {
@@ -37,6 +40,10 @@ export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({
   const [bio, setBio] = useState(user.bio || user.passport?.biography || '');
   const [languages, setLanguages] = useState((user.passport?.languages || ['English']).join(', '));
   const [isSaving, setIsSaving] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const [isDeleting, setIsDeleting] = useState(false);
   const [unlinkingPlatform, setUnlinkingPlatform] = useState<'discord' | 'telegram' | null>(null);
   const [saveStatus, setSaveStatus] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
@@ -133,6 +140,87 @@ export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({
     }
   };
 
+  const handleExportMyData = async () => {
+    setIsExporting(true);
+    setSaveStatus(null);
+    try {
+      const res = await fetch('/api/data', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ action: 'export_my_data', payload: {} })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success || !data.result) {
+        setSaveStatus({
+          type: 'error',
+          text: data.error || (isRtl ? 'فشل تصدير البيانات' : 'Failed to export personal data.')
+        });
+        return;
+      }
+      const blob = new Blob([JSON.stringify(data.result, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `community-os-data-${user.id}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      setSaveStatus({
+        type: 'success',
+        text: isRtl ? 'تم تنزيل نسخة كاملة من بياناتك بصيغة JSON.' : 'Complete personal data JSON export downloaded.'
+      });
+    } catch (err: any) {
+      setSaveStatus({
+        type: 'error',
+        text: err?.message || (isRtl ? 'تعذر تصدير البيانات' : 'Failed to export data.')
+      });
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    if (deleteConfirmText.trim() !== 'DELETE') {
+      setSaveStatus({
+        type: 'error',
+        text: isRtl ? 'اكتب كلمة DELETE بالحروف الكبيرة لتأكيد حذف الحساب.' : 'Type DELETE in uppercase to confirm account deletion.'
+      });
+      return;
+    }
+    setIsDeleting(true);
+    setSaveStatus(null);
+    try {
+      const res = await fetch('/api/data', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          action: 'delete_account',
+          payload: { confirmationText: deleteConfirmText.trim() }
+        })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        setSaveStatus({
+          type: 'error',
+          text: data.error || (isRtl ? 'تعذر حذف الحساب' : 'Failed to delete account.')
+        });
+        return;
+      }
+      onClose();
+      onSignOut();
+    } catch (err: any) {
+      setSaveStatus({
+        type: 'error',
+        text: err?.message || (isRtl ? 'خطأ أثناء حذف الحساب' : 'Error deleting account.')
+      });
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
       <div
@@ -200,7 +288,7 @@ export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({
 
           <div>
             <label className="block text-xs font-medium text-slate-300 mb-1">
-              {isRtl ? 'الاسم الظاهر' : 'Display Name'}
+              {isRtl ? 'الاسم الظاهر' : 'Display Name'} <span className="text-rose-400">*</span>
             </label>
             <input
               type="text"
@@ -337,6 +425,72 @@ export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({
                 </div>
               </div>
             </div>
+          </div>
+
+          {/* Privacy Data Export & Account Deletion Controls */}
+          <div className="pt-4 border-t border-slate-800/80 space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <button
+                type="button"
+                disabled={isExporting}
+                onClick={handleExportMyData}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-900 hover:bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-200 disabled:opacity-50"
+              >
+                <Download className="h-3.5 w-3.5 text-emerald-400" />
+                <span>{isExporting ? (isRtl ? 'جاري التصدير...' : 'Exporting...') : (isRtl ? 'تصدير جميع بياناتي (JSON)' : 'Export All My Data (JSON)')}</span>
+              </button>
+
+              {!showDeleteConfirm && (
+                <button
+                  type="button"
+                  onClick={() => setShowDeleteConfirm(true)}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-rose-900/50 bg-rose-950/20 hover:bg-rose-950/50 px-3 py-1.5 text-xs font-medium text-rose-300"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  <span>{isRtl ? 'حذف الحساب نهائياً' : 'Delete Account'}</span>
+                </button>
+              )}
+            </div>
+
+            {showDeleteConfirm && (
+              <div className="rounded-xl border border-rose-500/40 bg-rose-950/25 p-3.5 space-y-2.5 text-xs">
+                <div className="flex items-start gap-2 text-rose-200">
+                  <AlertTriangle className="h-4 w-4 text-rose-400 shrink-0 mt-0.5" />
+                  <span>
+                    {isRtl
+                      ? 'سيتم إزالة بياناتك الشخصية وإلغاء جميع الجلسات وفصل الحسابات المرتبطة. اكتب DELETE للتأكيد.'
+                      : 'This deletes your personal account profile, revokes active sessions, and unlinks social identities. Type DELETE to confirm.'}
+                  </span>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <input
+                    type="text"
+                    value={deleteConfirmText}
+                    onChange={(e) => setDeleteConfirmText(e.target.value)}
+                    placeholder="DELETE"
+                    className="rounded-md border border-rose-700/50 bg-slate-950 px-2.5 py-1.5 text-xs text-white font-mono w-32"
+                  />
+                  <button
+                    type="button"
+                    disabled={isDeleting || deleteConfirmText.trim() !== 'DELETE'}
+                    onClick={handleDeleteAccount}
+                    className="rounded-md bg-rose-600 hover:bg-rose-500 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
+                  >
+                    {isDeleting ? (isRtl ? 'جاري الحذف...' : 'Deleting...') : (isRtl ? 'تأكيد الحذف النهائي' : 'Confirm Permanent Deletion')}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowDeleteConfirm(false);
+                      setDeleteConfirmText('');
+                    }}
+                    className="rounded-md px-2.5 py-1.5 text-xs text-slate-400 hover:text-white"
+                  >
+                    {isRtl ? 'إلغاء' : 'Cancel'}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Action Buttons */}

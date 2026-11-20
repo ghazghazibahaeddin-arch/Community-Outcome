@@ -35,12 +35,16 @@ export async function POST(req: NextRequest, _context?: any) {
   try {
     await ensureDatabaseHydrated(env);
     const authUser = await getAuthenticatedUserFromRequest(req);
+    if (!authUser) {
+      return NextResponse.json(
+        { success: false, error: 'Authentication required to register Telegram webhook' },
+        { status: 401 }
+      );
+    }
     const db = getDatabase();
-    const ownsCommunity = authUser ? db.communities.some((c) => c.ownerId === authUser.id) : false;
+    const ownsCommunity = db.communities.some((c) => c.ownerId === authUser.id);
     const isAuthorized =
-      !authUser ||
-      ['platform_admin', 'community_owner', 'admin'].includes(authUser.platformRole) ||
-      ownsCommunity;
+      ['platform_admin', 'community_owner', 'admin'].includes(authUser.platformRole) || ownsCommunity;
     if (!isAuthorized) {
       return NextResponse.json(
         { success: false, error: 'Unauthorized: requires community owner or platform admin role' },

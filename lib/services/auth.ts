@@ -87,11 +87,6 @@ export function verifyTelegramAuthData(
     return { valid: false, error: 'Missing Telegram hash signature' };
   }
 
-  // Client interactive widget / fallback mode
-  if (hash === 'verified_via_telegram_client_oidc') {
-    return { valid: true };
-  }
-
   const env = getRuntimeEnv(explicitEnv);
   const token = botToken || env.TELEGRAM_BOT_TOKEN;
   if (!token) {
@@ -306,7 +301,9 @@ export function destroySession(token: string, explicitEnv?: CloudflareEnv): bool
   if (!db.sessions) return false;
 
   if (isSupabaseConfigured(explicitEnv)) {
-    const p = deleteSessionFromSupabase(token, explicitEnv).catch(() => {});
+    const p = deleteSessionFromSupabase(token, explicitEnv).catch((err) => {
+      console.warn('[auth] Supabase session cleanup error:', err);
+    });
     const cfCtx = getCloudflareExecutionContext();
     if (cfCtx?.waitUntil) {
       cfCtx.waitUntil(p);
@@ -329,7 +326,9 @@ export function destroyAllUserSessions(userId: string, explicitEnv?: CloudflareE
   const db = getDatabase();
   if (!db.sessions) return;
   if (isSupabaseConfigured(explicitEnv)) {
-    const p = deleteUserSessionsFromSupabase(userId, explicitEnv).catch(() => {});
+    const p = deleteUserSessionsFromSupabase(userId, explicitEnv).catch((err) => {
+      console.warn('[auth] Supabase user sessions cleanup error:', err);
+    });
     const cfCtx = getCloudflareExecutionContext();
     if (cfCtx?.waitUntil) {
       cfCtx.waitUntil(p);
@@ -381,31 +380,33 @@ export function requestPasswordReset(
   const resetUrl = `${baseUrl}/auth/reset-password?token=${resetToken}`;
 
   const env = getRuntimeEnv(explicitEnv);
-  // Check if external SMTP is configured
+  const isProd = env.NODE_ENV === 'production';
   const hasRealSmtp = Boolean(env.SMTP_HOST && env.SMTP_USER);
 
-  // Record email in devEmails store for inspection / testing
-  const devEmail: DevEmail = {
-    id: `eml_${Date.now()}`,
-    to: normalizedEmail,
-    subject: 'Community OS — Password Reset Request',
-    html: `<p>Hello,</p><p>You requested a password reset for your Community OS account. Click the link below to set a new password:</p><p><a href="${resetUrl}">Reset Password</a></p><p>This link expires in 1 hour.</p>`,
-    text: `You requested a password reset for your Community OS account. Visit: ${resetUrl} (Expires in 1 hour)`,
-    resetUrl,
-    resetToken,
-    sentAt: new Date().toISOString()
-  };
-
-  db.devEmails.unshift(devEmail);
+  // Only store reset secrets in inspectable devEmails outside production
+  if (!isProd) {
+    const devEmail: DevEmail = {
+      id: `eml_${Date.now()}`,
+      to: normalizedEmail,
+      subject: 'Community OS — Password Reset Request',
+      html: `<p>Hello,</p><p>You requested a password reset for your Community OS account. Click the link below to set a new password:</p><p><a href="${resetUrl}">Reset Password</a></p><p>This link expires in 1 hour.</p>`,
+      text: `You requested a password reset for your Community OS account. Visit: ${resetUrl} (Expires in 1 hour)`,
+      resetUrl,
+      resetToken,
+      sentAt: new Date().toISOString()
+    };
+    db.devEmails.unshift(devEmail);
+  }
   saveDatabase(db);
 
   return {
     success: true,
     message: hasRealSmtp
       ? 'Password reset instructions have been dispatched to your email address.'
+      : isProd
+      ? 'If that email address is registered, password reset instructions have been queued.'
       : 'Password reset link generated. (External email provider not configured; viewable via development email inspector).',
-    devToken: resetToken,
-    devResetUrl: resetUrl,
+    ...(isProd ? {} : { devToken: resetToken, devResetUrl: resetUrl }),
     deliveredVia: hasRealSmtp ? 'smtp' : 'dev_mock'
   };
 }
@@ -547,4 +548,55 @@ export function isUserAuthorized(
     default:
       return false;
   }
+}
+
+/**
+ * Permanently delete or anonymize a user account, revoking all active sessions and credentials.
+ * Blocks deletion if the user is still sole owner of an active community so governance is never orphaned.
+ */
+export function deleteUserAccount(
+  userId: string,
+  explicitEnv?: CloudflareEnv
+): { success: boolean; error?: string } {
+  const db = getDatabase();
+  const userIndex = db.users.findIndex((u) => u.id === userId);
+  if (userIndex === -1) {
+    return { success: false, error: 'User account not found' };
+  }
+
+  const ownedCommunities = (db.communities || []).filter((c) => c.ownerId === userId);
+  if (ownedCommunities.length > 0) {
+    return {
+      success: false,
+      error: `Cannot delete account while you are sole owner of ${ownedCommunities.map((c) => c.name).join(', ')}. Transfer community ownership first.`
+    };
+  }
+
+  destroyAllUserSessions(userId, explicitEnv);
+  if (db.authAccounts) {
+    db.authAccounts = db.authAccounts.filter((a) => a.id !== userId);
+  }
+  if (db.identityChallenges) {
+    db.identityChallenges = db.identityChallenges.filter((c) => c.userId !== userId);
+  }
+  if (db.notifications) {
+    db.notifications = db.notifications.filter((n) => n.userId !== userId);
+  }
+  if (db.memberships) {
+    db.memberships = db.memberships.filter((m) => m.userId !== userId);
+  }
+
+  db.users.splice(userIndex, 1);
+  if (!db.auditLogs) db.auditLogs = [];
+  db.auditLogs.unshift({
+    id: `aud_del_${Date.now()}`,
+    communityId: 'all',
+    actorId: 'system_privacy',
+    action: 'account_deleted',
+    details: `Account ${userId} permanently deleted by user request.`,
+    timestamp: new Date().toISOString()
+  });
+
+  saveDatabase(db);
+  return { success: true };
 }
